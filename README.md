@@ -16,14 +16,14 @@
 
 **部署遇到的任何问题，欢迎提交 issue，我会第一时间帮助您！**
 
-1. clone 本仓库
+一、 clone 本仓库
 
 ```bash
 git clone https://github.com/itsmorninghao/CogniLoop.git
 cd CogniLoop
 ```
 
-2. 复制并编辑环境变量文件
+二、 复制并编辑环境变量文件
 
 ```bash
 cp .env.example .env
@@ -31,44 +31,48 @@ cp .env.example .env
 
 编辑 `.env` 文件，填入你的 PostgreSQL、LLM、向量模型的连接信息
 
-3. 构建并启动服务
+三、 构建并启动服务
 
 ```bash
 cd docker-cogniloop
 docker-compose up -d --build
 ```
 
-4. 首次创建需要创建管理员账号
+四、 首次创建需要创建管理员账号
+
+**密码是必需的**，可以通过两种方式提供：
+
+**方式一：交互式输入密码（推荐）**
+
+如果未通过 `--password` 参数提供密码，脚本会提示您交互式输入密码：
 
 ```bash
 docker-compose exec app python scripts/create_admin.py
 ```
 
-默认账号信息：
+脚本会提示您输入密码并确认，密码输入时不会显示在终端。
 
-- 用户名: `admin`
-- 邮箱: `admin@cogniloop.local`
-- 密码: `admin123456`
-- 姓名: `系统管理员`
+**方式二：通过命令行参数提供密码**
 
-> 如需自定义，可使用下述命令：
->
-> ```bash
-> docker-compose exec app python scripts/create_admin.py \
->  --username myadmin \
->  --email myadmin@example.com \
->  --password mypassword \
->  --name "我的管理员"
-> ```
->
-> 参数说明：
+```bash
+docker-compose exec app python scripts/create_admin.py \
+  --username admin \
+  --email admin@cogniloop.local \
+  --password 您的密码 \
+  --name "系统管理员"
+```
+
+> **参数说明：**
 >
 > `--username`: 用户名（默认: `admin`）
+>
 > `--email`: 邮箱地址（默认: `admin@cogniloop.local`）
-> `--password`: 登录密码（默认: `admin123456`）
+>
+> `--password`: 登录密码（**必需**，如果不提供将通过交互式输入）
+>
 > `--name`: 管理员姓名（默认: `系统管理员`）
 
-5. 访问应用
+五、 访问应用
 
 - 前端: http://localhost:8000
 - API 文档: http://localhost:8000/docs
