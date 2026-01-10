@@ -1,0 +1,69 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+env
+.eggs
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Node.js
+node_modules
+frontend/node_modules
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+frontend/dist
+build
+dist
+*.egg
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Documentation
+docs
+*.md
+!README.md
+
+# Tests
+tests
+*_test.py
+test_*.py
+
+# Data directories (will be mounted as volumes)
+uploads
+question_sets
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+

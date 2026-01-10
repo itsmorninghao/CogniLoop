@@ -1,0 +1,66 @@
+[project]
+name = "cogniloop"
+version = "0.1.0"
+description = "基于 LangGraph 的智能助教系统"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlmodel>=0.0.22",
+    "asyncpg>=0.30.0",
+    "pgvector>=0.3.6",
+    "alembic>=1.14.0",
+    "greenlet>=3.0.0",
+    "langchain>=0.3.0",
+    "langchain-openai>=0.2.0",
+    "langgraph>=0.2.0",
+    "openai>=1.55.0",
+    "python-jose[cryptography]>=3.3.0",
+    "bcrypt>=4.0.0,<4.3.0",
+    "python-multipart>=0.0.17",
+    "aiofiles>=24.1.0",
+    "pypdf>=5.1.0",
+    "python-docx>=1.1.0",
+    "python-pptx>=1.0.0",
+    "pydantic-settings>=2.6.0",
+    "email-validator>=2.0.0",
+    "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.8.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.28.0",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults
+    "B904",   # raise without from inside except
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["backend/tests"]

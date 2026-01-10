@@ -1,0 +1,28 @@
+version: "3.8"
+
+services:
+  # 前后端一体化
+  app:
+    build:
+      context: ..
+      dockerfile: docker-cogniloop/Dockerfile
+    container_name: cogniloop_app
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ../uploads:/app/uploads
+      - ../question_sets:/app/question_sets
+      - ../.env:/app/.env:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  uploads_data:
+    driver: local
+  question_sets_data:
+    driver: local
