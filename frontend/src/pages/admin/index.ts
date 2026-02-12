@@ -4,4 +4,5 @@ export { TeacherManagementPage } from './TeacherManagement';
 export { StudentManagementPage } from './StudentManagement';
 export { CourseManagementPage } from './CourseManagement';
 export { AdminManagementPage } from './AdminManagement';
+export { SystemSettingsPage } from './SystemSettings';
 

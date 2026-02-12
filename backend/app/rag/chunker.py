@@ -1,6 +1,6 @@
 """文本分块器"""
 
-from backend.app.core.config import settings
+from backend.app.services.config_service import get_config_int
 
 
 class TextChunker:
@@ -9,8 +9,8 @@ class TextChunker:
         chunk_size: int | None = None,
         overlap: int | None = None,
     ) -> None:
-        self.chunk_size = chunk_size or settings.chunk_size
-        self.overlap = overlap or settings.chunk_overlap
+        self.chunk_size = chunk_size or get_config_int("chunk_size")
+        self.overlap = overlap or get_config_int("chunk_overlap")
 
     def chunk(self, text: str) -> list[str]:
         if not text or not text.strip():

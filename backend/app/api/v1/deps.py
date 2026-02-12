@@ -36,14 +36,20 @@ async def get_current_teacher(
     payload: dict = Depends(get_current_user_token),
 ) -> Teacher:
     if payload.get("type") != "teacher":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要教师权限")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="需要教师权限"
+        )
 
     auth_service = AuthService(session)
     teacher = await auth_service.get_teacher_by_id(int(payload["sub"]))
     if not teacher:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在"
+        )
     if not teacher.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用"
+        )
     return teacher
 
 
@@ -52,14 +58,20 @@ async def get_current_student(
     payload: dict = Depends(get_current_user_token),
 ) -> Student:
     if payload.get("type") != "student":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要学生权限")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="需要学生权限"
+        )
 
     auth_service = AuthService(session)
     student = await auth_service.get_student_by_id(int(payload["sub"]))
     if not student:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在"
+        )
     if not student.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用"
+        )
     return student
 
 
@@ -68,14 +80,20 @@ async def get_current_admin(
     payload: dict = Depends(get_current_user_token),
 ) -> Admin:
     if payload.get("type") != "admin":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限"
+        )
 
     admin_service = AdminService(session)
     admin = await admin_service.get_admin_by_id(int(payload["sub"]))
     if not admin:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在"
+        )
     if not admin.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="账户已被禁用"
+        )
     return admin
 
 
@@ -83,7 +101,9 @@ async def get_current_super_admin(
     admin: Admin = Depends(get_current_admin),
 ) -> Admin:
     if not admin.is_super_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要超级管理员权限")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="需要超级管理员权限"
+        )
     return admin
 
 

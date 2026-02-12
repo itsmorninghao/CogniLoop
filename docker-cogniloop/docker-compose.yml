@@ -1,12 +1,34 @@
-version: "3.8"
-
 services:
-  # 前后端一体化
+  # PostgreSQL + pgvector
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: cogniloop_db
+    environment:
+      POSTGRES_DB: cogniloop_db
+      POSTGRES_USER: cogniloop
+      POSTGRES_PASSWORD: cogniloop_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cogniloop -d cogniloop_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # 前后端一体化应用
   app:
     build:
       context: ..
       dockerfile: docker-cogniloop/Dockerfile
     container_name: cogniloop_app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://cogniloop:cogniloop_password@db:5432/cogniloop_db
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
@@ -22,7 +44,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  uploads_data:
-    driver: local
-  question_sets_data:
+  pg_data:
     driver: local

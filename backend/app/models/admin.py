@@ -21,4 +21,3 @@ class Admin(SQLModel, table=True):
     is_super_admin: bool = Field(default=False)  # 超级管理员标识
     created_at: datetime = Field(default_factory=utc_now_naive)
     updated_at: datetime = Field(default_factory=utc_now_naive)
-

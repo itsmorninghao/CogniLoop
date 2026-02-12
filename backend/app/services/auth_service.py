@@ -10,7 +10,12 @@ from backend.app.core.security import (
 )
 from backend.app.models.student import Student
 from backend.app.models.teacher import Teacher
-from backend.app.schemas.auth import LoginRequest, LoginResponse, RegisterRequest, UserInfo
+from backend.app.schemas.auth import (
+    LoginRequest,
+    LoginResponse,
+    RegisterRequest,
+    UserInfo,
+)
 
 
 class AuthService:

@@ -32,6 +32,7 @@ COPY pyproject.toml ./
 RUN uv pip install --system .
 
 COPY backend/ /app/backend/
+COPY scripts/ /app/scripts/
 
 COPY --from=frontend-builder /frontend/dist /app/static
 

@@ -7,9 +7,9 @@ from typing import Any
 from langchain_openai import ChatOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.config import settings
 from backend.app.graph.prompts import GRADING_SYSTEM, GRADING_USER
 from backend.app.services.answer_service import AnswerService
+from backend.app.services.config_service import get_config
 from backend.app.services.question_service import QuestionService
 
 
@@ -19,9 +19,9 @@ class AnswerGrader:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.llm = ChatOpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
-            model=settings.openai_model,
+            api_key=get_config("openai_api_key"),
+            base_url=get_config("openai_base_url"),
+            model=get_config("openai_model"),
             temperature=0.1,  # 批改需要更稳定的输出
         )
         self.answer_service = AnswerService(session)

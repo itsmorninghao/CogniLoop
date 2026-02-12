@@ -14,8 +14,6 @@ import sqlmodel
 from alembic import op
 from pgvector.sqlalchemy import Vector
 
-from backend.app.core.config import settings
-
 # revision identifiers, used by Alembic.
 revision: str = "001"
 down_revision: str | None = None
@@ -180,7 +178,7 @@ def upgrade() -> None:
     op.create_index("ix_documents_chapter_id", "documents", ["chapter_id"])
 
     # 知识块表
-    embedding_dims = settings.embedding_dims
+    embedding_dims = 768  # 初始部署时的向量维度
     op.create_table(
         "knowledge_chunks",
         sa.Column("id", sa.Integer(), nullable=False),

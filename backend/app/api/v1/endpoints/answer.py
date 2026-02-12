@@ -66,12 +66,16 @@ async def _run_grading_async(answer_id: int) -> None:
                 logger.info(f"批改任务成功: answer_id={answer_id}")
             else:
                 # grader 内部已经调用了 mark_grading_failed，这里确保提交
-                logger.warning(f"批改任务失败（grader 返回 False）: answer_id={answer_id}")
+                logger.warning(
+                    f"批改任务失败（grader 返回 False）: answer_id={answer_id}"
+                )
 
             # 无论成功或失败都提交（失败时 grader 已设置 failed 状态）
             await session.commit()
         except Exception as e:
-            logger.error(f"批改任务异常: answer_id={answer_id}, error={e}", exc_info=True)
+            logger.error(
+                f"批改任务异常: answer_id={answer_id}, error={e}", exc_info=True
+            )
             await session.rollback()
             # 尝试标记为失败
             try:
@@ -252,7 +256,9 @@ async def get_answer_by_question_set(
 # ============== 教师端 API ==============
 
 
-@router.get("/teacher/question-set/{question_set_id}", response_model=list[TeacherAnswerDetail])
+@router.get(
+    "/teacher/question-set/{question_set_id}", response_model=list[TeacherAnswerDetail]
+)
 async def get_question_set_answers(
     question_set_id: int,
     session: SessionDep,
@@ -271,7 +277,9 @@ async def get_question_set_answers(
         )
 
     answer_service = AnswerService(session)
-    answers = await answer_service.get_question_set_answers_with_students(question_set_id)
+    answers = await answer_service.get_question_set_answers_with_students(
+        question_set_id
+    )
     return answers
 
 

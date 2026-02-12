@@ -324,7 +324,9 @@ async def list_admins(
     ]
 
 
-@router.post("/admins", response_model=AdminResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/admins", response_model=AdminResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_admin(
     data: AdminCreateRequest,
     session: SessionDep,
@@ -399,4 +401,3 @@ async def delete_admin(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
-

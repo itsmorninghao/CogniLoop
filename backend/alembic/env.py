@@ -13,6 +13,7 @@ from backend.app.core.config import settings
 # 导入所有模型以确保它们被注册
 from backend.app.models import (  # noqa: F401
     Answer,
+    ConfigAuditLog,
     Course,
     Document,
     KnowledgeChunk,
@@ -20,6 +21,7 @@ from backend.app.models import (  # noqa: F401
     Student,
     StudentCourse,
     StudentQuestionSet,
+    SystemConfig,
     Teacher,
 )
 

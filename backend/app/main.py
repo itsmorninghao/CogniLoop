@@ -14,7 +14,9 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.app.api.v1 import api_router
 from backend.app.core.config import settings
+from backend.app.core.database import async_session_factory
 from backend.app.core.security import create_access_token, decode_access_token
+from backend.app.services.config_service import load_config_cache
 
 # 静态文件目录（支持 Docker 一体化部署）
 STATIC_DIR = Path("/app/static")
@@ -63,6 +65,11 @@ async def lifespan(_app: FastAPI):
     # 启动时
     logger.info("正在启动 CogniLoop 后端服务...")
     settings.ensure_dirs()
+
+    # 从数据库加载业务配置到内存缓存
+    async with async_session_factory() as session:
+        await load_config_cache(session)
+
     logger.info("CogniLoop 后端服务启动完成")
     yield
     # 关闭时

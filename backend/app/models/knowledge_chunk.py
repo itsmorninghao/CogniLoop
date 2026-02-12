@@ -6,8 +6,6 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import Column
 from sqlmodel import Field, Relationship, SQLModel
 
-from backend.app.core.config import settings
-
 if TYPE_CHECKING:
     from backend.app.models.document import Document
 
@@ -21,7 +19,7 @@ class KnowledgeChunk(SQLModel, table=True):
     content: str = Field(sa_column_kwargs={"nullable": False})
     embedding: Any = Field(
         default=None,
-        sa_column=Column(Vector(settings.embedding_dims)),
+        sa_column=Column(Vector()),
     )
     document_id: int = Field(foreign_key="documents.id", index=True)
     course_id: int = Field(index=True)  # 冗余字段，便于过滤

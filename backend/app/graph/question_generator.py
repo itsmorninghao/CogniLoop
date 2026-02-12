@@ -6,7 +6,6 @@ from datetime import UTC, datetime
 from langchain_openai import ChatOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.config import settings
 from backend.app.graph.prompts import (
     QUESTION_GENERATION_SYSTEM,
     QUESTION_GENERATION_USER,
@@ -15,6 +14,7 @@ from backend.app.graph.prompts import (
 )
 from backend.app.models.question_set import QuestionSet
 from backend.app.rag.retriever import KnowledgeRetriever
+from backend.app.services.config_service import get_config, get_config_int
 from backend.app.services.question_service import QuestionService
 
 
@@ -22,9 +22,9 @@ class QuestionGenerator:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
         self.llm = ChatOpenAI(
-            api_key=settings.openai_api_key,
-            base_url=settings.openai_base_url,
-            model=settings.openai_model,
+            api_key=get_config("openai_api_key"),
+            base_url=get_config("openai_base_url"),
+            model=get_config("openai_model"),
             temperature=0.7,
         )
         self.retriever = KnowledgeRetriever(session)
@@ -44,13 +44,16 @@ class QuestionGenerator:
             course_id=course_id,
             subject=subject,
             chapter_id=chapter_id,
-            top_k=settings.retrieval_top_k,
+            top_k=get_config_int("retrieval_top_k"),
         )
 
-        knowledge_context = "\n\n".join(
-            f"【知识点 {i + 1}】\n{chunk.content}"
-            for i, chunk in enumerate(knowledge_chunks)
-        ) or "（暂无相关知识库内容，请根据通用知识生成）"
+        knowledge_context = (
+            "\n\n".join(
+                f"【知识点 {i + 1}】\n{chunk.content}"
+                for i, chunk in enumerate(knowledge_chunks)
+            )
+            or "（暂无相关知识库内容，请根据通用知识生成）"
+        )
 
         user_prompt = QUESTION_GENERATION_USER.format(
             request=request,

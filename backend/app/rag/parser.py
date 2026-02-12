@@ -29,7 +29,9 @@ class DocumentParser:
 
     async def _parse_pdf(self, path: Path) -> str:
         reader = PdfReader(str(path))
-        text_parts = [page.extract_text() for page in reader.pages if page.extract_text()]
+        text_parts = [
+            page.extract_text() for page in reader.pages if page.extract_text()
+        ]
         return "\n\n".join(text_parts)
 
     async def _parse_word(self, path: Path) -> str:
@@ -44,7 +46,11 @@ class DocumentParser:
         prs = Presentation(str(path))
         text_parts = []
         for slide in prs.slides:
-            slide_text = [shape.text for shape in slide.shapes if hasattr(shape, "text") and shape.text.strip()]
+            slide_text = [
+                shape.text
+                for shape in slide.shapes
+                if hasattr(shape, "text") and shape.text.strip()
+            ]
             if slide_text:
                 text_parts.append("\n".join(slide_text))
         return "\n\n".join(text_parts)

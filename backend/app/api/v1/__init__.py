@@ -6,6 +6,7 @@ from backend.app.api.v1.endpoints import (
     admin,
     answer,
     auth,
+    config,
     course,
     document,
     question,
@@ -29,3 +30,4 @@ api_router.include_router(
 )
 api_router.include_router(answer.router, prefix="/answer", tags=["答案"])
 api_router.include_router(statistics.router, prefix="/statistics", tags=["统计"])
+api_router.include_router(config.router, prefix="/admin", tags=["系统配置"])

@@ -15,6 +15,7 @@ import {
   StudentManagementPage,
   CourseManagementPage,
   AdminManagementPage,
+  SystemSettingsPage,
 } from '@/pages/admin';
 
 export function App() {
@@ -47,6 +48,7 @@ export function App() {
           <Route path="teachers" element={<TeacherManagementPage />} />
           <Route path="students" element={<StudentManagementPage />} />
           <Route path="courses" element={<CourseManagementPage />} />
+          <Route path="settings" element={<SystemSettingsPage />} />
           <Route path="admins" element={<AdminManagementPage />} />
         </Route>
 

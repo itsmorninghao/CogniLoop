@@ -3,9 +3,9 @@
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.core.config import settings
 from backend.app.models.knowledge_chunk import KnowledgeChunk
 from backend.app.rag.embeddings import EmbeddingService
+from backend.app.services.config_service import get_config_int
 
 
 class KnowledgeRetriever:
@@ -21,7 +21,7 @@ class KnowledgeRetriever:
         chapter_id: int | None = None,
         top_k: int | None = None,
     ) -> list[KnowledgeChunk]:
-        top_k = top_k or settings.retrieval_top_k
+        top_k = top_k or get_config_int("retrieval_top_k")
         query_embedding = await self.embedding_service.embed_text(query)
 
         conditions = [KnowledgeChunk.course_id == course_id]
@@ -47,7 +47,7 @@ class KnowledgeRetriever:
         chapter_id: int | None = None,
         top_k: int | None = None,
     ) -> list[tuple[KnowledgeChunk, float]]:
-        top_k = top_k or settings.retrieval_top_k
+        top_k = top_k or get_config_int("retrieval_top_k")
         query_embedding = await self.embedding_service.embed_text(query)
         embedding_str = f"[{','.join(map(str, query_embedding))}]"
 

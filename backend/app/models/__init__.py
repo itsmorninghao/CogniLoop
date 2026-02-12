@@ -9,12 +9,14 @@ from backend.app.models.question_set import QuestionSet, QuestionSetStatus
 from backend.app.models.student import Student
 from backend.app.models.student_course import StudentCourse
 from backend.app.models.student_question_set import StudentQuestionSet
+from backend.app.models.system_config import ConfigAuditLog, SystemConfig
 from backend.app.models.teacher import Teacher
 
 __all__ = [
     "Admin",
     "Answer",
     "AnswerStatus",
+    "ConfigAuditLog",
     "Course",
     "Document",
     "DocumentStatus",
@@ -25,5 +27,6 @@ __all__ = [
     "Student",
     "StudentCourse",
     "StudentQuestionSet",
+    "SystemConfig",
     "Teacher",
 ]

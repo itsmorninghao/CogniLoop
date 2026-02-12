@@ -2,17 +2,20 @@
 
 from openai import AsyncOpenAI
 
-from backend.app.core.config import settings
+from backend.app.services.config_service import get_config, get_config_int
 
 
 class EmbeddingService:
     def __init__(self) -> None:
+        embedding_api_key = get_config("embedding_api_key")
+        embedding_base_url = get_config("embedding_base_url")
+
         self.client = AsyncOpenAI(
-            api_key=settings.embedding_api_key or settings.openai_api_key,
-            base_url=settings.embedding_base_url or settings.openai_base_url,
+            api_key=embedding_api_key,
+            base_url=embedding_base_url,
         )
-        self.model = settings.embedding_model
-        self.dimensions = settings.embedding_dims
+        self.model = get_config("embedding_model")
+        self.dimensions = get_config_int("embedding_dims")
 
     async def embed_text(self, text: str) -> list[float]:
         response = await self.client.embeddings.create(

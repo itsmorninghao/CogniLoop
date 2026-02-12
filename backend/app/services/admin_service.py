@@ -69,9 +69,7 @@ class AdminService:
         if not admin.is_active:
             raise ValueError("账户已被禁用")
 
-        access_token = create_access_token(
-            data={"sub": str(admin.id), "type": "admin"}
-        )
+        access_token = create_access_token(data={"sub": str(admin.id), "type": "admin"})
 
         return {
             "access_token": access_token,
@@ -277,17 +275,19 @@ class AdminService:
             student_count_result = await self.session.execute(student_count_stmt)
             student_count = student_count_result.scalar() or 0
 
-            courses.append({
-                "id": course.id,
-                "name": course.name,
-                "code": course.code,
-                "invite_code": course.invite_code,
-                "teacher_id": course.teacher_id,
-                "teacher_name": teacher_name,
-                "is_active": course.is_active,
-                "student_count": student_count,
-                "created_at": course.created_at.isoformat(),
-            })
+            courses.append(
+                {
+                    "id": course.id,
+                    "name": course.name,
+                    "code": course.code,
+                    "invite_code": course.invite_code,
+                    "teacher_id": course.teacher_id,
+                    "teacher_name": teacher_name,
+                    "is_active": course.is_active,
+                    "student_count": student_count,
+                    "created_at": course.created_at.isoformat(),
+                }
+            )
 
         return courses, total
 
@@ -312,9 +312,7 @@ class AdminService:
 
         # 删除学生关联
         await self.session.execute(
-            StudentCourse.__table__.delete().where(
-                StudentCourse.course_id == course_id
-            )
+            StudentCourse.__table__.delete().where(StudentCourse.course_id == course_id)
         )
 
         await self.session.delete(course)
@@ -345,9 +343,7 @@ class AdminService:
             await self.session.refresh(admin)
         return admin
 
-    async def delete_admin(
-        self, admin_id: int, current_admin_id: int
-    ) -> bool:
+    async def delete_admin(self, admin_id: int, current_admin_id: int) -> bool:
         """删除管理员（不能删除自己）"""
         if admin_id == current_admin_id:
             raise ValueError("不能删除自己的账户")
@@ -361,4 +357,3 @@ class AdminService:
         await self.session.delete(admin)
         await self.session.flush()
         return True
-

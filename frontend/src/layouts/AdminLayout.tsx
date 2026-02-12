@@ -7,6 +7,7 @@ import {
   BookOpen,
   LogOut,
   Crown,
+  Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth';
@@ -27,16 +28,16 @@ export function AdminLayout() {
     { to: '/admin/teachers', icon: GraduationCap, label: '教师管理' },
     { to: '/admin/students', icon: Users, label: '学生管理' },
     { to: '/admin/courses', icon: BookOpen, label: '课程管理' },
+    { to: '/admin/settings', icon: Settings, label: '系统配置' },
     ...(user?.is_super_admin
       ? [{ to: '/admin/admins', icon: Crown, label: '管理员' }]
       : []),
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex">
-      {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col">
-        <div className="p-6 border-b border-slate-800">
+    <div className="h-screen bg-slate-50 dark:bg-slate-900 flex overflow-hidden">
+      <aside className="w-64 bg-slate-900 text-white flex flex-col shrink-0">
+        <div className="p-6 border-b border-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center">
               <Shield className="w-6 h-6 text-amber-500" />
@@ -48,7 +49,7 @@ export function AdminLayout() {
           </div>
         </div>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 min-h-0 overflow-y-auto p-4 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -71,7 +72,7 @@ export function AdminLayout() {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-800 shrink-0">
           <div className="px-4 py-2 mb-2">
             <p className="text-sm font-medium truncate">{user?.full_name}</p>
             <p className="text-xs text-slate-400 truncate">{user?.email}</p>
