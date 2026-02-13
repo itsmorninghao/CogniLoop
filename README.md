@@ -29,7 +29,10 @@ cd CogniLoop
 cp .env.example .env
 ```
 
-编辑 `.env` 文件，填入你的 PostgreSQL、LLM、向量模型的连接信息
+编辑 `.env` 文件，配置 JWT 密钥等信息（生产环境建议使用 `openssl rand -hex 32` 生成密钥）
+
+> PostgreSQL 数据库由 Docker Compose 自动管理，无需额外配置。
+> LLM 和 Embedding 模型配置在管理员后台「系统配置」页面在线设置。
 
 三、 构建并启动服务
 
@@ -72,10 +75,17 @@ docker-compose exec app python scripts/create_admin.py \
 >
 > `--name`: 管理员姓名（默认: `系统管理员`）
 
-五、 访问应用
+五、 配置 LLM 和 Embedding 模型
+
+使用刚创建的管理员账号登录管理员后台 http://localhost:8000/admin/login ，在「系统配置」页面填写：
+
+- **LLM 模型配置**：API Key、Base URL、模型名称
+- **Embedding 模型配置**：API Key、Base URL、模型名称、向量维度
+- **RAG 检索配置**：分块大小、分块重叠、检索数量（可保持默认值）
+
+六、 访问应用
 
 - 前端: http://localhost:8000
-- API 文档: http://localhost:8000/docs
 - 管理员后台: http://localhost:8000/admin/login
 
 ## 🏗️ 项目结构
