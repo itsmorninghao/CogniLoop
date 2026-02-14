@@ -1,6 +1,9 @@
 """管理员服务"""
 
-from sqlalchemy import func, select
+import shutil
+from pathlib import Path
+
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.security import (
@@ -12,9 +15,11 @@ from backend.app.models.admin import Admin
 from backend.app.models.answer import Answer
 from backend.app.models.course import Course
 from backend.app.models.document import Document
+from backend.app.models.knowledge_chunk import KnowledgeChunk
 from backend.app.models.question_set import QuestionSet
 from backend.app.models.student import Student
 from backend.app.models.student_course import StudentCourse
+from backend.app.models.student_question_set import StudentQuestionSet
 from backend.app.models.teacher import Teacher
 
 
@@ -303,18 +308,54 @@ class AdminService:
         return course
 
     async def delete_course(self, course_id: int) -> bool:
-        """删除课程"""
+        """删除课程及其全部关联数据"""
         stmt = select(Course).where(Course.id == course_id)
         result = await self.session.execute(stmt)
         course = result.scalar_one_or_none()
         if not course:
             return False
 
-        # 删除学生关联
+        # 删除答案
+        await self.session.execute(delete(Answer).where(Answer.course_id == course_id))
+
+        # 删除学生试题集分配
         await self.session.execute(
-            StudentCourse.__table__.delete().where(StudentCourse.course_id == course_id)
+            delete(StudentQuestionSet).where(StudentQuestionSet.course_id == course_id)
         )
 
+        # 删除知识块
+        await self.session.execute(
+            delete(KnowledgeChunk).where(KnowledgeChunk.course_id == course_id)
+        )
+
+        # 删除文档（含磁盘文件）及记录
+        doc_stmt = select(Document).where(Document.course_id == course_id)
+        doc_result = await self.session.execute(doc_stmt)
+        for doc in doc_result.scalars().all():
+            file_path = Path(doc.file_path)
+            if file_path.exists():
+                file_path.unlink()
+                doc_dir = file_path.parent
+                if doc_dir.exists() and not any(doc_dir.iterdir()):
+                    shutil.rmtree(doc_dir)
+            await self.session.delete(doc)
+
+        # 删除试题集（含 markdown 文件）及记录
+        qs_stmt = select(QuestionSet).where(QuestionSet.course_id == course_id)
+        qs_result = await self.session.execute(qs_stmt)
+        for qs in qs_result.scalars().all():
+            if qs.markdown_path:
+                md_path = Path(qs.markdown_path)
+                if md_path.exists():
+                    md_path.unlink()
+            await self.session.delete(qs)
+
+        # 删除学生选课关联
+        await self.session.execute(
+            delete(StudentCourse).where(StudentCourse.course_id == course_id)
+        )
+
+        # 删除课程
         await self.session.delete(course)
         await self.session.flush()
         return True
