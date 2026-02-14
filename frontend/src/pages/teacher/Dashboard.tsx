@@ -58,7 +58,7 @@ export function TeacherDashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [newCourseName, setNewCourseName] = useState('');
-  const [newCourseCode, setNewCourseCode] = useState('');
+  const [newCourseDescription, setNewCourseDescription] = useState('');
 
   // 加载课程列表
   const loadCourses = async () => {
@@ -102,8 +102,8 @@ export function TeacherDashboard() {
 
   // 创建课程
   const handleCreateCourse = async () => {
-    if (!newCourseName.trim() || !newCourseCode.trim()) {
-      toast.error('请填写课程名称和代码');
+    if (!newCourseName.trim()) {
+      toast.error('请填写课程名称');
       return;
     }
 
@@ -111,12 +111,12 @@ export function TeacherDashboard() {
       setIsCreating(true);
       const response = await courseApi.create({
         name: newCourseName.trim(),
-        code: newCourseCode.trim(),
+        description: newCourseDescription.trim() || undefined,
       });
       toast.success('课程创建成功');
       setCreateDialogOpen(false);
       setNewCourseName('');
-      setNewCourseCode('');
+      setNewCourseDescription('');
       await loadCourses();
       await selectCourse(response.data.id);
     } catch (error) {
@@ -197,12 +197,13 @@ export function TeacherDashboard() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="course-code">课程代码</Label>
+                <Label htmlFor="course-description">课程描述 <span className="text-muted-foreground text-xs">（选填）</span></Label>
                 <Input
-                  id="course-code"
-                  placeholder="例如：CS101"
-                  value={newCourseCode}
-                  onChange={(e) => setNewCourseCode(e.target.value)}
+                  id="course-description"
+                  placeholder="简要描述课程内容，最多 200 字"
+                  value={newCourseDescription}
+                  maxLength={200}
+                  onChange={(e) => setNewCourseDescription(e.target.value)}
                 />
               </div>
             </div>
@@ -255,7 +256,6 @@ export function TeacherDashboard() {
                       </div>
                       <div>
                         <p className="font-medium">{course.name}</p>
-                        <p className="text-sm text-muted-foreground">{course.code}</p>
                       </div>
                     </div>
                   </div>

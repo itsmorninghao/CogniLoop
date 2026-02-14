@@ -20,6 +20,12 @@ def generate_invite_code() -> str:
     return "".join(random.choices(chars, k=6))
 
 
+def generate_course_code() -> str:
+    """生成课程代码 CRS-XXXXXX（6 位 A-Z, 0-9）"""
+    chars = string.ascii_uppercase + string.digits
+    return "CRS-" + "".join(random.choices(chars, k=6))
+
+
 def utc_now_naive() -> datetime:
     """获取当前 UTC 时间（naive，无时区信息）"""
     return datetime.now(UTC).replace(tzinfo=None)
@@ -32,7 +38,13 @@ class Course(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     name: str = Field(max_length=200, index=True)
-    code: str = Field(unique=True, index=True, max_length=50)
+    code: str = Field(
+        default_factory=generate_course_code,
+        unique=True,
+        index=True,
+        max_length=50,
+    )
+    description: str | None = Field(default=None, max_length=200)
     invite_code: str = Field(
         default_factory=generate_invite_code,
         unique=True,

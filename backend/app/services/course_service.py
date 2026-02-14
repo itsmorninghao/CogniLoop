@@ -20,15 +20,9 @@ class CourseService:
 
     async def create_course(self, data: CourseCreate, teacher_id: int) -> Course:
         """创建课程"""
-        # 检查课程代码是否已存在
-        stmt = select(Course).where(Course.code == data.code)
-        result = await self.session.execute(stmt)
-        if result.scalar_one_or_none():
-            raise ValueError("课程代码已存在")
-
         course = Course(
             name=data.name,
-            code=data.code,
+            description=data.description,
             teacher_id=teacher_id,
         )
         self.session.add(course)
@@ -79,6 +73,7 @@ class CourseService:
             id=course.id,
             name=course.name,
             code=course.code,
+            description=course.description,
             invite_code=course.invite_code,
             teacher_id=course.teacher_id,
             is_active=course.is_active,

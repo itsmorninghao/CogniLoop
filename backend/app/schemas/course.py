@@ -9,7 +9,7 @@ class CourseCreate(BaseModel):
     """创建课程请求"""
 
     name: str = Field(..., min_length=1, max_length=200)
-    code: str = Field(..., min_length=1, max_length=50)
+    description: str | None = Field(default=None, max_length=200)
 
 
 class CourseResponse(BaseModel):
@@ -18,6 +18,7 @@ class CourseResponse(BaseModel):
     id: int
     name: str
     code: str
+    description: str | None = None
     invite_code: str
     teacher_id: int
     is_active: bool

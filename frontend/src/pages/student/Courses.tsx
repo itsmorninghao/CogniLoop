@@ -182,7 +182,9 @@ export function StudentCoursesPage() {
                   </Badge>
                 </div>
                 <CardTitle className="mt-4">{course.name}</CardTitle>
-                <CardDescription>课程代码：{course.code}</CardDescription>
+                {course.description && (
+                  <CardDescription>{course.description}</CardDescription>
+                )}
               </CardHeader>
               <CardContent>
                 <div className="flex items-center justify-between">

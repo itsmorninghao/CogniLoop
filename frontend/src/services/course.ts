@@ -22,7 +22,7 @@ export interface CourseDetail extends Course {
 
 export interface CourseCreateRequest {
   name: string;
-  code: string;
+  description?: string;
 }
 
 export interface CourseListResponse {
