@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { GraduationCap, Loader2, BookOpen, Users } from 'lucide-react';
+import { GraduationCap, Loader2, BookOpen, Users, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/sonner';
 import { useAuthStore, type UserType } from '@/stores/auth';
+import { authApi } from '@/services/auth';
 
 export function RegisterPage() {
   const [searchParams] = useSearchParams();
@@ -26,9 +27,34 @@ export function RegisterPage() {
   const [studentEmail, setStudentEmail] = useState('');
   const [studentPassword, setStudentPassword] = useState('');
   const [studentName, setStudentName] = useState('');
+
+  // Captcha
+  const [captchaValue, setCaptchaValue] = useState('');
+  const [captchaId, setCaptchaId] = useState('');
+  const [captchaImage, setCaptchaImage] = useState('');
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   
   const { register, isLoading, isAuthenticated, userType } = useAuthStore();
   const navigate = useNavigate();
+
+  const fetchCaptcha = useCallback(async () => {
+    setCaptchaLoading(true);
+    try {
+      const response = await authApi.getCaptcha();
+      setCaptchaId(response.data.captcha_id);
+      setCaptchaImage(response.data.image_base64);
+      setCaptchaValue('');
+    } catch {
+      toast.error('获取验证码失败，请稍后重试');
+    } finally {
+      setCaptchaLoading(false);
+    }
+  }, []);
+
+  // 初始化获取验证码
+  useEffect(() => {
+    fetchCaptcha();
+  }, [fetchCaptcha]);
 
   // 已登录则跳转
   useEffect(() => {
@@ -45,17 +71,25 @@ export function RegisterPage() {
       return;
     }
 
+    if (!captchaValue.trim()) {
+      toast.error('请输入验证码');
+      return;
+    }
+
     try {
       await register({
         username: teacherUsername.trim(),
         email: teacherEmail.trim(),
         password: teacherPassword,
         full_name: teacherName.trim(),
+        captcha_id: captchaId,
+        captcha_value: captchaValue.trim(),
       }, 'teacher');
       toast.success('注册成功');
       navigate('/teacher');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '注册失败');
+      fetchCaptcha();
     }
   };
 
@@ -67,6 +101,11 @@ export function RegisterPage() {
       return;
     }
 
+    if (!captchaValue.trim()) {
+      toast.error('请输入验证码');
+      return;
+    }
+
     try {
       await register({
         username: studentNumber.trim(),
@@ -74,13 +113,48 @@ export function RegisterPage() {
         password: studentPassword,
         full_name: studentName.trim(),
         student_number: studentNumber.trim(),
+        captcha_id: captchaId,
+        captcha_value: captchaValue.trim(),
       }, 'student');
       toast.success('注册成功');
       navigate('/student');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '注册失败');
+      fetchCaptcha();
     }
   };
+
+  const captchaBlock = (
+    <div className="space-y-2">
+      <Label>验证码</Label>
+      <div className="flex items-center gap-3">
+        <Input
+          type="text"
+          placeholder="请输入验证码"
+          value={captchaValue}
+          onChange={(e) => setCaptchaValue(e.target.value)}
+          maxLength={6}
+          className="flex-1"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={fetchCaptcha}
+          className="shrink-0 h-9 rounded-md overflow-hidden border border-input bg-muted cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center"
+          title="点击刷新验证码"
+          disabled={captchaLoading}
+        >
+          {captchaLoading ? (
+            <RefreshCw className="w-5 h-5 animate-spin mx-4 text-muted-foreground" />
+          ) : captchaImage ? (
+            <img src={captchaImage} alt="验证码" className="h-full w-auto" />
+          ) : (
+            <RefreshCw className="w-5 h-5 mx-4 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-primary/5 flex items-center justify-center p-4">
@@ -156,6 +230,7 @@ export function RegisterPage() {
                       onChange={(e) => setTeacherPassword(e.target.value)}
                     />
                   </div>
+                  {captchaBlock}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
                       <>
@@ -211,6 +286,7 @@ export function RegisterPage() {
                       onChange={(e) => setStudentPassword(e.target.value)}
                     />
                   </div>
+                  {captchaBlock}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
                       <>

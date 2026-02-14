@@ -9,6 +9,7 @@ from backend.app.api.v1.deps import (
     SessionDep,
 )
 from backend.app.services.admin_service import AdminService
+from backend.app.services.captcha_service import CaptchaService
 
 router = APIRouter()
 
@@ -21,6 +22,8 @@ class AdminLoginRequest(BaseModel):
 
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=100)
+    captcha_id: str = Field(..., description="验证码 ID")
+    captcha_value: str = Field(..., description="用户输入的验证码")
 
 
 class AdminCreateRequest(BaseModel):
@@ -92,6 +95,16 @@ class PaginatedResponse(BaseModel):
 @router.post("/login")
 async def admin_login(data: AdminLoginRequest, session: SessionDep) -> dict:
     """管理员登录"""
+    # 校验验证码
+    captcha_service = CaptchaService(session)
+    try:
+        await captcha_service.verify(data.captcha_id, data.captcha_value)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
     admin_service = AdminService(session)
     try:
         return await admin_service.login(data.username, data.password)

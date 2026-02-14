@@ -45,6 +45,8 @@ export interface PaginatedResponse<T> {
 export interface LoginRequest {
   username: string;
   password: string;
+  captcha_id: string;
+  captcha_value: string;
 }
 
 export interface CreateAdminRequest {

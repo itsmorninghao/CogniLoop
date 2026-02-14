@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { GraduationCap, Loader2, BookOpen, Users } from 'lucide-react';
+import { GraduationCap, Loader2, BookOpen, Users, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/sonner';
 import { useAuthStore, type UserType } from '@/stores/auth';
+import { authApi } from '@/services/auth';
 
 export function LoginPage() {
   const [searchParams] = useSearchParams();
@@ -16,10 +17,33 @@ export function LoginPage() {
   const [activeTab, setActiveTab] = useState<UserType>(initialRole);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [captchaValue, setCaptchaValue] = useState('');
+  const [captchaId, setCaptchaId] = useState('');
+  const [captchaImage, setCaptchaImage] = useState('');
+  const [captchaLoading, setCaptchaLoading] = useState(false);
   
   const { login, isLoading, isAuthenticated, userType, token } = useAuthStore();
   const navigate = useNavigate();
   const hasNavigated = useRef(false);
+
+  const fetchCaptcha = useCallback(async () => {
+    setCaptchaLoading(true);
+    try {
+      const response = await authApi.getCaptcha();
+      setCaptchaId(response.data.captcha_id);
+      setCaptchaImage(response.data.image_base64);
+      setCaptchaValue('');
+    } catch {
+      toast.error('获取验证码失败，请稍后重试');
+    } finally {
+      setCaptchaLoading(false);
+    }
+  }, []);
+
+  // 初始化获取验证码
+  useEffect(() => {
+    fetchCaptcha();
+  }, [fetchCaptcha]);
 
   // 已登录且有有效 token 则跳转（防止重复跳转）
   useEffect(() => {
@@ -37,14 +61,56 @@ export function LoginPage() {
       return;
     }
 
+    if (!captchaValue.trim()) {
+      toast.error('请输入验证码');
+      return;
+    }
+
     try {
-      await login({ username: username.trim(), password }, activeTab);
+      await login(
+        { username: username.trim(), password, captcha_id: captchaId, captcha_value: captchaValue.trim() },
+        activeTab,
+      );
       toast.success('登录成功');
       navigate(activeTab === 'teacher' ? '/teacher' : '/student');
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '登录失败');
+      // 登录失败后刷新验证码
+      fetchCaptcha();
     }
   };
+
+  const captchaBlock = (
+    <div className="space-y-2">
+      <Label>验证码</Label>
+      <div className="flex items-center gap-3">
+        <Input
+          type="text"
+          placeholder="请输入验证码"
+          value={captchaValue}
+          onChange={(e) => setCaptchaValue(e.target.value)}
+          maxLength={6}
+          className="flex-1"
+          autoComplete="off"
+        />
+        <button
+          type="button"
+          onClick={fetchCaptcha}
+          className="shrink-0 h-9 rounded-md overflow-hidden border border-input bg-muted cursor-pointer hover:opacity-80 transition-opacity flex items-center justify-center"
+          title="点击刷新验证码"
+          disabled={captchaLoading}
+        >
+          {captchaLoading ? (
+            <RefreshCw className="w-5 h-5 animate-spin mx-4 text-muted-foreground" />
+          ) : captchaImage ? (
+            <img src={captchaImage} alt="验证码" className="h-full w-auto" />
+          ) : (
+            <RefreshCw className="w-5 h-5 mx-4 text-muted-foreground" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-primary/5 flex items-center justify-center p-4">
@@ -100,6 +166,7 @@ export function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                     />
                   </div>
+                  {captchaBlock}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
                       <>
@@ -135,6 +202,7 @@ export function LoginPage() {
                       onChange={(e) => setPassword(e.target.value)}
                     />
                   </div>
+                  {captchaBlock}
                   <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading ? (
                       <>

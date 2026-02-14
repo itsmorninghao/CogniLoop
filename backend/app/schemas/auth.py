@@ -12,6 +12,8 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=6, max_length=100)
     full_name: str = Field(..., min_length=1, max_length=100)
+    captcha_id: str = Field(..., description="验证码 ID")
+    captcha_value: str = Field(..., description="用户输入的验证码")
 
 
 class LoginRequest(BaseModel):
@@ -19,6 +21,8 @@ class LoginRequest(BaseModel):
 
     username: str = Field(..., min_length=3, max_length=50)
     password: str = Field(..., min_length=6, max_length=100)
+    captcha_id: str = Field(..., description="验证码 ID")
+    captcha_value: str = Field(..., description="用户输入的验证码")
 
 
 class UserInfo(BaseModel):

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from sqlalchemy import Enum as SQLAEnum
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -41,12 +42,25 @@ class Document(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     filename: str = Field(max_length=255)
     original_filename: str = Field(max_length=255)
-    file_type: FileType
+    file_type: FileType = Field(
+        sa_type=SQLAEnum(
+            FileType,
+            values_callable=lambda obj: [e.value for e in obj],
+            native_enum=False,
+        )
+    )
     file_path: str = Field(max_length=500)
     course_id: int = Field(foreign_key="courses.id", index=True)
     subject: str | None = Field(default=None, max_length=100)
     chapter_id: int | None = Field(default=None, index=True)
-    status: DocumentStatus = Field(default=DocumentStatus.PROCESSING)
+    status: DocumentStatus = Field(
+        default=DocumentStatus.PROCESSING,
+        sa_type=SQLAEnum(
+            DocumentStatus,
+            values_callable=lambda obj: [e.value for e in obj],
+            native_enum=False,
+        ),
+    )
     error_message: str | None = Field(default=None)
     chunk_count: int = Field(default=0)
     created_at: datetime = Field(default_factory=utc_now_naive)

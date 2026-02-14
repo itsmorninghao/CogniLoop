@@ -26,6 +26,7 @@ dependencies = [
     "pydantic-settings>=2.6.0",
     "email-validator>=2.0.0",
     "httpx>=0.28.0",
+    "captcha>=0.6.0",
 ]
 
 [project.optional-dependencies]

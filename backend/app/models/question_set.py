@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from sqlalchemy import Enum as SQLAEnum
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
@@ -37,7 +38,14 @@ class QuestionSet(SQLModel, table=True):
     course_id: int = Field(foreign_key="courses.id", index=True)
     teacher_id: int = Field(foreign_key="teachers.id", index=True)
     is_public: bool = Field(default=False)
-    status: QuestionSetStatus = Field(default=QuestionSetStatus.DRAFT)
+    status: QuestionSetStatus = Field(
+        default=QuestionSetStatus.DRAFT,
+        sa_type=SQLAEnum(
+            QuestionSetStatus,
+            values_callable=lambda obj: [e.value for e in obj],
+            native_enum=False,
+        ),
+    )
     created_at: datetime = Field(default_factory=utc_now_naive)
     updated_at: datetime = Field(default_factory=utc_now_naive)
 

@@ -7,11 +7,15 @@ export interface RegisterRequest {
   password: string;
   full_name: string;
   student_number?: string;
+  captcha_id: string;
+  captcha_value: string;
 }
 
 export interface LoginRequest {
   username: string;
   password: string;
+  captcha_id: string;
+  captcha_value: string;
 }
 
 export interface AuthResponse {
@@ -27,8 +31,17 @@ export interface AuthResponse {
   };
 }
 
+export interface CaptchaResponse {
+  captcha_id: string;
+  image_base64: string;
+}
+
 // 认证 API
 export const authApi = {
+  // 获取验证码
+  getCaptcha: () =>
+    api.get<CaptchaResponse>('/auth/captcha'),
+
   // 教师注册
   registerTeacher: (data: RegisterRequest) =>
     api.post<AuthResponse>('/auth/register/teacher', data),

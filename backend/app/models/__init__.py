@@ -2,6 +2,7 @@
 
 from backend.app.models.admin import Admin
 from backend.app.models.answer import Answer, AnswerStatus
+from backend.app.models.captcha_store import CaptchaStore
 from backend.app.models.course import Course
 from backend.app.models.document import Document, DocumentStatus, FileType
 from backend.app.models.knowledge_chunk import KnowledgeChunk
@@ -16,6 +17,7 @@ __all__ = [
     "Admin",
     "Answer",
     "AnswerStatus",
+    "CaptchaStore",
     "ConfigAuditLog",
     "Course",
     "Document",
