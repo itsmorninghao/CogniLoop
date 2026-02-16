@@ -33,6 +33,7 @@ class QuestionSetResponse(BaseModel):
     teacher_id: int
     is_public: bool
     status: QuestionSetStatus
+    shared_to_plaza_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
 

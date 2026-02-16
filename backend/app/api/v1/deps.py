@@ -15,6 +15,7 @@ from backend.app.services.admin_service import AdminService
 from backend.app.services.auth_service import AuthService
 
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
@@ -107,7 +108,64 @@ async def get_current_super_admin(
     return admin
 
 
+async def get_optional_user_token(
+    credentials: HTTPAuthorizationCredentials | None = Depends(optional_security),
+) -> dict | None:
+    """可选认证：未登录时返回 None"""
+    if not credentials:
+        return None
+    payload = decode_access_token(credentials.credentials)
+    return payload
+
+
+async def get_current_user(
+    session: SessionDep,
+    payload: dict = Depends(get_current_user_token),
+) -> Student | Teacher:
+    """获取当前登录用户（学生或教师）"""
+    user_type = payload.get("type")
+    auth_service = AuthService(session)
+
+    if user_type == "teacher":
+        teacher = await auth_service.get_teacher_by_id(int(payload["sub"]))
+        if not teacher or not teacher.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用"
+            )
+        return teacher
+    elif user_type == "student":
+        student = await auth_service.get_student_by_id(int(payload["sub"]))
+        if not student or not student.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用"
+            )
+        return student
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="无效的用户类型"
+        )
+
+
+async def get_optional_user(
+    session: SessionDep,
+    payload: dict | None = Depends(get_optional_user_token),
+) -> Student | Teacher | None:
+    """可选认证：未登录返回 None，已登录返回用户"""
+    if not payload:
+        return None
+    user_type = payload.get("type")
+    auth_service = AuthService(session)
+
+    if user_type == "teacher":
+        return await auth_service.get_teacher_by_id(int(payload["sub"]))
+    elif user_type == "student":
+        return await auth_service.get_student_by_id(int(payload["sub"]))
+    return None
+
+
 CurrentTeacher = Annotated[Teacher, Depends(get_current_teacher)]
 CurrentStudent = Annotated[Student, Depends(get_current_student)]
 CurrentAdmin = Annotated[Admin, Depends(get_current_admin)]
 CurrentSuperAdmin = Annotated[Admin, Depends(get_current_super_admin)]
+CurrentUser = Annotated[Student | Teacher, Depends(get_current_user)]
+OptionalUser = Annotated[Student | Teacher | None, Depends(get_optional_user)]

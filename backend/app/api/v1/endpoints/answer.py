@@ -59,7 +59,7 @@ async def _run_grading_async(answer_id: int) -> None:
                 question_service = QuestionService(session)
                 answer_service = AnswerService(session)
                 answer = await answer_service.get_answer_by_id(answer_id)
-                if answer:
+                if answer and answer.student_id:
                     await question_service.mark_completed(
                         answer.question_set_id, answer.student_id
                     )

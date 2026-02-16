@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from backend.app.api.v1.deps import CurrentTeacher, SessionDep
 from backend.app.graph.question_generator import QuestionGenerator
+from backend.app.schemas.plaza import SharePlazaResponse, UnsharePlazaResponse
 from backend.app.schemas.question import (
     AssignRequest,
     QuestionGenerateRequest,
@@ -13,6 +14,7 @@ from backend.app.schemas.question import (
     QuestionSetResponse,
 )
 from backend.app.services.course_service import CourseService
+from backend.app.services.plaza_service import PlazaService
 from backend.app.services.question_service import QuestionService
 
 router = APIRouter()
@@ -203,6 +205,46 @@ async def publish_question_set(
         )
 
     return {"message": "发布成功"}
+
+
+@router.post("/{question_set_id}/share-plaza", response_model=SharePlazaResponse)
+async def share_to_plaza(
+    question_set_id: int,
+    session: SessionDep,
+    teacher: CurrentTeacher,
+) -> SharePlazaResponse:
+    """分享试题集到广场"""
+    try:
+        plaza_service = PlazaService(session)
+        qs = await plaza_service.share_to_plaza(question_set_id, teacher.id)
+        return SharePlazaResponse(
+            message="已分享到广场",
+            shared_to_plaza_at=qs.shared_to_plaza_at,
+            share_url=f"/plaza/question-sets/{qs.id}",
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
+
+
+@router.post("/{question_set_id}/unshare-plaza", response_model=UnsharePlazaResponse)
+async def unshare_from_plaza(
+    question_set_id: int,
+    session: SessionDep,
+    teacher: CurrentTeacher,
+) -> UnsharePlazaResponse:
+    """从广场撤回试题集"""
+    try:
+        plaza_service = PlazaService(session)
+        await plaza_service.unshare_from_plaza(question_set_id, teacher.id)
+        return UnsharePlazaResponse(message="已从广场撤回")
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
 
 @router.delete("/{question_set_id}", status_code=status.HTTP_204_NO_CONTENT)

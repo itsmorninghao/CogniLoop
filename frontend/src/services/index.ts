@@ -5,4 +5,5 @@ export * from './document';
 export * from './question';
 export * from './answer';
 export * from './statistics';
+export * from './plaza';
 

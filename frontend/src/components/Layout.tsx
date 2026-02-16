@@ -12,6 +12,7 @@ import {
   Sparkles,
   ClipboardList,
   Clock,
+  Globe,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
@@ -27,11 +28,13 @@ const teacherNavItems: NavItem[] = [
   { to: '/teacher', label: '仪表盘', icon: LayoutDashboard, end: true },
   { to: '/teacher/knowledge', label: '知识库', icon: FileText },
   { to: '/teacher/questions', label: '生成试题', icon: Sparkles },
+  { to: '/teacher/plaza', label: '题目广场', icon: Globe },
 ];
 
 const studentNavItems: NavItem[] = [
   { to: '/student', label: '我的课程', icon: Library, end: true },
   { to: '/student/tests', label: '待做试题', icon: ClipboardList },
+  { to: '/student/plaza', label: '题目广场', icon: Globe },
 ];
 
 export function Layout() {

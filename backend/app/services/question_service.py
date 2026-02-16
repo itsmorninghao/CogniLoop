@@ -303,13 +303,17 @@ class QuestionService:
         if result.scalar_one_or_none():
             return True
 
-        # 检查是否公开且学生在课程中
-        stmt = select(QuestionSet).where(
-            QuestionSet.id == question_set_id, QuestionSet.is_public
-        )
-        result = await self.session.execute(stmt)
-        question_set = result.scalar_one_or_none()
+        # 获取试题集
+        question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
+            return False
+
+        # 广场分支：已分享到广场的试题集，任意已登录学生可访问
+        if question_set.shared_to_plaza_at is not None:
+            return True
+
+        # 公开试题集：检查学生是否在对应课程中
+        if not question_set.is_public:
             return False
 
         stmt = select(StudentCourse).where(

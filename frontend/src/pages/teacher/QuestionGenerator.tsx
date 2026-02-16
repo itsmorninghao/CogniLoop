@@ -20,6 +20,8 @@ import {
   Trash2,
   ArrowLeft,
   ClipboardList,
+  Share2,
+  Check,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -42,6 +44,7 @@ import { toast } from '@/components/ui/sonner';
 import { questionApi, type QuestionSet } from '@/services/question';
 import { courseApi, type Course } from '@/services/course';
 import { statisticsApi, type StudentInfo } from '@/services/statistics';
+import { plazaApi } from '@/services/plaza';
 
 export function QuestionGeneratorPage() {
   const navigate = useNavigate();
@@ -57,6 +60,7 @@ export function QuestionGeneratorPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [questionSetToDelete, setQuestionSetToDelete] = useState<QuestionSet | null>(null);
+  const [sharingId, setSharingId] = useState<number | null>(null);
 
   // 生成表单
   const [prompt, setPrompt] = useState('');
@@ -313,6 +317,24 @@ export function QuestionGeneratorPage() {
     }
   };
 
+  const handleToggleShare = async (qs: QuestionSet) => {
+    try {
+      setSharingId(qs.id);
+      if (qs.shared_to_plaza_at) {
+        await plazaApi.unsharePlaza(qs.id);
+        toast.success('已从广场撤回');
+      } else {
+        await plazaApi.sharePlaza(qs.id);
+        toast.success('已分享到广场');
+      }
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '操作失败');
+    } finally {
+      setSharingId(null);
+    }
+  };
+
   // 全选学生
   const selectAllStudents = () => {
     setSelectedStudentIds(students.map((s) => s.id));
@@ -458,7 +480,7 @@ export function QuestionGeneratorPage() {
                           {qs.status === 'draft' ? '草稿' : '已发布'}
                         </Badge>
                       </div>
-                      <div className="flex gap-2 mt-3">
+                      <div className="flex flex-wrap gap-2 mt-3">
                         <Button
                           variant="outline"
                           size="sm"
@@ -482,6 +504,21 @@ export function QuestionGeneratorPage() {
                         >
                           <Users className="w-4 h-4" />
                           答题
+                        </Button>
+                        <Button
+                          variant={qs.shared_to_plaza_at ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => handleToggleShare(qs)}
+                          disabled={sharingId === qs.id}
+                        >
+                          {sharingId === qs.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : qs.shared_to_plaza_at ? (
+                            <Check className="w-4 h-4" />
+                          ) : (
+                            <Share2 className="w-4 h-4" />
+                          )}
+                          {qs.shared_to_plaza_at ? '已分享' : '分享'}
                         </Button>
                         <Button
                           variant="outline"

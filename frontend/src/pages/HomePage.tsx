@@ -6,6 +6,9 @@ import {
   FileText,
   Brain,
   CheckCircle,
+  Globe,
+  Users,
+  Trophy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth';
@@ -324,15 +327,56 @@ export function HomePage() {
         </div>
       </section>
 
-      {/* ==================== Page 3: CTA + Footer ==================== */}
+      {/* ==================== Page 3: Plaza CTA + CTA + Footer ==================== */}
       <section ref={ctaRef} className="h-screen flex flex-col">
+        {/* 题目广场入口 */}
+        <div className="bg-gradient-to-b from-white to-slate-50 py-16">
+          <div className="container mx-auto px-6">
+            <div className="max-w-3xl mx-auto text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-6">
+                <Globe className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-3">
+                题目广场
+              </h2>
+              <p className="text-lg text-slate-500 mb-8 max-w-md mx-auto">
+                浏览教师分享的优质试题，挑战自我，查看排行榜
+              </p>
+              <div className="flex items-center justify-center gap-8 text-sm text-slate-500 mb-8">
+                <span className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary/70" />
+                  全网共享试题
+                </span>
+                <span className="flex items-center gap-2">
+                  <Trophy className="w-5 h-5 text-primary/70" />
+                  排行榜挑战
+                </span>
+                <span className="flex items-center gap-2">
+                  <Brain className="w-5 h-5 text-primary/70" />
+                  AI 智能批改
+                </span>
+              </div>
+              <Link to="/plaza">
+                <Button
+                  size="lg"
+                  className="h-14 px-8 text-lg rounded-full shadow-lg shadow-primary/25 hover:shadow-xl transition-all duration-300 gap-2"
+                >
+                  <Globe className="w-5 h-5" />
+                  进入题目广场
+                  <ArrowRight className="w-5 h-5" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {/* CTA 区域 */}
         <div className="flex-1 bg-white flex items-center justify-center">
           <div className="container mx-auto px-6 text-center">
-            <h2 className="text-4xl md:text-5xl font-bold text-slate-800 mb-6">
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-5">
               准备好开始了吗？
             </h2>
-            <p className="text-lg text-slate-500 mb-10 max-w-lg mx-auto">
+            <p className="text-lg text-slate-500 mb-8 max-w-lg mx-auto">
               立即注册，体验 AI 驱动的智能教育平台
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">

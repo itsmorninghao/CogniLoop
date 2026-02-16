@@ -9,6 +9,7 @@ export interface QuestionSet {
   teacher_id: number;
   is_public: boolean;
   status: 'draft' | 'published';
+  shared_to_plaza_at: string | null;
   created_at: string;
   updated_at: string;
 }

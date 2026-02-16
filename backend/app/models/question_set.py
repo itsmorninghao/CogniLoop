@@ -46,6 +46,7 @@ class QuestionSet(SQLModel, table=True):
             native_enum=False,
         ),
     )
+    shared_to_plaza_at: datetime | None = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=utc_now_naive)
     updated_at: datetime = Field(default_factory=utc_now_naive)
 

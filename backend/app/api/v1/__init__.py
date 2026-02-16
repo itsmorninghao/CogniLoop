@@ -9,6 +9,7 @@ from backend.app.api.v1.endpoints import (
     config,
     course,
     document,
+    plaza,
     question,
     statistics,
     student_course,
@@ -29,5 +30,6 @@ api_router.include_router(
     student_question.router, prefix="/student-question", tags=["学生试题"]
 )
 api_router.include_router(answer.router, prefix="/answer", tags=["答案"])
+api_router.include_router(plaza.router, prefix="/plaza", tags=["题目广场"])
 api_router.include_router(statistics.router, prefix="/statistics", tags=["统计"])
 api_router.include_router(config.router, prefix="/admin", tags=["系统配置"])

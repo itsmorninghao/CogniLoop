@@ -8,6 +8,7 @@ import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { TeacherDashboard, KnowledgeBasePage, QuestionGeneratorPage, TeacherAnswersPage } from '@/pages/teacher';
 import { StudentCoursesPage, StudentTestsPage, StudentExamPage, PendingTestsPage } from '@/pages/student';
+import { PlazaDiscover, PlazaMyAttempts, PlazaMyShared } from '@/pages/plaza';
 import {
   AdminLoginPage,
   AdminDashboard,
@@ -31,6 +32,9 @@ export function App() {
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+
+        {/* Plaza Routes (游客可访问) */}
+        <Route path="/plaza" element={<PlazaDiscover />} />
 
         {/* Admin Login (不暴露入口，直接通过 URL 访问) */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -65,6 +69,10 @@ export function App() {
           <Route path="knowledge" element={<KnowledgeBasePage />} />
           <Route path="questions" element={<QuestionGeneratorPage />} />
           <Route path="answers/:questionSetId" element={<TeacherAnswersPage />} />
+          <Route path="plaza" element={<PlazaDiscover />} />
+          <Route path="plaza/my-attempts" element={<PlazaMyAttempts />} />
+          <Route path="plaza/my-shared" element={<PlazaMyShared />} />
+          <Route path="plaza/exam/:questionSetId" element={<StudentExamPage />} />
         </Route>
 
         {/* Student Routes */}
@@ -80,6 +88,8 @@ export function App() {
           <Route path="tests" element={<PendingTestsPage />} />
           <Route path="course/:courseId/tests" element={<StudentTestsPage />} />
           <Route path="exam/:questionSetId" element={<StudentExamPage />} />
+          <Route path="plaza" element={<PlazaDiscover />} />
+          <Route path="plaza/my-attempts" element={<PlazaMyAttempts />} />
         </Route>
 
         {/* Catch all */}

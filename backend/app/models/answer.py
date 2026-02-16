@@ -4,13 +4,15 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
-from sqlalchemy import JSON, Column, String
+from sqlalchemy import JSON, Column, Integer, String
+from sqlalchemy import ForeignKey as SAForeignKey
 from sqlmodel import Field, Relationship, SQLModel
 
 if TYPE_CHECKING:
     from backend.app.models.course import Course
     from backend.app.models.question_set import QuestionSet
     from backend.app.models.student import Student
+    from backend.app.models.teacher import Teacher
 
 
 class AnswerStatus(str, Enum):
@@ -38,7 +40,11 @@ class Answer(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     question_set_id: int = Field(foreign_key="question_sets.id", index=True)
-    student_id: int = Field(foreign_key="students.id", index=True)
+    student_id: int | None = Field(default=None, foreign_key="students.id", index=True)
+    teacher_id: int | None = Field(
+        default=None,
+        sa_column=Column(Integer, SAForeignKey("teachers.id"), index=True, nullable=True),
+    )
     course_id: int = Field(foreign_key="courses.id", index=True)
     student_answers: dict[str, Any] | None = Field(
         default=None,
@@ -58,7 +64,19 @@ class Answer(SQLModel, table=True):
     submitted_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=utc_now_naive)
 
+    # 便利属性
+    @property
+    def user_id(self) -> int:
+        """做题人 ID"""
+        return self.student_id or self.teacher_id  # type: ignore[return-value]
+
+    @property
+    def user_type(self) -> str:
+        """做题人类型"""
+        return "student" if self.student_id else "teacher"
+
     # 关系
     question_set: "QuestionSet" = Relationship(back_populates="answers")
     student: "Student" = Relationship(back_populates="answers")
+    teacher: "Teacher" = Relationship()
     course: "Course" = Relationship()
