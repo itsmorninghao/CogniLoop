@@ -10,7 +10,6 @@ import {
   Trophy,
   ArrowRight,
   GraduationCap,
-  LogIn,
   Clock,
   AlertTriangle,
   Medal,
@@ -122,32 +121,60 @@ export function PlazaDiscover() {
   };
 
   return (
-    <div className={inLayout ? 'space-y-6' : 'min-h-screen bg-gradient-to-b from-slate-50 to-white'}>
+    <div className={inLayout ? 'space-y-6' : 'min-h-screen bg-slate-50/80 pt-16'}>
       {/* Header */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                <GraduationCap className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">题目广场</h1>
-                <p className="text-sm text-muted-foreground">发现优质试题，挑战自我</p>
+      {inLayout && (
+        <div className="bg-white border-b sticky top-0 z-10">
+          <div className="container mx-auto px-6 py-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <GraduationCap className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold">题目广场</h1>
+                  <p className="text-sm text-muted-foreground">发现优质试题，挑战自我</p>
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {!isAuthenticated && (
-                <Button size="sm" onClick={() => navigate('/login')} className="gap-2">
-                  <LogIn className="w-4 h-4" />
-                  登录
+            <div className="flex items-center gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="搜索题目..."
+                  value={keyword}
+                  onChange={(e) => setKeyword(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  className="pl-10"
+                />
+              </div>
+              <div className="flex gap-1">
+                <Button
+                  variant={sort === 'newest' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => { setSort('newest'); setSkip(0); }}
+                >
+                  <Sparkles className="w-4 h-4 mr-1" />
+                  最新
                 </Button>
-              )}
+                <Button
+                  variant={sort === 'popular' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => { setSort('popular'); setSkip(0); }}
+                >
+                  <Flame className="w-4 h-4 mr-1" />
+                  最热
+                </Button>
+              </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Search & Sort */}
-          <div className="flex items-center gap-3">
+      {/* Standalone toolbar — sticks right below PublicNav */}
+      {!inLayout && (
+        <div className="sticky top-16 z-10 bg-white/80 backdrop-blur-xl">
+          <div className="container mx-auto px-6 h-14 flex items-center gap-3">
             <div className="flex-1 relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input
@@ -155,30 +182,32 @@ export function PlazaDiscover() {
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                className="pl-10"
+                className="pl-9 h-9 bg-slate-100/80 border-0 focus-visible:ring-1 focus-visible:ring-primary/30"
               />
             </div>
-            <div className="flex gap-1">
+            <div className="flex gap-0.5">
               <Button
                 variant={sort === 'newest' ? 'default' : 'ghost'}
                 size="sm"
+                className="h-8 text-xs"
                 onClick={() => { setSort('newest'); setSkip(0); }}
               >
-                <Sparkles className="w-4 h-4 mr-1" />
+                <Sparkles className="w-3.5 h-3.5 mr-1" />
                 最新
               </Button>
               <Button
                 variant={sort === 'popular' ? 'default' : 'ghost'}
                 size="sm"
+                className="h-8 text-xs"
                 onClick={() => { setSort('popular'); setSkip(0); }}
               >
-                <Flame className="w-4 h-4 mr-1" />
+                <Flame className="w-3.5 h-3.5 mr-1" />
                 最热
               </Button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Content */}
       <div className="container mx-auto px-6 py-6">

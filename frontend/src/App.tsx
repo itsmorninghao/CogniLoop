@@ -1,8 +1,9 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { Layout } from '@/components/Layout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { PublicNav } from '@/components/PublicNav';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -28,13 +29,14 @@ export function App() {
       }}
     >
       <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<HomePage />} />
+        {/* Public Routes with transparent nav */}
+        <Route element={<><PublicNav /><Outlet /></>}>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/plaza" element={<PlazaDiscover />} />
+        </Route>
+
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
-
-        {/* Plaza Routes (游客可访问) */}
-        <Route path="/plaza" element={<PlazaDiscover />} />
 
         {/* Admin Login (不暴露入口，直接通过 URL 访问) */}
         <Route path="/admin/login" element={<AdminLoginPage />} />
