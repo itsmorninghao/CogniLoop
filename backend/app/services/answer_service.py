@@ -168,57 +168,127 @@ class AnswerService:
     async def get_question_set_answers_with_students(
         self, question_set_id: int
     ) -> list[dict]:
-        """获取试题集的所有答案（包含学生信息）"""
+        """获取试题集的所有答案（包含学生/教师信息）"""
         from backend.app.models.student import Student
+        from backend.app.models.teacher import Teacher
 
-        stmt = (
+        items: list[dict] = []
+
+        # 学生答案
+        student_stmt = (
             select(Answer, Student)
             .join(Student, Student.id == Answer.student_id)
-            .where(Answer.question_set_id == question_set_id)
+            .where(
+                Answer.question_set_id == question_set_id,
+                Answer.student_id.isnot(None),
+            )
             .order_by(Answer.submitted_at.desc().nullsfirst())
         )
-        result = await self.session.execute(stmt)
-        rows = result.all()
+        student_rows = (await self.session.execute(student_stmt)).all()
 
-        return [
-            {
-                "id": answer.id,
-                "question_set_id": answer.question_set_id,
-                "student_id": answer.student_id,
-                "course_id": answer.course_id,
-                "status": answer.status,
-                "total_score": answer.total_score,
-                "saved_at": answer.saved_at,
-                "submitted_at": answer.submitted_at,
-                "student_answers": answer.student_answers,
-                "grading_results": answer.grading_results,
-                "error_message": answer.error_message,
-                "student": {
-                    "id": student.id,
-                    "username": student.username,
-                    "full_name": student.full_name,
-                    "email": student.email,
-                },
-            }
-            for answer, student in rows
-        ]
+        for answer, student in student_rows:
+            items.append(
+                {
+                    "id": answer.id,
+                    "question_set_id": answer.question_set_id,
+                    "student_id": answer.student_id,
+                    "course_id": answer.course_id,
+                    "status": answer.status,
+                    "total_score": answer.total_score,
+                    "saved_at": answer.saved_at,
+                    "submitted_at": answer.submitted_at,
+                    "student_answers": answer.student_answers,
+                    "grading_results": answer.grading_results,
+                    "error_message": answer.error_message,
+                    "student": {
+                        "id": student.id,
+                        "username": student.username,
+                        "full_name": student.full_name,
+                        "email": student.email,
+                    },
+                }
+            )
+
+        # 教师答案（广场做题产生的）
+        teacher_stmt = (
+            select(Answer, Teacher)
+            .join(Teacher, Teacher.id == Answer.teacher_id)
+            .where(
+                Answer.question_set_id == question_set_id,
+                Answer.teacher_id.isnot(None),
+                Answer.student_id.is_(None),
+            )
+            .order_by(Answer.submitted_at.desc().nullsfirst())
+        )
+        teacher_rows = (await self.session.execute(teacher_stmt)).all()
+
+        for answer, teacher in teacher_rows:
+            items.append(
+                {
+                    "id": answer.id,
+                    "question_set_id": answer.question_set_id,
+                    "student_id": None,
+                    "course_id": answer.course_id,
+                    "status": answer.status,
+                    "total_score": answer.total_score,
+                    "saved_at": answer.saved_at,
+                    "submitted_at": answer.submitted_at,
+                    "student_answers": answer.student_answers,
+                    "grading_results": answer.grading_results,
+                    "error_message": answer.error_message,
+                    "student": {
+                        "id": teacher.id,
+                        "username": teacher.username,
+                        "full_name": f"[教师] {teacher.full_name}",
+                        "email": teacher.email,
+                    },
+                }
+            )
+
+        # 按提交时间排序
+        epoch = datetime(1970, 1, 1)
+        items.sort(
+            key=lambda x: x["submitted_at"] or x["saved_at"] or epoch,
+            reverse=True,
+        )
+
+        return items
 
     async def get_answer_with_student(self, answer_id: int) -> dict | None:
-        """获取单份答案（包含学生信息）"""
+        """获取单份答案（包含学生/教师信息）"""
         from backend.app.models.student import Student
+        from backend.app.models.teacher import Teacher
 
-        stmt = (
-            select(Answer, Student)
-            .join(Student, Student.id == Answer.student_id)
-            .where(Answer.id == answer_id)
-        )
-        result = await self.session.execute(stmt)
-        row = result.first()
-
-        if not row:
+        answer = await self.get_answer_by_id(answer_id)
+        if not answer:
             return None
 
-        answer, student = row
+        user_info: dict
+        if answer.student_id:
+            stmt = select(Student).where(Student.id == answer.student_id)
+            student = (await self.session.execute(stmt)).scalar_one_or_none()
+            if not student:
+                return None
+            user_info = {
+                "id": student.id,
+                "username": student.username,
+                "full_name": student.full_name,
+                "email": student.email,
+            }
+        elif answer.teacher_id:
+            stmt = select(Teacher).where(Teacher.id == answer.teacher_id)
+            teacher = (await self.session.execute(stmt)).scalar_one_or_none()
+            if not teacher:
+                return None
+            user_info = {
+                "id": teacher.id,
+                "username": teacher.username,
+                "full_name": f"[教师] {teacher.full_name}",
+                "email": teacher.email,
+            }
+        else:
+            return None
+
         return {
             "id": answer.id,
             "question_set_id": answer.question_set_id,
@@ -231,12 +301,7 @@ class AnswerService:
             "student_answers": answer.student_answers,
             "grading_results": answer.grading_results,
             "error_message": answer.error_message,
-            "student": {
-                "id": student.id,
-                "username": student.username,
-                "full_name": student.full_name,
-                "email": student.email,
-            },
+            "student": user_info,
         }
 
     async def teacher_update_score(

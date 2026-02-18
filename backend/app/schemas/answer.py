@@ -70,7 +70,7 @@ class TeacherAnswerDetail(BaseModel):
 
     id: int
     question_set_id: int
-    student_id: int
+    student_id: int | None = None
     course_id: int
     status: str
     total_score: float | None

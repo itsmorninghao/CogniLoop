@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Search,
   Loader2,
@@ -11,13 +11,24 @@ import {
   ArrowRight,
   GraduationCap,
   LogIn,
+  Clock,
+  AlertTriangle,
+  Medal,
+  BarChart3,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
-import { plazaApi, type PlazaQuestionSetItem } from '@/services/plaza';
+import { plazaApi, type PlazaQuestionSetItem, type LeaderboardEntry } from '@/services/plaza';
 import { useAuthStore } from '@/stores/auth';
 
 const HOT_THRESHOLD = 10;
@@ -30,12 +41,39 @@ function isNew(sharedAt: string): boolean {
 
 export function PlazaDiscover() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated, userType } = useAuthStore();
+  // 判断是否在 Layout 内（有路由前缀 /teacher 或 /student）
+  const inLayout = location.pathname.startsWith('/teacher') || location.pathname.startsWith('/student');
   const [items, setItems] = useState<PlazaQuestionSetItem[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [keyword, setKeyword] = useState('');
   const [sort, setSort] = useState<'newest' | 'popular'>('newest');
+
+  // 排行榜弹窗
+  const [lbOpen, setLbOpen] = useState(false);
+  const [lbLoading, setLbLoading] = useState(false);
+  const [lbData, setLbData] = useState<LeaderboardEntry[]>([]);
+  const [lbMyRank, setLbMyRank] = useState<number | null>(null);
+  const [lbMyScore, setLbMyScore] = useState<number | null>(null);
+  const [lbTitle, setLbTitle] = useState('');
+
+  const openLeaderboard = async (item: PlazaQuestionSetItem) => {
+    setLbTitle(item.title);
+    setLbOpen(true);
+    setLbLoading(true);
+    try {
+      const res = await plazaApi.leaderboard(item.id);
+      setLbData(res.data.leaderboard);
+      setLbMyRank(res.data.my_rank);
+      setLbMyScore(res.data.my_score);
+    } catch {
+      toast.error('加载排行榜失败');
+    } finally {
+      setLbLoading(false);
+    }
+  };
   const [skip, setSkip] = useState(0);
   const limit = 20;
 
@@ -66,25 +104,25 @@ export function PlazaDiscover() {
     loadData();
   };
 
-  const handleTakeExam = (questionSetId: number) => {
+  const handleTakeExam = (item: PlazaQuestionSetItem) => {
     if (!isAuthenticated) {
       toast.info('请先登录后再做题');
       navigate('/login', { state: { from: `/plaza` } });
       return;
     }
+    if (item.is_own) {
+      toast.error('不能做自己出的题哦');
+      return;
+    }
     if (userType === 'teacher') {
-      navigate(`/teacher/plaza/exam/${questionSetId}`);
+      navigate(`/teacher/plaza/exam/${item.id}`);
     } else {
-      navigate(`/student/exam/${questionSetId}?source=plaza`);
+      navigate(`/student/exam/${item.id}?source=plaza`);
     }
   };
 
-  const handleViewDetail = (questionSetId: number) => {
-    navigate(`/plaza/${questionSetId}`);
-  };
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white">
+    <div className={inLayout ? 'space-y-6' : 'min-h-screen bg-gradient-to-b from-slate-50 to-white'}>
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="container mx-auto px-6 py-4">
@@ -161,7 +199,7 @@ export function PlazaDiscover() {
                 <Card
                   key={item.id}
                   className="hover:shadow-lg transition-all duration-300 hover:border-primary/30 cursor-pointer group flex flex-col"
-                  onClick={() => handleViewDetail(item.id)}
+                  onClick={() => handleTakeExam(item)}
                 >
                   <CardContent className="p-5 flex flex-col h-full">
                     {/* Title & Tags */}
@@ -213,9 +251,32 @@ export function PlazaDiscover() {
 
                     {/* My Status */}
                     {item.my_status === 'completed' && (
-                      <div className="bg-green-50 dark:bg-green-950/30 rounded-lg px-3 py-2 mb-3 text-sm text-green-700 dark:text-green-300">
-                        <Trophy className="w-4 h-4 inline mr-1" />
-                        我的得分: {item.my_score} 分
+                      <div className="bg-green-50 dark:bg-green-950/30 rounded-lg px-3 py-2 mb-3 text-sm text-green-700 dark:text-green-300 flex items-center justify-between">
+                        <span>
+                          <Trophy className="w-4 h-4 inline mr-1" />
+                          我的得分: {item.my_score} 分
+                        </span>
+                        {isAuthenticated && (
+                          <button
+                            className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); openLeaderboard(item); }}
+                          >
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            排行榜
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {item.my_status === 'submitted' && (
+                      <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg px-3 py-2 mb-3 text-sm text-blue-700 dark:text-blue-300">
+                        <Clock className="w-4 h-4 inline mr-1" />
+                        已提交，批改中...
+                      </div>
+                    )}
+                    {item.my_status === 'failed' && (
+                      <div className="bg-red-50 dark:bg-red-950/30 rounded-lg px-3 py-2 mb-3 text-sm text-red-700 dark:text-red-300">
+                        <AlertTriangle className="w-4 h-4 inline mr-1" />
+                        批改失败
                       </div>
                     )}
                     {item.my_status === 'draft' && (
@@ -224,23 +285,36 @@ export function PlazaDiscover() {
                       </div>
                     )}
 
+                    {/* 登录用户且没有完成状态的也能看排行榜 */}
+                    {isAuthenticated && item.my_status !== 'completed' && (
+                      <button
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary mb-3 transition-colors"
+                        onClick={(e) => { e.stopPropagation(); openLeaderboard(item); }}
+                      >
+                        <BarChart3 className="w-3.5 h-3.5" />
+                        查看排行榜
+                      </button>
+                    )}
+
                     {/* Spacer to push actions to bottom */}
                     <div className="flex-1" />
 
                     {/* Actions */}
                     <div className="flex gap-2 mt-auto">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex-1 gap-1"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTakeExam(item.id);
-                        }}
-                      >
-                        {item.my_status === 'completed' ? '查看详情' : item.my_status === 'draft' ? '继续答题' : '去做题'}
-                        <ArrowRight className="w-4 h-4" />
-                      </Button>
+                      {item.is_own ? (
+                        <Badge variant="secondary" className="flex-1 justify-center py-1.5">
+                          我出的题
+                        </Badge>
+                      ) : (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="flex-1 gap-1"
+                        >
+                          {item.my_status === 'completed' ? '查看结果' : item.my_status === 'submitted' ? '查看状态' : item.my_status === 'draft' ? '继续答题' : '去做题'}
+                          <ArrowRight className="w-4 h-4" />
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -274,6 +348,72 @@ export function PlazaDiscover() {
           </>
         )}
       </div>
+
+      {/* 排行榜弹窗 */}
+      <Dialog open={lbOpen} onOpenChange={setLbOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trophy className="w-5 h-5 text-amber-500" />
+              排行榜
+            </DialogTitle>
+            <DialogDescription>{lbTitle}</DialogDescription>
+          </DialogHeader>
+
+          {lbLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : lbData.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              暂无排行数据
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[400px] overflow-y-auto">
+              {/* 我的排名 */}
+              {(lbMyRank || lbMyScore !== null) && (
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 mb-3 flex items-center justify-between">
+                  <span className="text-sm font-medium">我的排名</span>
+                  <div className="flex items-center gap-3">
+                    {lbMyScore !== null && (
+                      <span className="text-sm">{lbMyScore} 分</span>
+                    )}
+                    {lbMyRank && (
+                      <Badge variant="default">第 {lbMyRank} 名</Badge>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {lbData.map((entry) => (
+                <div
+                  key={`${entry.rank}-${entry.user_name}`}
+                  className={`flex items-center justify-between p-2.5 rounded-lg ${
+                    entry.rank <= 3 ? 'bg-amber-50 dark:bg-amber-950/20' : 'bg-muted/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-7 text-center font-bold text-sm">
+                      {entry.rank <= 3 ? (
+                        <Medal className={`w-5 h-5 inline ${
+                          entry.rank === 1 ? 'text-amber-500' : entry.rank === 2 ? 'text-gray-400' : 'text-amber-700'
+                        }`} />
+                      ) : (
+                        entry.rank
+                      )}
+                    </span>
+                    <span className="font-medium text-sm">{entry.user_name}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {entry.user_type === 'teacher' ? '教师' : '学生'}
+                    </Badge>
+                  </div>
+                  <span className="font-bold text-sm">{entry.score} 分</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

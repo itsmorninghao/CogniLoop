@@ -274,14 +274,14 @@ export function TeacherAnswersPage() {
       {/* Answer List */}
       <Card>
         <CardHeader>
-          <CardTitle>学生答卷列表</CardTitle>
-          <CardDescription>点击查看详情或修改分数</CardDescription>
+          <CardTitle>答卷列表</CardTitle>
+          <CardDescription>包含学生和广场教师的答卷，点击查看详情或修改分数</CardDescription>
         </CardHeader>
         <CardContent>
           {answers.length === 0 ? (
             <div className="text-center py-12">
               <User className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">暂无学生提交答案</p>
+              <p className="text-muted-foreground">暂无答案提交</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -304,9 +304,9 @@ export function TeacherAnswersPage() {
                     {getStatusBadge(answer.status as AnswerStatus)}
 
                     {answer.status === 'completed' && answer.total_score !== null && (
-                      <div className="text-right min-w-[60px]">
-                        <p className="text-2xl font-bold">{answer.total_score.toFixed(1)}</p>
-                        <p className="text-xs text-muted-foreground">分</p>
+                      <div className="flex items-baseline gap-0.5 min-w-[60px] justify-end">
+                        <span className="text-2xl font-bold">{answer.total_score.toFixed(1)}</span>
+                        <span className="text-xs text-muted-foreground">分</span>
                       </div>
                     )}
 

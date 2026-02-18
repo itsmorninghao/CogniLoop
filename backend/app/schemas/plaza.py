@@ -18,6 +18,7 @@ class PlazaQuestionSetItem(BaseModel):
     average_score: float | None = None
     my_status: str | None = None  # null / "draft" / "completed"
     my_score: float | None = None
+    is_own: bool = False
 
 
 class PlazaQuestionSetListResponse(BaseModel):
@@ -54,6 +55,7 @@ class PlazaQuestionSetDetail(BaseModel):
     my_status: str | None = None
     my_score: float | None = None
     my_rank: int | None = None
+    is_own: bool = False
     created_at: datetime
     leaderboard: list[LeaderboardEntry] = []
 

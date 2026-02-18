@@ -14,7 +14,6 @@ from backend.app.api.v1.deps import (
     SessionDep,
 )
 from backend.app.core.config import settings
-from backend.app.models.student import Student
 from backend.app.models.teacher import Teacher
 from backend.app.schemas.plaza import (
     LeaderboardEntry,
@@ -138,6 +137,15 @@ async def get_leaderboard(
     limit: int = Query(10, ge=1, le=50),
 ) -> LeaderboardResponse:
     """获取试题集排行榜"""
+    from backend.app.services.question_service import QuestionService
+
+    qs_service = QuestionService(session)
+    qs = await qs_service.get_question_set_by_id(question_set_id)
+    if not qs or qs.shared_to_plaza_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="试题集不存在或未在广场上"
+        )
+
     service = PlazaService(session)
     entries = await service.get_leaderboard(question_set_id, limit=limit)
 
@@ -199,7 +207,7 @@ async def get_my_shared_stats(
 async def get_plaza_question_set_content(
     question_set_id: int,
     session: SessionDep,
-    user: CurrentUser,
+    _user: CurrentUser,
 ) -> dict:
     """获取广场试题集的题目内容（需登录）"""
     from backend.app.services.question_service import QuestionService
@@ -210,9 +218,6 @@ async def get_plaza_question_set_content(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="试题集不存在或未在广场上"
         )
-
-    # 教师不能做自己出的题（但可以看内容）
-    # 这里只限制获取内容，做题提交时再严格校验
 
     content = await qs_service.get_question_set_content(question_set_id)
     if content is None:
@@ -227,6 +232,32 @@ async def get_plaza_question_set_content(
     }
 
 
+@router.get("/my-answer/{question_set_id}")
+async def get_my_plaza_answer(
+    question_set_id: int,
+    session: SessionDep,
+    user: CurrentUser,
+) -> dict | None:
+    """获取当前用户在某广场试题集上的答案"""
+    service = PlazaService(session)
+    answer = await service.get_my_answer(question_set_id, user)
+    if not answer:
+        return None
+    return {
+        "id": answer.id,
+        "question_set_id": answer.question_set_id,
+        "student_id": answer.student_id,
+        "course_id": answer.course_id,
+        "student_answers": answer.student_answers,
+        "grading_results": answer.grading_results,
+        "total_score": answer.total_score,
+        "status": answer.status,
+        "error_message": answer.error_message,
+        "saved_at": str(answer.saved_at),
+        "submitted_at": str(answer.submitted_at) if answer.submitted_at else None,
+    }
+
+
 @router.post("/answer/save-draft")
 async def plaza_save_draft(
     data: PlazaAnswerSaveDraft,
@@ -237,11 +268,16 @@ async def plaza_save_draft(
     service = PlazaService(session)
 
     if isinstance(user, Teacher):
-        answer = await service.teacher_save_draft(
-            teacher_id=user.id,
-            question_set_id=data.question_set_id,
-            student_answers=data.student_answers,
-        )
+        try:
+            answer = await service.teacher_save_draft(
+                teacher_id=user.id,
+                question_set_id=data.question_set_id,
+                student_answers=data.student_answers,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            )
     else:
         # 学生做广场题 - 复用现有 answer_service
         from backend.app.schemas.answer import AnswerSaveDraft
@@ -256,14 +292,21 @@ async def plaza_save_draft(
             )
 
         answer_service = AnswerService(session)
-        answer = await answer_service.save_draft(
-            student_id=user.id,
-            course_id=question_set.course_id,
-            data=AnswerSaveDraft(
-                question_set_id=data.question_set_id,
-                student_answers=data.student_answers,
-            ),
-        )
+        try:
+            answer = await answer_service.save_draft(
+                student_id=user.id,
+                course_id=question_set.course_id,
+                data=AnswerSaveDraft(
+                    question_set_id=data.question_set_id,
+                    student_answers=data.student_answers,
+                ),
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            )
+
+    await session.commit()
 
     return {
         "id": answer.id,
@@ -283,11 +326,16 @@ async def plaza_submit_answer(
     service = PlazaService(session)
 
     if isinstance(user, Teacher):
-        answer = await service.teacher_submit_answer(
-            teacher_id=user.id,
-            question_set_id=data.question_set_id,
-            student_answers=data.student_answers,
-        )
+        try:
+            answer = await service.teacher_submit_answer(
+                teacher_id=user.id,
+                question_set_id=data.question_set_id,
+                student_answers=data.student_answers,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            )
     else:
         from backend.app.services.answer_service import AnswerService
         from backend.app.services.question_service import QuestionService
@@ -300,12 +348,17 @@ async def plaza_submit_answer(
             )
 
         answer_service = AnswerService(session)
-        answer = await answer_service.submit_answer(
-            student_id=user.id,
-            course_id=question_set.course_id,
-            question_set_id=data.question_set_id,
-            student_answers=data.student_answers,
-        )
+        try:
+            answer = await answer_service.submit_answer(
+                student_id=user.id,
+                course_id=question_set.course_id,
+                question_set_id=data.question_set_id,
+                student_answers=data.student_answers,
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            )
 
     await session.commit()
 

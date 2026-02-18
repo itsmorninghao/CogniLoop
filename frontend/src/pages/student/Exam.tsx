@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,6 +24,8 @@ import { Progress } from '@/components/ui/progress';
 import { toast } from '@/components/ui/sonner';
 import { studentQuestionApi } from '@/services/question';
 import { answerApi, type Answer } from '@/services/answer';
+import { plazaApi } from '@/services/plaza';
+import { useAuthStore } from '@/stores/auth';
 
 interface ParsedQuestion {
   id: string;
@@ -38,6 +40,14 @@ type ExamStatus = 'not_started' | 'in_progress' | 'submitted' | 'completed' | 'f
 
 export function StudentExamPage() {
   const { questionSetId } = useParams<{ questionSetId: string }>();
+  const location = useLocation();
+
+  const { userType } = useAuthStore();
+  const isPlaza = location.pathname.includes('plaza') || new URLSearchParams(location.search).get('source') === 'plaza';
+  // 返回路径：广场模式按用户类型返回各自上下文，非广场返回学生端
+  const backPath = isPlaza
+    ? (userType === 'teacher' ? '/teacher/plaza' : '/student/plaza')
+    : '/student';
 
   const [questions, setQuestions] = useState<ParsedQuestion[]>([]);
   const [answers, setAnswers] = useState<Record<string, string | string[]>>({});
@@ -118,22 +128,39 @@ export function StudentExamPage() {
     try {
       setIsLoading(true);
 
-      const contentRes = await studentQuestionApi.getContent(Number(questionSetId));
+      // 根据模式选择不同 API 获取题目内容
+      const contentRes = isPlaza
+        ? await plazaApi.getContent(Number(questionSetId))
+        : await studentQuestionApi.getContent(Number(questionSetId));
       const parsed = parseQuestions(contentRes.data.markdown_content);
       setQuestions(parsed);
 
       try {
-        const answerRes = await answerApi.getByQuestionSet(Number(questionSetId));
-        if (answerRes.data) {
-          setExistingAnswer(answerRes.data);
-          if (answerRes.data.student_answers) {
-            setAnswers(answerRes.data.student_answers);
+        // 根据模式选择不同 API 获取已有答案
+        if (isPlaza) {
+          const answerRes = await plazaApi.getMyAnswer(Number(questionSetId));
+          if (answerRes.data) {
+            const a = answerRes.data as unknown as Answer;
+            setExistingAnswer(a);
+            if (a.student_answers) {
+              setAnswers(a.student_answers);
+            }
+            setExamStatus(getExamStatus(a));
           }
-          setExamStatus(getExamStatus(answerRes.data));
+        } else {
+          const answerRes = await answerApi.getByQuestionSet(Number(questionSetId));
+          if (answerRes.data) {
+            setExistingAnswer(answerRes.data);
+            if (answerRes.data.student_answers) {
+              setAnswers(answerRes.data.student_answers);
+            }
+            setExamStatus(getExamStatus(answerRes.data));
+          }
         }
       } catch {
         // 没有已有答案
       }
+
     } catch (error) {
       toast.error('加载试题失败');
       console.error(error);
@@ -147,12 +174,24 @@ export function StudentExamPage() {
     if (!questionSetId) return;
 
     try {
-      const answerRes = await answerApi.getByQuestionSet(Number(questionSetId));
-      if (answerRes.data) {
-        setExistingAnswer(answerRes.data);
-        setExamStatus(getExamStatus(answerRes.data));
-        if (answerRes.data.status === 'completed') {
-          toast.success('批改完成！');
+      if (isPlaza) {
+        const answerRes = await plazaApi.getMyAnswer(Number(questionSetId));
+        if (answerRes.data) {
+          const a = answerRes.data as unknown as Answer;
+          setExistingAnswer(a);
+          setExamStatus(getExamStatus(a));
+          if (a.status === 'completed') {
+            toast.success('批改完成！');
+          }
+        }
+      } else {
+        const answerRes = await answerApi.getByQuestionSet(Number(questionSetId));
+        if (answerRes.data) {
+          setExistingAnswer(answerRes.data);
+          setExamStatus(getExamStatus(answerRes.data));
+          if (answerRes.data.status === 'completed') {
+            toast.success('批改完成！');
+          }
         }
       }
     } catch (error) {
@@ -167,11 +206,23 @@ export function StudentExamPage() {
 
     try {
       setIsSaving(true);
-      const response = await answerApi.saveDraft({
-        question_set_id: Number(questionSetId),
-        student_answers: answers,
-      });
-      setExistingAnswer(response.data);
+      if (isPlaza) {
+        await plazaApi.saveDraft({
+          question_set_id: Number(questionSetId),
+          student_answers: answers,
+        });
+        // 刷新 existingAnswer 以保持状态同步
+        const refreshRes = await plazaApi.getMyAnswer(Number(questionSetId));
+        if (refreshRes.data) {
+          setExistingAnswer(refreshRes.data as unknown as Answer);
+        }
+      } else {
+        const response = await answerApi.saveDraft({
+          question_set_id: Number(questionSetId),
+          student_answers: answers,
+        });
+        setExistingAnswer(response.data);
+      }
       setExamStatus('in_progress');
       toast.success('草稿已保存');
     } catch (error) {
@@ -180,7 +231,7 @@ export function StudentExamPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [questionSetId, answers, examStatus]);
+  }, [questionSetId, answers, examStatus, isPlaza]);
 
   // 提交答案
   const handleSubmit = async () => {
@@ -199,11 +250,23 @@ export function StudentExamPage() {
 
     try {
       setIsSubmitting(true);
-      const response = await answerApi.submit({
-        question_set_id: Number(questionSetId),
-        student_answers: answers,
-      });
-      setExistingAnswer(response.data);
+      if (isPlaza) {
+        await plazaApi.submitAnswer({
+          question_set_id: Number(questionSetId),
+          student_answers: answers,
+        });
+        // 提交后刷新 existingAnswer
+        const refreshRes = await plazaApi.getMyAnswer(Number(questionSetId));
+        if (refreshRes.data) {
+          setExistingAnswer(refreshRes.data as unknown as Answer);
+        }
+      } else {
+        const response = await answerApi.submit({
+          question_set_id: Number(questionSetId),
+          student_answers: answers,
+        });
+        setExistingAnswer(response.data);
+      }
       setExamStatus('submitted');
       toast.success('提交成功，正在批改中...');
     } catch (error) {
@@ -253,7 +316,7 @@ export function StudentExamPage() {
     return (
       <div className="flex flex-col items-center justify-center h-64 space-y-4">
         <p className="text-muted-foreground">暂无试题内容</p>
-        <Link to="/student">
+        <Link to={backPath}>
           <Button variant="outline">返回</Button>
         </Link>
       </div>
@@ -518,7 +581,7 @@ export function StudentExamPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/student">
+          <Link to={backPath}>
             <Button variant="ghost" size="icon">
               <ArrowLeft className="w-5 h-5" />
             </Button>

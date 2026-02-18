@@ -27,6 +27,9 @@ export function PlazaMyShared() {
   }, []);
 
   const handleUnshare = async (questionSetId: number) => {
+    if (!confirm('确定要从广场撤回该试题集吗？撤回后其他用户将无法继续做题。')) {
+      return;
+    }
     try {
       setUnsharing(questionSetId);
       await plazaApi.unsharePlaza(questionSetId);

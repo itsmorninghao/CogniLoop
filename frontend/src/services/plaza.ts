@@ -11,6 +11,7 @@ export interface PlazaQuestionSetItem {
   average_score: number | null;
   my_status: string | null; // null / "draft" / "completed"
   my_score: number | null;
+  is_own: boolean;
 }
 
 export interface PlazaQuestionSetListResponse {
@@ -41,6 +42,7 @@ export interface PlazaQuestionSetDetail {
   my_status: string | null;
   my_score: number | null;
   my_rank: number | null;
+  is_own: boolean;
   created_at: string;
   leaderboard: LeaderboardEntry[];
 }
@@ -124,6 +126,22 @@ export const plazaApi = {
 
   // 教师分享统计
   mySharedStats: () => api.get<PlazaSharedStatsResponse>('/plaza/my-shared-stats'),
+
+  // 获取我的答案
+  getMyAnswer: (questionSetId: number) =>
+    api.get<{
+      id: number;
+      question_set_id: number;
+      student_id: number | null;
+      course_id: number;
+      student_answers: Record<string, string | string[]> | null;
+      grading_results: Record<string, unknown> | null;
+      total_score: number | null;
+      status: string;
+      error_message: string | null;
+      saved_at: string;
+      submitted_at: string | null;
+    } | null>(`/plaza/my-answer/${questionSetId}`),
 
   // 做题 - 保存草稿
   saveDraft: (data: { question_set_id: number; student_answers: Record<string, unknown> }) =>

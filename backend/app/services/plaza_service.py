@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.models.answer import Answer, AnswerStatus
@@ -122,6 +122,11 @@ class PlazaService:
 
         items = []
         for qs, teacher_name, course_name, attempt_count in rows:
+            # 判断是否为当前教师自己出的题
+            is_own = (
+                isinstance(current_user, Teacher) and current_user.id == qs.teacher_id
+            ) if current_user else False
+
             item: dict[str, Any] = {
                 "id": qs.id,
                 "title": qs.title,
@@ -133,6 +138,7 @@ class PlazaService:
                 "average_score": None,
                 "my_status": None,
                 "my_score": None,
+                "is_own": is_own,
             }
 
             # 平均分
@@ -181,6 +187,10 @@ class PlazaService:
         completion_count = await self._count_completions(qs.id)
         avg = await self._avg_score(qs.id)
 
+        is_own = (
+            isinstance(current_user, Teacher) and current_user.id == qs.teacher_id
+        ) if current_user else False
+
         detail: dict[str, Any] = {
             "id": qs.id,
             "title": qs.title,
@@ -195,6 +205,7 @@ class PlazaService:
             "my_status": None,
             "my_score": None,
             "my_rank": None,
+            "is_own": is_own,
             "leaderboard": await self.get_leaderboard(qs.id),
         }
 
@@ -214,7 +225,7 @@ class PlazaService:
                 Answer.total_score.label("score"),
                 Answer.submitted_at,
                 Student.full_name.label("user_name"),
-                func.literal("student").label("user_type"),
+                literal_column("'student'").label("user_type"),
             )
             .join(Student, Student.id == Answer.student_id)
             .where(
@@ -231,7 +242,7 @@ class PlazaService:
                 Answer.total_score.label("score"),
                 Answer.submitted_at,
                 Teacher.full_name.label("user_name"),
-                func.literal("teacher").label("user_type"),
+                literal_column("'teacher'").label("user_type"),
             )
             .join(Teacher, Teacher.id == Answer.teacher_id)
             .where(
@@ -453,6 +464,31 @@ class PlazaService:
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def get_my_answer(self, question_set_id: int, user: Any) -> Answer | None:
+        """获取当前用户在某广场试题集上的最新答案"""
+        is_student = isinstance(user, Student)
+        user_cond = (
+            Answer.student_id == user.id if is_student else Answer.teacher_id == user.id
+        )
+
+        # 优先返回已完成/已提交/失败的答案，再返回草稿
+        for s in [
+            AnswerStatus.COMPLETED.value,
+            AnswerStatus.SUBMITTED.value,
+            AnswerStatus.FAILED.value,
+            AnswerStatus.DRAFT.value,
+        ]:
+            stmt = select(Answer).where(
+                Answer.question_set_id == question_set_id,
+                user_cond,
+                Answer.status == s,
+            )
+            answer = (await self.session.execute(stmt)).scalar_one_or_none()
+            if answer:
+                return answer
+
+        return None
+
     async def _get_my_status(self, question_set_id: int, user: Any) -> dict:
         """获取当前用户在某试题集上的状态"""
         is_student = isinstance(user, Student)
@@ -460,25 +496,24 @@ class PlazaService:
             Answer.student_id == user.id if is_student else Answer.teacher_id == user.id
         )
 
-        # 优先检查已完成
-        stmt = select(Answer).where(
-            Answer.question_set_id == question_set_id,
-            user_cond,
-            Answer.status == AnswerStatus.COMPLETED.value,
-        )
-        completed = (await self.session.execute(stmt)).scalar_one_or_none()
-        if completed:
-            return {"my_status": "completed", "my_score": completed.total_score}
-
-        # 检查草稿
-        stmt = select(Answer).where(
-            Answer.question_set_id == question_set_id,
-            user_cond,
-            Answer.status == AnswerStatus.DRAFT.value,
-        )
-        draft = (await self.session.execute(stmt)).scalar_one_or_none()
-        if draft:
-            return {"my_status": "draft", "my_score": None}
+        # 按优先级查找：completed > submitted > failed > draft
+        for s in [
+            AnswerStatus.COMPLETED.value,
+            AnswerStatus.SUBMITTED.value,
+            AnswerStatus.FAILED.value,
+            AnswerStatus.DRAFT.value,
+        ]:
+            stmt = select(Answer).where(
+                Answer.question_set_id == question_set_id,
+                user_cond,
+                Answer.status == s,
+            )
+            answer = (await self.session.execute(stmt)).scalar_one_or_none()
+            if answer:
+                return {
+                    "my_status": answer.status,
+                    "my_score": answer.total_score if answer.status == AnswerStatus.COMPLETED.value else None,
+                }
 
         return {"my_status": None, "my_score": None}
 
