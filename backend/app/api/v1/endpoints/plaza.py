@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import re
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -203,13 +204,33 @@ async def get_my_shared_stats(
     )
 
 
+def _strip_answers(markdown: str) -> str:
+    """从 markdown 题目内容中移除答案、解析、评分要点，防止泄露。"""
+    lines = markdown.split("\n")
+    result: list[str] = []
+    skipping = False
+    for line in lines:
+        if re.match(
+            r"\*\*(?:正确答案|参考答案|解析|评分要点)\*\*[：:]", line
+        ):
+            skipping = True
+            continue
+        if skipping:
+            if line.startswith("## ") or re.match(r"\*\*(?:题目内容|选项 [A-E])\*\*[：:]", line):
+                skipping = False
+            else:
+                continue
+        result.append(line)
+    return "\n".join(result)
+
+
 @router.get("/question-sets/{question_set_id}/content")
 async def get_plaza_question_set_content(
     question_set_id: int,
     session: SessionDep,
-    _user: CurrentUser,
+    _user: OptionalUser,
 ) -> dict:
-    """获取广场试题集的题目内容（需登录）"""
+    """获取广场试题集的题目内容（游客可访问，仅限已分享到广场的题集）"""
     from backend.app.services.question_service import QuestionService
 
     qs_service = QuestionService(session)
@@ -228,7 +249,7 @@ async def get_plaza_question_set_content(
     return {
         "id": question_set.id,
         "title": question_set.title,
-        "markdown_content": content,
+        "markdown_content": _strip_answers(content),
     }
 
 
