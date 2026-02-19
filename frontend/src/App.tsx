@@ -4,6 +4,7 @@ import { Layout } from '@/components/Layout';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { PublicNav } from '@/components/PublicNav';
+import { SetupGuard } from '@/components/SetupGuard';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -12,6 +13,7 @@ import { StudentCoursesPage, StudentTestsPage, StudentExamPage, PendingTestsPage
 import { PlazaDiscover, PlazaMyAttempts, PlazaMyShared } from '@/pages/plaza';
 import {
   AdminLoginPage,
+  AdminSetupPage,
   AdminDashboard,
   TeacherManagementPage,
   StudentManagementPage,
@@ -29,19 +31,24 @@ export function App() {
       }}
     >
       <Routes>
-        {/* Public Routes with transparent nav */}
-        <Route element={<><PublicNav /><Outlet /></>}>
-          <Route path="/" element={<HomePage />} />
-          <Route path="/plaza" element={<PlazaDiscover />} />
-        </Route>
+        {/* 首次部署：仅当无超级管理员时可访问，创建后访问会重定向到登录 */}
+        <Route path="/admin/setup" element={<AdminSetupPage />} />
 
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* 以下路由均需先完成初始化；否则会重定向到 /admin/setup */}
+        <Route element={<SetupGuard />}>
+          {/* Public Routes with transparent nav */}
+          <Route element={<><PublicNav /><Outlet /></>}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/plaza" element={<PlazaDiscover />} />
+          </Route>
 
-        {/* Admin Login (不暴露入口，直接通过 URL 访问) */}
-        <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
-        {/* Admin Routes */}
+          {/* Admin Login (不暴露入口，直接通过 URL 访问) */}
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+
+          {/* Admin Routes */}
         <Route
           path="/admin"
           element={
@@ -94,8 +101,9 @@ export function App() {
           <Route path="plaza/my-attempts" element={<PlazaMyAttempts />} />
         </Route>
 
-        {/* Catch all */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+          {/* Catch all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Route>
       </Routes>
       <Toaster />
     </BrowserRouter>

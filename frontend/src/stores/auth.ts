@@ -25,6 +25,7 @@ interface AuthState {
   // Actions
   login: (data: LoginRequest, userType: UserType) => Promise<void>;
   register: (data: RegisterRequest, userType: 'teacher' | 'student') => Promise<void>;
+  setAdminSession: (data: AdminLoginResponse) => void;
   logout: () => void;
   clearError: () => void;
   setLoading: (loading: boolean) => void;
@@ -97,6 +98,17 @@ export const useAuthStore = create<AuthState>()(
           set({ isLoading: false, error: message });
           throw error;
         }
+      },
+
+      setAdminSession: (data: AdminLoginResponse) => {
+        localStorage.setItem('token', data.access_token);
+        set({
+          token: data.access_token,
+          user: data.user,
+          userType: 'admin',
+          isAuthenticated: true,
+          error: null,
+        });
       },
 
       logout: () => {

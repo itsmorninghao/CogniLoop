@@ -96,6 +96,12 @@ class AdminService:
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def has_any_admin(self) -> bool:
+        """用于判断是否需要首次初始化"""
+        stmt = select(func.count(Admin.id))
+        result = await self.session.execute(stmt)
+        return (result.scalar() or 0) > 0
+
     # ==================== 统计数据 ====================
 
     async def get_system_stats(self) -> dict:

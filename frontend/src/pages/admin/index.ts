@@ -1,4 +1,5 @@
 export { AdminLoginPage } from './AdminLogin';
+export { AdminSetupPage } from './AdminSetup';
 export { AdminDashboard } from './Dashboard';
 export { TeacherManagementPage } from './TeacherManagement';
 export { StudentManagementPage } from './StudentManagement';

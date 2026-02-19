@@ -57,6 +57,17 @@ export interface CreateAdminRequest {
   is_super_admin: boolean;
 }
 
+export interface SetupRequiredResponse {
+  setup_required: boolean;
+}
+
+export interface SetupRequest {
+  username: string;
+  email: string;
+  password: string;
+  full_name: string;
+}
+
 export interface AdminLoginResponse {
   access_token: string;
   token_type: string;
@@ -66,6 +77,14 @@ export interface AdminLoginResponse {
 
 // 管理员 API
 export const adminApi = {
+  // 是否需要进行首次初始化
+  getSetupRequired: () =>
+    api.get<SetupRequiredResponse>('/admin/setup-required'),
+
+  // 首次创建超级管理员（仅当无管理员时可用，否则 403）
+  createSetup: (data: SetupRequest) =>
+    api.post<AdminLoginResponse>('/admin/setup', data),
+
   // 登录
   login: (data: LoginRequest) =>
     api.post<AdminLoginResponse>('/admin/login', data),

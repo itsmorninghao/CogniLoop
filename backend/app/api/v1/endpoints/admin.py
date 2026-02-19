@@ -36,6 +36,21 @@ class AdminCreateRequest(BaseModel):
     is_super_admin: bool = False
 
 
+class SetupRequiredResponse(BaseModel):
+    """是否需要初始化"""
+
+    setup_required: bool
+
+
+class SetupRequest(BaseModel):
+    """首次创建超级管理员请求"""
+
+    username: str = Field(..., min_length=3, max_length=50)
+    email: EmailStr
+    password: str = Field(..., min_length=6, max_length=100)
+    full_name: str = Field(..., min_length=1, max_length=100)
+
+
 class UserResponse(BaseModel):
     """用户响应"""
 
@@ -111,6 +126,59 @@ async def admin_login(data: AdminLoginRequest, session: SessionDep) -> dict:
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e),
+        )
+
+
+@router.get("/setup-required", response_model=SetupRequiredResponse)
+async def get_setup_required(session: SessionDep) -> SetupRequiredResponse:
+    """是否需要进行首次初始化，公开接口"""
+    admin_service = AdminService(session)
+    has_any = await admin_service.has_any_admin()
+    return SetupRequiredResponse(setup_required=not has_any)
+
+
+@router.post("/setup")
+async def create_setup_super_admin(
+    data: SetupRequest,
+    session: SessionDep,
+) -> dict:
+    """首次部署时创建超级管理员，仅当系统中无任何管理员时可用；否则返回 403。公开接口"""
+    admin_service = AdminService(session)
+    if await admin_service.has_any_admin():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="系统已初始化，无法重复创建",
+        )
+    try:
+        admin = await admin_service.create_admin(
+            username=data.username,
+            email=data.email,
+            password=data.password,
+            full_name=data.full_name,
+            is_super_admin=True,
+        )
+        await session.commit()
+        # 返回与登录一致的格式，便于前端直接登录
+        from backend.app.core.security import create_access_token
+
+        access_token = create_access_token(data={"sub": str(admin.id), "type": "admin"})
+        return {
+            "access_token": access_token,
+            "token_type": "bearer",
+            "user_type": "admin",
+            "user": {
+                "id": admin.id,
+                "username": admin.username,
+                "email": admin.email,
+                "full_name": admin.full_name,
+                "is_active": admin.is_active,
+                "is_super_admin": admin.is_super_admin,
+            },
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
         )
 
