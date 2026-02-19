@@ -1,15 +1,10 @@
 """答案相关 API"""
 
-import asyncio
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
 from backend.app.api.v1.deps import CurrentStudent, CurrentTeacher, SessionDep
-from backend.app.core.config import settings
-from backend.app.graph.grader import AnswerGrader
 from backend.app.schemas.answer import (
     AnswerCreate,
     AnswerDetail,
@@ -19,73 +14,11 @@ from backend.app.schemas.answer import (
     TeacherScoreUpdate,
 )
 from backend.app.services.answer_service import AnswerService
+from backend.app.services.grading_task import run_grading_in_background
 from backend.app.services.question_service import QuestionService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def _run_grading_sync(answer_id: int) -> None:
-    """在新事件循环中运行批改任务（同步包装器）"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(_run_grading_async(answer_id))
-    finally:
-        loop.close()
-
-
-async def _run_grading_async(answer_id: int) -> None:
-    """异步批改任务 - 使用独立的数据库连接"""
-    # 创建独立的引擎和会话（不与主事件循环共享）
-    engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        pool_pre_ping=True,
-    )
-    async_session = sessionmaker(
-        engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
-    async with async_session() as session:
-        try:
-            grader = AnswerGrader(session)
-            success = await grader.grade(answer_id)
-
-            if success:
-                # 批改成功后标记完成
-                question_service = QuestionService(session)
-                answer_service = AnswerService(session)
-                answer = await answer_service.get_answer_by_id(answer_id)
-                if answer and answer.student_id:
-                    await question_service.mark_completed(
-                        answer.question_set_id, answer.student_id
-                    )
-                logger.info(f"批改任务成功: answer_id={answer_id}")
-            else:
-                # grader 内部已经调用了 mark_grading_failed，这里确保提交
-                logger.warning(
-                    f"批改任务失败（grader 返回 False）: answer_id={answer_id}"
-                )
-
-            # 无论成功或失败都提交（失败时 grader 已设置 failed 状态）
-            await session.commit()
-        except Exception as e:
-            logger.error(
-                f"批改任务异常: answer_id={answer_id}, error={e}", exc_info=True
-            )
-            await session.rollback()
-            # 尝试标记为失败
-            try:
-                answer_service = AnswerService(session)
-                await answer_service.mark_grading_failed(answer_id, str(e))
-                await session.commit()
-            except Exception:
-                pass
-        finally:
-            await engine.dispose()
 
 
 @router.post("/save-draft", response_model=AnswerResponse)
@@ -176,8 +109,11 @@ async def submit_answer(
         # 先提交事务，确保 answer 已持久化到数据库
         await session.commit()
 
-        # 异步批改（后台任务，在独立线程中运行）
-        background_tasks.add_task(_run_grading_sync, answer.id)
+        background_tasks.add_task(
+            run_grading_in_background,
+            answer.id,
+            mark_student_completed=True,
+        )
 
         return AnswerResponse.model_validate(answer)
     except ValueError as e:

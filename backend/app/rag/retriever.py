@@ -4,14 +4,14 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.models.knowledge_chunk import KnowledgeChunk
-from backend.app.rag.embeddings import EmbeddingService
+from backend.app.rag.embeddings import get_embedding_service
 from backend.app.services.config_service import get_config_int
 
 
 class KnowledgeRetriever:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
-        self.embedding_service = EmbeddingService()
+        self.embedding_service = get_embedding_service()
 
     async def retrieve(
         self,

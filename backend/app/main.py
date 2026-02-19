@@ -1,6 +1,7 @@
 """FastAPI 应用入口"""
 
 import logging
+import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -36,25 +37,26 @@ class JWTRefreshMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         response = await call_next(request)
 
-        # 只处理成功的请求（2xx 状态码）
         if not (200 <= response.status_code < 300):
             return response
 
-        # 获取 Authorization header
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
             return response
 
-        token = auth_header[7:]  # 移除 "Bearer " 前缀
+        token = auth_header[7:]
         payload = decode_access_token(token)
         if not payload:
             return response
 
-        # 生成新的 token 并添加到响应头
-        new_token = create_access_token(
-            data={"sub": payload["sub"], "type": payload["type"]}
-        )
-        response.headers["X-New-Token"] = new_token
+        exp = payload.get("exp", 0)
+        remaining = exp - time.time()
+        total = settings.jwt_access_token_expire_minutes * 60
+        if remaining < total * 0.5:
+            new_token = create_access_token(
+                data={"sub": payload["sub"], "type": payload["type"]}
+            )
+            response.headers["X-New-Token"] = new_token
 
         return response
 
@@ -89,7 +91,7 @@ app.add_middleware(JWTRefreshMiddleware)
 # CORS 配置
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -165,8 +167,8 @@ if STATIC_DIR.exists() and STATIC_INDEX.exists():
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         """SPA 路由回退"""
-        file_path = STATIC_DIR / full_path
-        if file_path.exists() and file_path.is_file():
+        file_path = (STATIC_DIR / full_path).resolve()
+        if file_path.is_relative_to(STATIC_DIR) and file_path.is_file():
             return FileResponse(file_path)
         return FileResponse(STATIC_INDEX)
 

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     question_sets_dir: Path = Path("./question_sets")
     max_upload_size: int = 200 * 1024 * 1024  # 200MB
 
+    # CORS 配置
+    cors_origins: list[str] = ["*"]
+
     # 日志配置
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 

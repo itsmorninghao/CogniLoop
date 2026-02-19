@@ -1,5 +1,7 @@
 """试题集相关 API"""
 
+import logging
+
 from fastapi import APIRouter, HTTPException, status
 
 from backend.app.api.v1.deps import CurrentTeacher, SessionDep
@@ -18,6 +20,8 @@ from backend.app.services.plaza_service import PlazaService
 from backend.app.services.question_service import QuestionService
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 @router.post("/generate", response_model=QuestionSetResponse)
@@ -47,10 +51,11 @@ async def generate_question_set(
             difficulty=data.difficulty,
         )
         return QuestionSetResponse.model_validate(question_set)
-    except Exception as e:
+    except Exception:
+        logger.error("生成试题集失败", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"生成试题集失败: {e!s}",
+            detail="生成试题集失败，请稍后重试",
         )
 
 
@@ -81,13 +86,13 @@ async def modify_question_set(
             request=data.natural_language_request,
         )
 
-        # 刷新获取最新数据
         await session.refresh(question_set)
         return QuestionSetResponse.model_validate(question_set)
-    except Exception as e:
+    except Exception:
+        logger.error("修改试题集失败", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"修改试题集失败: {e!s}",
+            detail="修改试题集失败，请稍后重试",
         )
 
 

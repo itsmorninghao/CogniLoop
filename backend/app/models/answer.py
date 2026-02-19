@@ -1,12 +1,14 @@
 """答案模型"""
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import JSON, Column, Integer, String
 from sqlalchemy import ForeignKey as SAForeignKey
 from sqlmodel import Field, Relationship, SQLModel
+
+from backend.app.core.utils import utc_now_naive
 
 if TYPE_CHECKING:
     from backend.app.models.course import Course
@@ -26,11 +28,6 @@ class AnswerStatus(str, Enum):
 
 # 状态字符串类型（用于数据库列）
 AnswerStatusType = Literal["draft", "submitted", "completed", "failed"]
-
-
-def utc_now_naive() -> datetime:
-    """获取当前 UTC 时间（naive，无时区信息）"""
-    return datetime.now(UTC).replace(tzinfo=None)
 
 
 class Answer(SQLModel, table=True):

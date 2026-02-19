@@ -1,12 +1,9 @@
 """题目广场 API"""
 
-import asyncio
 import logging
 import re
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
 
 from backend.app.api.v1.deps import (
     CurrentTeacher,
@@ -14,7 +11,6 @@ from backend.app.api.v1.deps import (
     OptionalUser,
     SessionDep,
 )
-from backend.app.core.config import settings
 from backend.app.models.teacher import Teacher
 from backend.app.schemas.plaza import (
     LeaderboardEntry,
@@ -29,55 +25,11 @@ from backend.app.schemas.plaza import (
     PlazaSharedStatItem,
     PlazaSharedStatsResponse,
 )
+from backend.app.services.grading_task import run_grading_in_background
 from backend.app.services.plaza_service import PlazaService
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-
-def _run_grading_sync(answer_id: int) -> None:
-    """在新事件循环中运行批改任务（同步包装器）"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(_run_grading_async(answer_id))
-    finally:
-        loop.close()
-
-
-async def _run_grading_async(answer_id: int) -> None:
-    """异步批改任务 - 使用独立的数据库连接"""
-    engine = create_async_engine(settings.database_url, echo=False, pool_pre_ping=True)
-    async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-    async with async_session() as session:
-        try:
-            from backend.app.graph.grader import AnswerGrader
-            from backend.app.services.answer_service import AnswerService
-
-            grader = AnswerGrader(session)
-            success = await grader.grade(answer_id)
-            if success:
-                logger.info(f"广场批改任务成功: answer_id={answer_id}")
-            else:
-                logger.warning(f"广场批改任务失败: answer_id={answer_id}")
-
-            await session.commit()
-        except Exception as e:
-            logger.error(
-                f"广场批改任务异常: answer_id={answer_id}, error={e}", exc_info=True
-            )
-            await session.rollback()
-            try:
-                from backend.app.services.answer_service import AnswerService
-
-                answer_service = AnswerService(session)
-                await answer_service.mark_grading_failed(answer_id, str(e))
-                await session.commit()
-            except Exception:
-                await session.rollback()
-        finally:
-            await engine.dispose()
 
 
 @router.get("/question-sets", response_model=PlazaQuestionSetListResponse)
@@ -153,8 +105,8 @@ async def get_leaderboard(
     my_rank = None
     my_score = None
     if user:
-        my_rank = await service._get_my_rank(question_set_id, user)
-        status_info = await service._get_my_status(question_set_id, user)
+        my_rank = await service.get_my_rank(question_set_id, user)
+        status_info = await service.get_my_status(question_set_id, user)
         my_score = status_info.get("my_score")
 
     return LeaderboardResponse(
@@ -327,8 +279,6 @@ async def plaza_save_draft(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
             )
 
-    await session.commit()
-
     return {
         "id": answer.id,
         "status": answer.status,
@@ -381,10 +331,7 @@ async def plaza_submit_answer(
                 status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
             )
 
-    await session.commit()
-
-    # 异步批改（后台任务，在独立线程中运行）
-    background_tasks.add_task(_run_grading_sync, answer.id)
+    background_tasks.add_task(run_grading_in_background, answer.id)
 
     return {
         "id": answer.id,

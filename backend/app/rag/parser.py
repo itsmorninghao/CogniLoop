@@ -1,5 +1,6 @@
 """文档解析器：支持 PDF、Word、Markdown、PPT"""
 
+import asyncio
 from pathlib import Path
 
 import aiofiles
@@ -28,6 +29,9 @@ class DocumentParser:
         return await parser(path)
 
     async def _parse_pdf(self, path: Path) -> str:
+        return await asyncio.to_thread(self._parse_pdf_sync, path)
+
+    def _parse_pdf_sync(self, path: Path) -> str:
         reader = PdfReader(str(path))
         text_parts = [
             page.extract_text() for page in reader.pages if page.extract_text()
@@ -35,6 +39,9 @@ class DocumentParser:
         return "\n\n".join(text_parts)
 
     async def _parse_word(self, path: Path) -> str:
+        return await asyncio.to_thread(self._parse_word_sync, path)
+
+    def _parse_word_sync(self, path: Path) -> str:
         doc = DocxDocument(str(path))
         return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
 
@@ -43,6 +50,9 @@ class DocumentParser:
             return await f.read()
 
     async def _parse_ppt(self, path: Path) -> str:
+        return await asyncio.to_thread(self._parse_ppt_sync, path)
+
+    def _parse_ppt_sync(self, path: Path) -> str:
         prs = Presentation(str(path))
         text_parts = []
         for slide in prs.slides:

@@ -293,6 +293,11 @@ class ConfigService:
         if changed_keys:
             await load_config_cache(self.session)
 
+            if changed_keys & EMBEDDING_CONFIG_KEYS:
+                from backend.app.rag.embeddings import reset_embedding_service
+
+                reset_embedding_service()
+
         return changed_keys
 
     async def get_audit_logs(

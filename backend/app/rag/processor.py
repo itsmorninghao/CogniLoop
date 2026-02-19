@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.models.document import Document, DocumentStatus
 from backend.app.models.knowledge_chunk import KnowledgeChunk
 from backend.app.rag.chunker import TextChunker
-from backend.app.rag.embeddings import EmbeddingService
+from backend.app.rag.embeddings import get_embedding_service
 from backend.app.rag.parser import DocumentParser
 from backend.app.services.document_service import DocumentService
 
@@ -15,7 +15,7 @@ class DocumentProcessor:
         self.session = session
         self.parser = DocumentParser()
         self.chunker = TextChunker()
-        self.embedding_service = EmbeddingService()
+        self.embedding_service = get_embedding_service()
         self.document_service = DocumentService(session)
 
     async def process_document(self, document_id: int) -> bool:

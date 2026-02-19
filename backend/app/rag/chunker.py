@@ -11,6 +11,10 @@ class TextChunker:
     ) -> None:
         self.chunk_size = chunk_size or get_config_int("chunk_size")
         self.overlap = overlap or get_config_int("chunk_overlap")
+        if self.chunk_size < 1:
+            self.chunk_size = 500
+        if self.overlap >= self.chunk_size:
+            self.overlap = self.chunk_size // 5
 
     def chunk(self, text: str) -> list[str]:
         if not text or not text.strip():

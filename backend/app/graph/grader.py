@@ -1,6 +1,7 @@
 """答案批改器"""
 
 import json
+import logging
 import re
 from typing import Any
 
@@ -11,6 +12,8 @@ from backend.app.graph.prompts import GRADING_SYSTEM, GRADING_USER
 from backend.app.services.answer_service import AnswerService
 from backend.app.services.config_service import get_config
 from backend.app.services.question_service import QuestionService
+
+logger = logging.getLogger(__name__)
 
 
 class AnswerGrader:
@@ -294,6 +297,11 @@ class AnswerGrader:
             "correct_answer": question.get("correct_answer", ""),
         }
 
+    @staticmethod
+    def _sanitize_student_answer(answer: str, max_length: int = 5000) -> str:
+        """清洗学生答案，防止过长输入"""
+        return answer.strip()[:max_length]
+
     async def _grade_short_answer(
         self,
         question: dict[str, Any],
@@ -310,15 +318,15 @@ class AnswerGrader:
                 "correct_answer": None,
             }
 
-        # 构建提示词
+        sanitized_answer = self._sanitize_student_answer(student_answer)
+
         user_prompt = GRADING_USER.format(
             question=question.get("content", ""),
             reference_answer=question.get("reference_answer", ""),
             scoring_points=question.get("scoring_points", ""),
-            student_answer=student_answer,
+            student_answer=sanitized_answer,
         )
 
-        # 调用 LLM 批改
         messages = [
             {"role": "system", "content": GRADING_SYSTEM},
             {"role": "user", "content": user_prompt},
@@ -328,22 +336,29 @@ class AnswerGrader:
             response = await self.llm.ainvoke(messages)
             result = json.loads(response.content)
 
+            score = float(result.get("score", 0))
+            score = max(0.0, min(1.0, score))
+
             return {
                 "question_id": question.get("number", ""),
                 "question_type": "short_answer",
-                "score": float(result.get("score", 0)),
+                "score": score,
                 "max_score": 1.0,
                 "feedback": result.get("feedback", ""),
                 "analysis": result.get("analysis", ""),
                 "correct_answer": None,
             }
-        except (json.JSONDecodeError, KeyError):
-            # LLM 输出格式错误，给予部分分数
+        except (json.JSONDecodeError, KeyError, ValueError):
+            logger.warning(
+                f"LLM 输出解析失败: {getattr(response, 'content', '')[:500]}",
+                exc_info=True,
+            )
             return {
                 "question_id": question.get("number", ""),
                 "question_type": "short_answer",
-                "score": 0.5,
+                "score": 0.0,
                 "max_score": 1.0,
-                "feedback": "自动批改遇到问题，已给予部分分数，请教师复核",
+                "feedback": "自动批改遇到问题，请教师人工复核",
+                "needs_review": True,
                 "correct_answer": None,
             }

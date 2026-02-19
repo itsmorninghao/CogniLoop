@@ -1,18 +1,37 @@
 """Embedding 服务"""
 
+import threading
+
 from openai import AsyncOpenAI
 
 from backend.app.services.config_service import get_config, get_config_int
 
+_lock = threading.Lock()
+_instance: "EmbeddingService | None" = None
+
+
+def get_embedding_service() -> "EmbeddingService":
+    """获取或创建 EmbeddingService 单例。"""
+    global _instance
+    if _instance is None:
+        with _lock:
+            if _instance is None:
+                _instance = EmbeddingService()
+    return _instance
+
+
+def reset_embedding_service() -> None:
+    """重置单例"""
+    global _instance
+    with _lock:
+        _instance = None
+
 
 class EmbeddingService:
     def __init__(self) -> None:
-        embedding_api_key = get_config("embedding_api_key")
-        embedding_base_url = get_config("embedding_base_url")
-
         self.client = AsyncOpenAI(
-            api_key=embedding_api_key,
-            base_url=embedding_base_url,
+            api_key=get_config("embedding_api_key"),
+            base_url=get_config("embedding_base_url"),
         )
         self.model = get_config("embedding_model")
         self.dimensions = get_config_int("embedding_dims")

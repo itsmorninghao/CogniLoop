@@ -1,20 +1,29 @@
 """题目广场服务"""
 
-from datetime import UTC, datetime
+from collections.abc import Callable
 from typing import Any
 
-from sqlalchemy import func, literal_column, or_, select
+from sqlalchemy import case, func, literal_column, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.core.utils import utc_now_naive
 from backend.app.models.answer import Answer, AnswerStatus
 from backend.app.models.course import Course
 from backend.app.models.question_set import QuestionSet
 from backend.app.models.student import Student
 from backend.app.models.teacher import Teacher
 
+_STATUS_PRIORITY = [
+    AnswerStatus.COMPLETED.value,
+    AnswerStatus.SUBMITTED.value,
+    AnswerStatus.FAILED.value,
+    AnswerStatus.DRAFT.value,
+]
 
-def utc_now_naive() -> datetime:
-    return datetime.now(UTC).replace(tzinfo=None)
+
+def _escape_like(keyword: str) -> str:
+    """转义 SQL LIKE 通配符，防止用户输入 % 或 _ 干扰查询。"""
+    return keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 class PlazaService:
@@ -64,18 +73,17 @@ class PlazaService:
         limit: int = 20,
         keyword: str | None = None,
         sort: str = "newest",
-        current_user: Any = None,
+        current_user: Student | Teacher | None = None,
     ) -> tuple[list[dict], int]:
         """获取广场试题集列表"""
-        base_cond = [
-            QuestionSet.shared_to_plaza_at.isnot(None),
-        ]
+        base_cond = [QuestionSet.shared_to_plaza_at.isnot(None)]
 
         if keyword:
+            escaped = _escape_like(keyword)
             base_cond.append(
                 or_(
-                    QuestionSet.title.ilike(f"%{keyword}%"),
-                    QuestionSet.description.ilike(f"%{keyword}%"),
+                    QuestionSet.title.ilike(f"%{escaped}%", escape="\\"),
+                    QuestionSet.description.ilike(f"%{escaped}%", escape="\\"),
                 )
             )
 
@@ -96,6 +104,17 @@ class PlazaService:
             .scalar_subquery()
         )
 
+        avg_score_sub = (
+            select(func.avg(Answer.total_score))
+            .where(
+                Answer.question_set_id == QuestionSet.id,
+                Answer.status == AnswerStatus.COMPLETED.value,
+                Answer.total_score.isnot(None),
+            )
+            .correlate(QuestionSet)
+            .scalar_subquery()
+        )
+
         # 排序
         if sort == "popular":
             order = attempt_sub.desc()
@@ -110,6 +129,7 @@ class PlazaService:
                 Teacher.full_name.label("teacher_name"),
                 Course.name.label("course_name"),
                 attempt_sub.label("attempt_count"),
+                avg_score_sub.label("average_score"),
             )
             .join(Teacher, Teacher.id == QuestionSet.teacher_id)
             .join(Course, Course.id == QuestionSet.course_id)
@@ -120,12 +140,19 @@ class PlazaService:
         )
         rows = (await self.session.execute(stmt)).all()
 
+        # 批量获取当前用户的状态
+        qs_ids = [row[0].id for row in rows]
+        user_statuses: dict[int, dict] = {}
+        if current_user and qs_ids:
+            user_statuses = await self._batch_get_my_status(qs_ids, current_user)
+
         items = []
-        for qs, teacher_name, course_name, attempt_count in rows:
-            # 判断是否为当前教师自己出的题
+        for qs, teacher_name, course_name, attempt_count, avg_score in rows:
             is_own = (
-                isinstance(current_user, Teacher) and current_user.id == qs.teacher_id
-            ) if current_user else False
+                (isinstance(current_user, Teacher) and current_user.id == qs.teacher_id)
+                if current_user
+                else False
+            )
 
             item: dict[str, Any] = {
                 "id": qs.id,
@@ -135,32 +162,23 @@ class PlazaService:
                 "course_name": course_name,
                 "shared_to_plaza_at": qs.shared_to_plaza_at,
                 "attempt_count": attempt_count or 0,
-                "average_score": None,
+                "average_score": round(float(avg_score), 1)
+                if avg_score is not None
+                else None,
                 "my_status": None,
                 "my_score": None,
                 "is_own": is_own,
             }
 
-            # 平均分
-            avg_stmt = select(func.avg(Answer.total_score)).where(
-                Answer.question_set_id == qs.id,
-                Answer.status == AnswerStatus.COMPLETED.value,
-                Answer.total_score.isnot(None),
-            )
-            avg = (await self.session.execute(avg_stmt)).scalar()
-            if avg is not None:
-                item["average_score"] = round(float(avg), 1)
-
-            # 当前用户的状态
-            if current_user:
-                item.update(await self._get_my_status(qs.id, current_user))
+            if current_user and qs.id in user_statuses:
+                item.update(user_statuses[qs.id])
 
             items.append(item)
 
         return items, total
 
     async def get_plaza_question_set_detail(
-        self, question_set_id: int, current_user: Any = None
+        self, question_set_id: int, current_user: Student | Teacher | None = None
     ) -> dict | None:
         """获取广场试题集详情"""
         stmt = (
@@ -188,8 +206,10 @@ class PlazaService:
         avg = await self._avg_score(qs.id)
 
         is_own = (
-            isinstance(current_user, Teacher) and current_user.id == qs.teacher_id
-        ) if current_user else False
+            (isinstance(current_user, Teacher) and current_user.id == qs.teacher_id)
+            if current_user
+            else False
+        )
 
         detail: dict[str, Any] = {
             "id": qs.id,
@@ -210,8 +230,8 @@ class PlazaService:
         }
 
         if current_user:
-            detail.update(await self._get_my_status(qs.id, current_user))
-            detail["my_rank"] = await self._get_my_rank(qs.id, current_user)
+            detail.update(await self.get_my_status(qs.id, current_user))
+            detail["my_rank"] = await self.get_my_rank(qs.id, current_user)
 
         return detail
 
@@ -274,7 +294,7 @@ class PlazaService:
 
     async def get_my_attempts(
         self,
-        current_user: Any,
+        current_user: Student | Teacher,
         skip: int = 0,
         limit: int = 20,
         status_filter: str = "all",
@@ -366,8 +386,6 @@ class PlazaService:
             "items": items,
         }
 
-    # ======================== 教师做题 ========================
-
     async def teacher_save_draft(
         self, teacher_id: int, question_set_id: int, student_answers: dict
     ) -> Answer:
@@ -455,73 +473,110 @@ class PlazaService:
         return qs
 
     async def _find_teacher_answer(
-        self, question_set_id: int, teacher_id: int, status: str
+        self, question_set_id: int, teacher_id: int, answer_status: str
     ) -> Answer | None:
         stmt = select(Answer).where(
             Answer.question_set_id == question_set_id,
             Answer.teacher_id == teacher_id,
-            Answer.status == status,
+            Answer.status == answer_status,
         )
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
-    async def get_my_answer(self, question_set_id: int, user: Any) -> Answer | None:
-        """获取当前用户在某广场试题集上的最新答案"""
-        is_student = isinstance(user, Student)
+    async def get_my_answer(
+        self, question_set_id: int, user: Student | Teacher
+    ) -> Answer | None:
+        """获取当前用户在某广场试题集上的最新答案,单次查询,按状态优先级排序"""
         user_cond = (
-            Answer.student_id == user.id if is_student else Answer.teacher_id == user.id
+            Answer.student_id == user.id
+            if isinstance(user, Student)
+            else Answer.teacher_id == user.id
         )
 
-        # 优先返回已完成/已提交/失败的答案，再返回草稿
-        for s in [
-            AnswerStatus.COMPLETED.value,
-            AnswerStatus.SUBMITTED.value,
-            AnswerStatus.FAILED.value,
-            AnswerStatus.DRAFT.value,
-        ]:
-            stmt = select(Answer).where(
-                Answer.question_set_id == question_set_id,
-                user_cond,
-                Answer.status == s,
-            )
-            answer = (await self.session.execute(stmt)).scalar_one_or_none()
-            if answer:
-                return answer
-
-        return None
-
-    async def _get_my_status(self, question_set_id: int, user: Any) -> dict:
-        """获取当前用户在某试题集上的状态"""
-        is_student = isinstance(user, Student)
-        user_cond = (
-            Answer.student_id == user.id if is_student else Answer.teacher_id == user.id
+        status_order = case(
+            {s: i for i, s in enumerate(_STATUS_PRIORITY)},
+            value=Answer.status,
+            else_=len(_STATUS_PRIORITY),
         )
 
-        # 按优先级查找：completed > submitted > failed > draft
-        for s in [
-            AnswerStatus.COMPLETED.value,
-            AnswerStatus.SUBMITTED.value,
-            AnswerStatus.FAILED.value,
-            AnswerStatus.DRAFT.value,
-        ]:
-            stmt = select(Answer).where(
+        stmt = (
+            select(Answer)
+            .where(
                 Answer.question_set_id == question_set_id,
                 user_cond,
-                Answer.status == s,
+                Answer.status.in_(_STATUS_PRIORITY),
             )
-            answer = (await self.session.execute(stmt)).scalar_one_or_none()
-            if answer:
-                return {
-                    "my_status": answer.status,
-                    "my_score": answer.total_score if answer.status == AnswerStatus.COMPLETED.value else None,
-                }
+            .order_by(status_order)
+            .limit(1)
+        )
+        return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def get_my_status(
+        self, question_set_id: int, user: Student | Teacher
+    ) -> dict:
+        """获取当前用户在某试题集上的状态,单次查询"""
+        answer = await self.get_my_answer(question_set_id, user)
+        if answer:
+            return {
+                "my_status": answer.status,
+                "my_score": (
+                    answer.total_score
+                    if answer.status == AnswerStatus.COMPLETED.value
+                    else None
+                ),
+            }
         return {"my_status": None, "my_score": None}
 
-    async def _get_my_rank(self, question_set_id: int, user: Any) -> int | None:
-        """获取当前用户的排名"""
-        is_student = isinstance(user, Student)
+    async def _batch_get_my_status(
+        self,
+        question_set_ids: list[int],
+        user: Student | Teacher,
+    ) -> dict[int, dict]:
+        """批量获取用户在多个试题集上的状态"""
         user_cond = (
-            Answer.student_id == user.id if is_student else Answer.teacher_id == user.id
+            Answer.student_id == user.id
+            if isinstance(user, Student)
+            else Answer.teacher_id == user.id
+        )
+
+        status_order = case(
+            {s: i for i, s in enumerate(_STATUS_PRIORITY)},
+            value=Answer.status,
+            else_=len(_STATUS_PRIORITY),
+        )
+
+        stmt = (
+            select(Answer)
+            .where(
+                Answer.question_set_id.in_(question_set_ids),
+                user_cond,
+                Answer.status.in_(_STATUS_PRIORITY),
+            )
+            .order_by(Answer.question_set_id, status_order)
+        )
+        rows = (await self.session.execute(stmt)).scalars().all()
+
+        result: dict[int, dict] = {}
+        for answer in rows:
+            qs_id = answer.question_set_id
+            if qs_id not in result:
+                result[qs_id] = {
+                    "my_status": answer.status,
+                    "my_score": (
+                        answer.total_score
+                        if answer.status == AnswerStatus.COMPLETED.value
+                        else None
+                    ),
+                }
+        return result
+
+    async def get_my_rank(
+        self, question_set_id: int, user: Student | Teacher
+    ) -> int | None:
+        """获取当前用户的排名"""
+        user_cond = (
+            Answer.student_id == user.id
+            if isinstance(user, Student)
+            else Answer.teacher_id == user.id
         )
 
         my_answer_stmt = select(Answer).where(
@@ -583,7 +638,9 @@ class PlazaService:
         )
         return (await self.session.execute(stmt)).scalar()
 
-    async def _score_stat(self, question_set_id: int, agg_func: Any) -> float | None:
+    async def _score_stat(
+        self, question_set_id: int, agg_func: Callable
+    ) -> float | None:
         stmt = select(agg_func(Answer.total_score)).where(
             Answer.question_set_id == question_set_id,
             Answer.status == AnswerStatus.COMPLETED.value,
