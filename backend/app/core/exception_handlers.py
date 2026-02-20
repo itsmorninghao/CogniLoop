@@ -1,10 +1,10 @@
 """全局异常处理器"""
 
+import logging
+
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-
-import logging
 
 logger = logging.getLogger(__name__)
 

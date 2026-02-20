@@ -45,7 +45,9 @@ def upgrade() -> None:
     # Answer: 新增 teacher_id
     op.add_column(
         "answers",
-        sa.Column("teacher_id", sa.Integer(), sa.ForeignKey("teachers.id"), nullable=True),
+        sa.Column(
+            "teacher_id", sa.Integer(), sa.ForeignKey("teachers.id"), nullable=True
+        ),
     )
     op.create_index("ix_answers_teacher_id", "answers", ["teacher_id"])
 

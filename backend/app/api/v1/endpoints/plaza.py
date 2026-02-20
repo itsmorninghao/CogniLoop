@@ -162,13 +162,13 @@ def _strip_answers(markdown: str) -> str:
     result: list[str] = []
     skipping = False
     for line in lines:
-        if re.match(
-            r"\*\*(?:正确答案|参考答案|解析|评分要点)\*\*[：:]", line
-        ):
+        if re.match(r"\*\*(?:正确答案|参考答案|解析|评分要点)\*\*[：:]", line):
             skipping = True
             continue
         if skipping:
-            if line.startswith("## ") or re.match(r"\*\*(?:题目内容|选项 [A-E])\*\*[：:]", line):
+            if line.startswith("## ") or re.match(
+                r"\*\*(?:题目内容|选项 [A-E])\*\*[：:]", line
+            ):
                 skipping = False
             else:
                 continue
@@ -248,9 +248,7 @@ async def plaza_save_draft(
                 student_answers=data.student_answers,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     else:
         # 学生做广场题 - 复用现有 answer_service
         from backend.app.schemas.answer import AnswerSaveDraft
@@ -275,9 +273,7 @@ async def plaza_save_draft(
                 ),
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return {
         "id": answer.id,
@@ -304,9 +300,7 @@ async def plaza_submit_answer(
                 student_answers=data.student_answers,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     else:
         from backend.app.services.answer_service import AnswerService
         from backend.app.services.question_service import QuestionService
@@ -327,9 +321,7 @@ async def plaza_submit_answer(
                 student_answers=data.student_answers,
             )
         except ValueError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
-            )
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     background_tasks.add_task(run_grading_in_background, answer.id)
 

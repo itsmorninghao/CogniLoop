@@ -40,7 +40,9 @@ class Answer(SQLModel, table=True):
     student_id: int | None = Field(default=None, foreign_key="students.id", index=True)
     teacher_id: int | None = Field(
         default=None,
-        sa_column=Column(Integer, SAForeignKey("teachers.id"), index=True, nullable=True),
+        sa_column=Column(
+            Integer, SAForeignKey("teachers.id"), index=True, nullable=True
+        ),
     )
     course_id: int = Field(foreign_key="courses.id", index=True)
     student_answers: dict[str, Any] | None = Field(
