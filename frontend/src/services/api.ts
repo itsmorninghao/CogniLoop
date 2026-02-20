@@ -54,12 +54,14 @@ api.interceptors.response.use(
       
       // 401: 未授权，清除认证状态并跳转登录
       if (status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('auth-storage');
+        const message = data?.detail || '登录已过期，请重新登录';
+        // 非登录页才清 token 并跳转，避免登录失败时误跳转
         if (window.location.pathname !== '/login') {
+          localStorage.removeItem('token');
+          localStorage.removeItem('auth-storage');
           window.location.href = '/login';
         }
-        return Promise.reject(error);
+        return Promise.reject(new Error(message));
       }
       
       // 422: 请求参数校验失败，使用后端返回的友好 detail
