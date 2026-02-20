@@ -1,9 +1,7 @@
 # 构建前端
-FROM node:20-alpine AS frontend-builder
+FROM node:20-bookworm-slim AS frontend-builder
 
 WORKDIR /frontend
-
-ENV NODE_OPTIONS="--max-old-space-size=512"
 
 COPY frontend/package.json frontend/package-lock.json* ./
 
