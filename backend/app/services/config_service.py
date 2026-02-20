@@ -235,6 +235,7 @@ class ConfigService:
             实际发生变更的配置 key 集合（调用方据此判断是否需要触发后续操作）
         """
         changed_keys: set[str] = set()
+        committed_values: dict[str, str] = {}
 
         for key, new_value in updates.items():
             # 安全检查：只允许更新已定义的配置项，忽略非法 key
@@ -286,12 +287,15 @@ class ConfigService:
             self.session.add(audit_log)
 
             changed_keys.add(key)
+            committed_values[key] = new_value
 
         await self.session.flush()
 
-        # 有变更时立即刷新内存缓存，使新配置对后续请求生效
+        # 有变更时立即更新内存缓存，使新配置对后续请求生效。
+        # 直接用已知的新值更新缓存
         if changed_keys:
-            await load_config_cache(self.session)
+            global _config_cache
+            _config_cache = {**_config_cache, **committed_values}
 
             if changed_keys & EMBEDDING_CONFIG_KEYS:
                 from backend.app.rag.embeddings import reset_embedding_service

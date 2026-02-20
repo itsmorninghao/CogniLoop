@@ -3,13 +3,15 @@ FROM node:20-alpine AS frontend-builder
 
 WORKDIR /frontend
 
+ENV NODE_OPTIONS="--max-old-space-size=512"
+
 COPY frontend/package.json frontend/package-lock.json* ./
 
-RUN npm ci --silent
+RUN npm ci --silent --no-audit --no-fund
 
 COPY frontend/ ./
 
-RUN npm run build
+RUN npx vite build
 
 # 构建后端
 FROM python:3.11-slim
@@ -32,7 +34,6 @@ COPY pyproject.toml ./
 RUN uv pip install --system .
 
 COPY backend/ /app/backend/
-COPY scripts/ /app/scripts/
 
 COPY --from=frontend-builder /frontend/dist /app/static
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Settings,
   Loader2,
@@ -54,6 +54,8 @@ export function SystemSettingsPage() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [pendingUpdates, setPendingUpdates] = useState<Record<string, string>>({});
 
+  const formValuesRef = useRef<Record<string, string>>({});
+
   // ==================== 数据加载 ====================
 
   const loadConfigs = useCallback(async () => {
@@ -71,6 +73,7 @@ export function SystemSettingsPage() {
         }
       }
       setFormValues(initialValues);
+      formValuesRef.current = initialValues;
     } catch (error) {
       toast.error('加载配置失败');
       console.error(error);
@@ -101,14 +104,15 @@ export function SystemSettingsPage() {
 
   const handleInputChange = (key: string, value: string) => {
     setFormValues((prev) => ({ ...prev, [key]: value }));
+    formValuesRef.current = { ...formValuesRef.current, [key]: value };
   };
 
-  /** 找出实际发生变化的配置项 */
-  const getChangedConfigs = (): Record<string, string> => {
+  /** 找出实际发生变化的配置项，接收当前表单值作为参数以避免陈旧闭包 */
+  const getChangedConfigs = (currentFormValues: Record<string, string>): Record<string, string> => {
     const changed: Record<string, string> = {};
     for (const group of Object.values(groups)) {
       for (const item of group.items) {
-        const currentValue = formValues[item.key];
+        const currentValue = currentFormValues[item.key];
         if (currentValue !== undefined && currentValue !== item.value) {
           changed[item.key] = currentValue;
         }
@@ -129,7 +133,7 @@ export function SystemSettingsPage() {
   };
 
   const handleSave = () => {
-    const changes = getChangedConfigs();
+    const changes = getChangedConfigs(formValuesRef.current);
 
     if (Object.keys(changes).length === 0) {
       toast.info('没有需要保存的变更');
