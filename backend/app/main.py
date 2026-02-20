@@ -6,16 +6,20 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from backend.app.api.v1 import api_router
 from backend.app.core.config import settings
 from backend.app.core.database import async_session_factory
+from backend.app.core.exception_handlers import (
+    global_exception_handler,
+    validation_exception_handler,
+)
 from backend.app.core.security import create_access_token, decode_access_token
 from backend.app.services.config_service import load_config_cache
 
@@ -100,28 +104,8 @@ app.add_middleware(
 
 
 # 全局异常处理
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(
-    _request: Request, exc: RequestValidationError
-) -> JSONResponse:
-    """处理请求验证错误"""
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "detail": "请求参数验证失败",
-            "errors": exc.errors(),
-        },
-    )
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
-    """全局异常处理"""
-    logger.error(f"未处理的异常: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={"detail": "服务器内部错误"},
-    )
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, global_exception_handler)
 
 
 # 健康检查 API

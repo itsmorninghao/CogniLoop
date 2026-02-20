@@ -55,13 +55,28 @@ export function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!username.trim() || !password.trim()) {
-      toast.error('请填写用户名和密码');
+
+    const trimmedUsername = username.trim();
+    const trimmedPassword = password.trim();
+    const trimmedCaptcha = captchaValue.trim();
+
+    if (!trimmedUsername) {
+      toast.error(activeTab === 'student' ? '请填写学号' : '请填写用户名');
       return;
     }
-
-    if (!captchaValue.trim()) {
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 50) {
+      toast.error(activeTab === 'student' ? '学号长度为 3–50 个字符' : '用户名长度为 3–50 个字符');
+      return;
+    }
+    if (!trimmedPassword) {
+      toast.error('请填写密码');
+      return;
+    }
+    if (trimmedPassword.length < 6 || trimmedPassword.length > 100) {
+      toast.error('密码长度为 6–100 个字符');
+      return;
+    }
+    if (!trimmedCaptcha) {
       toast.error('请输入验证码');
       return;
     }

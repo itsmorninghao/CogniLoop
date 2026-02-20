@@ -65,16 +65,21 @@ export function RegisterPage() {
 
   const handleTeacherSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!teacherUsername.trim() || !teacherEmail.trim() || !teacherPassword.trim() || !teacherName.trim()) {
-      toast.error('请填写完整信息');
-      return;
-    }
 
-    if (!captchaValue.trim()) {
-      toast.error('请输入验证码');
-      return;
-    }
+    const trimmedUsername = teacherUsername.trim();
+    const trimmedName = teacherName.trim();
+    const trimmedEmail = teacherEmail.trim();
+    const trimmedCaptcha = captchaValue.trim();
+
+    if (!trimmedUsername) { toast.error('请填写用户名'); return; }
+    if (trimmedUsername.length < 3 || trimmedUsername.length > 50) { toast.error('用户名长度为 3–50 个字符'); return; }
+    if (!trimmedName) { toast.error('请填写姓名'); return; }
+    if (trimmedName.length > 100) { toast.error('姓名不能超过 100 个字符'); return; }
+    if (!trimmedEmail) { toast.error('请填写邮箱'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) { toast.error('请填写有效的邮箱地址'); return; }
+    if (!teacherPassword) { toast.error('请设置密码'); return; }
+    if (teacherPassword.length < 6 || teacherPassword.length > 100) { toast.error('密码长度为 6–100 个字符'); return; }
+    if (!trimmedCaptcha) { toast.error('请输入验证码'); return; }
 
     try {
       await register({
@@ -95,16 +100,21 @@ export function RegisterPage() {
 
   const handleStudentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!studentNumber.trim() || !studentEmail.trim() || !studentPassword.trim() || !studentName.trim()) {
-      toast.error('请填写完整信息');
-      return;
-    }
 
-    if (!captchaValue.trim()) {
-      toast.error('请输入验证码');
-      return;
-    }
+    const trimmedNumber = studentNumber.trim();
+    const trimmedName = studentName.trim();
+    const trimmedEmail = studentEmail.trim();
+    const trimmedCaptcha = captchaValue.trim();
+
+    if (!trimmedNumber) { toast.error('请填写学号'); return; }
+    if (trimmedNumber.length < 3 || trimmedNumber.length > 50) { toast.error('学号长度为 3–50 个字符'); return; }
+    if (!trimmedName) { toast.error('请填写姓名'); return; }
+    if (trimmedName.length > 100) { toast.error('姓名不能超过 100 个字符'); return; }
+    if (!trimmedEmail) { toast.error('请填写邮箱'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) { toast.error('请填写有效的邮箱地址'); return; }
+    if (!studentPassword) { toast.error('请设置密码'); return; }
+    if (studentPassword.length < 6 || studentPassword.length > 100) { toast.error('密码长度为 6–100 个字符'); return; }
+    if (!trimmedCaptcha) { toast.error('请输入验证码'); return; }
 
     try {
       await register({

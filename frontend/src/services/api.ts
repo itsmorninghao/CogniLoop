@@ -54,18 +54,20 @@ api.interceptors.response.use(
       
       // 401: 未授权，清除认证状态并跳转登录
       if (status === 401) {
-        // 清除 localStorage 中的 token
         localStorage.removeItem('token');
-        // 清除 zustand 持久化状态
         localStorage.removeItem('auth-storage');
-        // 使用 window.location 确保完全刷新，避免状态不一致
         if (window.location.pathname !== '/login') {
           window.location.href = '/login';
         }
         return Promise.reject(error);
       }
       
-      // 返回错误信息
+      // 422: 请求参数校验失败，使用后端返回的友好 detail
+      if (status === 422) {
+        const message = data?.detail || '请求参数填写有误，请检查后重试';
+        return Promise.reject(new Error(message));
+      }
+
       const message = data?.detail || '请求失败';
       return Promise.reject(new Error(message));
     }
