@@ -1,7 +1,6 @@
 """题目广场 API"""
 
 import logging
-import re
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 
@@ -156,24 +155,20 @@ async def get_my_shared_stats(
     )
 
 
-def _strip_answers(markdown: str) -> str:
-    """从 markdown 题目内容中移除答案、解析、评分要点，防止泄露。"""
-    lines = markdown.split("\n")
-    result: list[str] = []
-    skipping = False
-    for line in lines:
-        if re.match(r"\*\*(?:正确答案|参考答案|解析|评分要点)\*\*[：:]", line):
-            skipping = True
-            continue
-        if skipping:
-            if line.startswith("## ") or re.match(
-                r"\*\*(?:题目内容|选项 [A-E])\*\*[：:]", line
-            ):
-                skipping = False
-            else:
-                continue
-        result.append(line)
-    return "\n".join(result)
+def _strip_answers(json_content: str) -> str:
+    """从 JSON 题目内容中移除答案、解析、评分要点，防止泄露。"""
+    import json as _json
+
+    try:
+        data = _json.loads(json_content)
+        questions = data.get("questions", [])
+        for q in questions:
+            q.pop("answer", None)
+            q.pop("explanation", None)
+            q.pop("scoring_points", None)
+        return _json.dumps(data, ensure_ascii=False)
+    except Exception:
+        return json_content
 
 
 @router.get("/question-sets/{question_set_id}/content")
@@ -201,7 +196,7 @@ async def get_plaza_question_set_content(
     return {
         "id": question_set.id,
         "title": question_set.title,
-        "markdown_content": _strip_answers(content),
+        "json_content": _strip_answers(content),
     }
 
 

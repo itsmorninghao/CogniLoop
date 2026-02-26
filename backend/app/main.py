@@ -1,5 +1,6 @@
 """FastAPI 应用入口"""
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -22,6 +23,7 @@ from backend.app.core.exception_handlers import (
 )
 from backend.app.core.security import create_access_token, decode_access_token
 from backend.app.services.config_service import load_config_cache
+from backend.app.services.exam_paper_task import set_main_loop
 
 # 静态文件目录（支持 Docker 一体化部署）
 STATIC_DIR = Path("/app/static")
@@ -71,6 +73,9 @@ async def lifespan(_app: FastAPI):
     # 启动时
     logger.info("正在启动 CogniLoop 后端服务...")
     settings.ensure_dirs()
+
+    # 注册主事件循环，供后台线程跨线程推送 SSE 事件使用
+    set_main_loop(asyncio.get_running_loop())
 
     # 从数据库加载业务配置到内存缓存
     async with async_session_factory() as session:

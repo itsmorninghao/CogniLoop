@@ -22,6 +22,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     curl \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 

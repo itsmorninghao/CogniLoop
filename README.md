@@ -89,6 +89,10 @@ docker-compose up -d --build
 - [ ] 根据答题情况生成学生画像，做到每位同学的每一套题都是个性化定制的，而不是千篇一律的
 - [ ] 支持教师设置答题时间
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=itsmorninghao/CogniLoop&type=date&legend=top-left)](https://www.star-history.com/#itsmorninghao/CogniLoop&type=date&legend=top-left)
+
 ## 许可证
 
-MIT License
+AGPL v3。详见 [LICENSE](LICENSE) 文件。

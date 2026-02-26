@@ -93,6 +93,190 @@ CONFIG_DEFINITIONS: dict[str, dict[str, Any]] = {
         "default": "10",
         "description": "知识检索时返回的最相似文档块数量",
     },
+    # ---- 仿高考组卷 Multi-Agent 配置 ----
+    "exam_agent_solve_count": {
+        "group": "exam_agent",
+        "label": "SolveAgent 试做次数 K",
+        "type": "integer",
+        "default": "5",
+        "description": "每道题并行模拟作答的次数，越多难度评估越准确，但 Token 消耗越高",
+    },
+    "exam_agent_max_retry": {
+        "group": "exam_agent",
+        "label": "单题最大重试次数",
+        "type": "integer",
+        "default": "3",
+        "description": "质检失败或难度不达标时的最大重试次数（质检与难度共用计数器）",
+    },
+    "exam_agent_concurrency": {
+        "group": "exam_agent",
+        "label": "并发窗口大小",
+        "type": "integer",
+        "default": "8",
+        "description": "同时处理的题目数，调高可加速但会增加 API 并发压力（建议按 API 等级调整）",
+    },
+    "exam_agent_fewshot_count": {
+        "group": "exam_agent",
+        "label": "Few-shot 样本数量",
+        "type": "integer",
+        "default": "3",
+        "description": "每道题注入的历年同位置真题样本数量",
+    },
+    # ---- 各 Agent 独立 LLM 配置（留空则回退到全局 LLM 配置） ----
+    "exam_agent_question_api_key": {
+        "group": "exam_agent_llm",
+        "label": "出题 Agent · API Key",
+        "type": "password",
+        "default": "",
+        "description": "QuestionAgent 使用的 API Key（留空则使用全局 LLM Key）",
+    },
+    "exam_agent_question_base_url": {
+        "group": "exam_agent_llm",
+        "label": "出题 Agent · Base URL",
+        "type": "string",
+        "default": "",
+        "description": "QuestionAgent 使用的 API 地址（留空则使用全局 LLM 地址）",
+    },
+    "exam_agent_question_model": {
+        "group": "exam_agent_llm",
+        "label": "出题 Agent · 模型",
+        "type": "string",
+        "default": "",
+        "description": "QuestionAgent 使用的模型名称（留空则使用全局 LLM 模型）",
+    },
+    "exam_agent_qc_api_key": {
+        "group": "exam_agent_llm",
+        "label": "质检 Agent · API Key",
+        "type": "password",
+        "default": "",
+        "description": "QualityCheckAgent 使用的 API Key（留空则使用全局 LLM Key）",
+    },
+    "exam_agent_qc_base_url": {
+        "group": "exam_agent_llm",
+        "label": "质检 Agent · Base URL",
+        "type": "string",
+        "default": "",
+        "description": "QualityCheckAgent 使用的 API 地址（留空则使用全局 LLM 地址）",
+    },
+    "exam_agent_qc_model": {
+        "group": "exam_agent_llm",
+        "label": "质检 Agent · 模型",
+        "type": "string",
+        "default": "",
+        "description": "QualityCheckAgent 使用的模型名称（留空则使用全局 LLM 模型）",
+    },
+    "exam_agent_solve_api_key": {
+        "group": "exam_agent_llm",
+        "label": "模拟考生 Agent · API Key",
+        "type": "password",
+        "default": "",
+        "description": "SolveAgent 使用的 API Key（留空则使用全局 LLM Key）",
+    },
+    "exam_agent_solve_base_url": {
+        "group": "exam_agent_llm",
+        "label": "模拟考生 Agent · Base URL",
+        "type": "string",
+        "default": "",
+        "description": "SolveAgent 使用的 API 地址（留空则使用全局 LLM 地址）",
+    },
+    "exam_agent_solve_model": {
+        "group": "exam_agent_llm",
+        "label": "模拟考生 Agent · 模型",
+        "type": "string",
+        "default": "",
+        "description": "SolveAgent 使用的模型名称（留空则使用全局 LLM 模型，建议用弱一档模型）",
+    },
+    "exam_agent_solve_models": {
+        "group": "exam_agent_llm",
+        "label": "模拟考生 Agent · 多模型并行配置",
+        "type": "json",
+        "default": "[]",
+        "description": '配置多个不同模型实例并行试做，模拟不同水平考生。格式: [{"label":"名称","model":"模型名","temperature":0.9}]。留空则使用上方单一配置。',
+    },
+    "exam_agent_grade_api_key": {
+        "group": "exam_agent_llm",
+        "label": "评分 Agent · API Key",
+        "type": "password",
+        "default": "",
+        "description": "GradeAgent 使用的 API Key（留空则使用全局 LLM Key）",
+    },
+    "exam_agent_grade_base_url": {
+        "group": "exam_agent_llm",
+        "label": "评分 Agent · Base URL",
+        "type": "string",
+        "default": "",
+        "description": "GradeAgent 使用的 API 地址（留空则使用全局 LLM 地址）",
+    },
+    "exam_agent_grade_model": {
+        "group": "exam_agent_llm",
+        "label": "评分 Agent · 模型",
+        "type": "string",
+        "default": "",
+        "description": "GradeAgent 使用的模型名称（留空则使用全局 LLM 模型，建议与出题模型不同）",
+    },
+    "exam_agent_hotspot_api_key": {
+        "group": "exam_agent_llm",
+        "label": "热点 Agent · API Key",
+        "type": "password",
+        "default": "",
+        "description": "HotspotAgent 使用的 API Key（留空则使用全局 LLM Key）",
+    },
+    "exam_agent_hotspot_base_url": {
+        "group": "exam_agent_llm",
+        "label": "热点 Agent · Base URL",
+        "type": "string",
+        "default": "",
+        "description": "HotspotAgent 使用的 API 地址（留空则使用全局 LLM 地址）",
+    },
+    "exam_agent_hotspot_model": {
+        "group": "exam_agent_llm",
+        "label": "热点 Agent · 模型",
+        "type": "string",
+        "default": "",
+        "description": "HotspotAgent 使用的模型名称（留空则使用全局 LLM 模型）",
+    },
+    "exam_agent_dispatch_api_key": {
+        "group": "exam_agent_llm",
+        "label": "调度 Agent · API Key",
+        "type": "password",
+        "default": "",
+        "description": "DispatchAgent 使用的 API Key（留空则使用全局 LLM Key）",
+    },
+    "exam_agent_dispatch_base_url": {
+        "group": "exam_agent_llm",
+        "label": "调度 Agent · Base URL",
+        "type": "string",
+        "default": "",
+        "description": "DispatchAgent 使用的 API 地址（留空则使用全局 LLM 地址）",
+    },
+    "exam_agent_dispatch_model": {
+        "group": "exam_agent_llm",
+        "label": "调度 Agent · 模型",
+        "type": "string",
+        "default": "",
+        "description": "DispatchAgent 使用的模型名称（留空则使用全局 LLM 模型）",
+    },
+    "exam_agent_avg_tokens_per_question": {
+        "group": "exam_agent",
+        "label": "单题平均 Token 消耗估算",
+        "type": "integer",
+        "default": "15000",
+        "description": "配额预估接口使用的单题 Token 基准值（含生成、质检、K×试做评分）",
+    },
+    "exam_agent_hotspot_cache_ttl": {
+        "group": "exam_agent",
+        "label": "热点缓存 TTL（秒）",
+        "type": "integer",
+        "default": "21600",
+        "description": "HotspotAgent 结果缓存时间（秒），默认 6 小时",
+    },
+    "exam_agent_hotspot_threshold_days": {
+        "group": "exam_agent",
+        "label": "热点时间范围（天）",
+        "type": "integer",
+        "default": "30",
+        "description": "抓取最近 N 天内的热点新闻",
+    },
 }
 
 # 配置分组的中文名称，前端展示用
@@ -100,6 +284,43 @@ CONFIG_GROUP_LABELS = {
     "llm": "LLM 模型配置",
     "embedding": "Embedding 模型配置",
     "rag": "RAG 检索配置",
+    "exam_agent": "仿高考组卷 Agent 配置",
+    "exam_agent_llm": "组卷 Agent 独立 LLM 配置",
+}
+
+CONFIG_GROUP_DESCRIPTIONS = {
+    "llm": "全局大语言模型配置，作为所有 Agent 的默认模型。各 Agent 可单独覆盖。",
+    "embedding": "文档向量化模型配置，用于 RAG 知识库检索。修改后将触发重新向量化。",
+    "rag": "RAG 检索参数配置，影响文档分块和知识检索效果。",
+    "exam_agent": "仿高考组卷流程的全局参数，包括试做次数、重试上限、并发控制等。",
+    "exam_agent_llm": "为每个 Agent 单独配置 LLM 模型。留空的字段自动回退到全局 LLM 配置。",
+}
+
+AGENT_DESCRIPTIONS = {
+    "question": {
+        "name": "出题 Agent (QuestionAgent)",
+        "description": "根据知识点、难度要求和历年真题样本，生成符合高考风格的试题。支持选择题、填空题和主观题。",
+    },
+    "qc": {
+        "name": "质检 Agent (QualityCheckAgent)",
+        "description": "对生成的试题进行质量审核，检查格式规范、答案正确性和题干清晰度。不合格的题目将退回重新生成。",
+    },
+    "solve": {
+        "name": "模拟考生 Agent (SolveAgent)",
+        "description": "模拟普通高中生水平作答试题，用于评估题目难度。支持配置多个不同模型做并行试做，模拟不同水平的考生，让难度评估更精准。",
+    },
+    "grade": {
+        "name": "评分 Agent (GradeAgent)",
+        "description": "对模拟考生的作答进行评判打分。选择题自动比对答案，主观题使用 LLM 语义评分。建议使用与出题不同的模型以降低偏差。",
+    },
+    "hotspot": {
+        "name": "热点 Agent (HotspotAgent)",
+        "description": "通过 RSS 聚合官方媒体新闻，使用 LLM 提炼出适合作为高考命题素材的社会热点，让试题更贴近时事。",
+    },
+    "dispatch": {
+        "name": "调度 Agent (DispatchAgent)",
+        "description": "任务分发中枢：为每个题目位置推断知识点、检索历年真题 Few-shot 样本、准备 RAG 上下文和热点素材。",
+    },
 }
 
 # Embedding 相关配置 key 集合，用于判断是否需要触发重新向量化
@@ -164,6 +385,61 @@ def get_config(key: str) -> str:
     raise KeyError(f"未定义的配置项: {key}")
 
 
+def get_agent_llm_config(agent_prefix: str) -> dict[str, str]:
+    """
+    读取某个 Agent 的独立 LLM 配置（api_key / base_url / model）。
+    如果 Agent 自身的配置项为空，自动回退到全局 LLM 配置。
+
+    agent_prefix: 如 "question", "qc", "solve", "grade", "hotspot", "dispatch"
+    返回: {"api_key": ..., "base_url": ..., "model": ...}
+    """
+    api_key = get_config(f"exam_agent_{agent_prefix}_api_key")
+    base_url = get_config(f"exam_agent_{agent_prefix}_base_url")
+    model = get_config(f"exam_agent_{agent_prefix}_model")
+    return {
+        "api_key": api_key if api_key else get_config("openai_api_key"),
+        "base_url": base_url if base_url else get_config("openai_base_url"),
+        "model": model if model else get_config("openai_model"),
+    }
+
+
+def get_solve_agent_configs() -> list[dict[str, Any]]:
+    """
+    获取 SolveAgent 多模型配置列表。
+    优先使用 exam_agent_solve_models JSON 配置，为空则回退到单一 solve 模型配置。
+    每个模型条目中留空的 api_key/base_url 会自动回退到 solve 单一配置或全局配置。
+    """
+    import json as _json
+
+    raw = get_config("exam_agent_solve_models")
+    models: list[dict] = []
+    if raw and raw.strip() not in ("", "[]"):
+        try:
+            parsed = _json.loads(raw)
+            if isinstance(parsed, list):
+                models = [m for m in parsed if isinstance(m, dict) and m.get("model")]
+        except Exception:
+            pass
+
+    fallback = get_agent_llm_config("solve")
+
+    if not models:
+        return [{"label": "默认模型", **fallback, "temperature": 0.9}]
+
+    result = []
+    for m in models:
+        result.append(
+            {
+                "label": m.get("label", "模型"),
+                "api_key": m.get("api_key") or fallback["api_key"],
+                "base_url": m.get("base_url") or fallback["base_url"],
+                "model": m["model"],
+                "temperature": float(m.get("temperature", 0.9)),
+            }
+        )
+    return result
+
+
 def get_config_int(key: str) -> int:
     """读取整数类型的配置值，带类型转换和安全回退。"""
     value = get_config(key)
@@ -192,9 +468,8 @@ class ConfigService:
 
         返回格式：
         {
-            "llm": {"label": "LLM 模型配置", "items": [...]},
-            "embedding": {"label": "Embedding 模型配置", "items": [...]},
-            "rag": {"label": "RAG 检索配置", "items": [...]},
+            "llm": {"label": "...", "description": "...", "items": [...]},
+            "exam_agent_llm": {"label": "...", "description": "...", "agent_info": {...}, "items": [...]},
         }
         """
         grouped: dict[str, dict] = {}
@@ -202,10 +477,14 @@ class ConfigService:
         for key, definition in CONFIG_DEFINITIONS.items():
             group = definition["group"]
             if group not in grouped:
-                grouped[group] = {
+                group_data: dict[str, Any] = {
                     "label": CONFIG_GROUP_LABELS.get(group, group),
+                    "description": CONFIG_GROUP_DESCRIPTIONS.get(group, ""),
                     "items": [],
                 }
+                if group == "exam_agent_llm":
+                    group_data["agent_info"] = AGENT_DESCRIPTIONS
+                grouped[group] = group_data
 
             grouped[group]["items"].append(
                 {

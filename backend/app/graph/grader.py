@@ -2,7 +2,6 @@
 
 import json
 import logging
-import re
 from typing import Any
 
 from langchain_openai import ChatOpenAI
@@ -47,11 +46,11 @@ class AnswerGrader:
                 f"开始批改: answer_id={answer_id}, question_set_id={answer.question_set_id}"
             )
 
-            # 2. 获取试题集内容
-            markdown_content = await self.question_service.get_question_set_content(
+            # 2. 获取试题集内容（JSON 字符串）
+            json_content = await self.question_service.get_question_set_content(
                 answer.question_set_id
             )
-            if not markdown_content:
+            if not json_content:
                 logger.error(
                     f"批改失败: 试题集内容不存在, question_set_id={answer.question_set_id}"
                 )
@@ -60,13 +59,13 @@ class AnswerGrader:
                 )
                 return False
 
-            logger.info(f"试题集内容长度: {len(markdown_content)}")
+            logger.info(f"试题集内容长度: {len(json_content)}")
 
             # 3. 解析试题
-            questions = self._parse_questions(markdown_content)
+            questions = self._parse_questions(json_content)
             if not questions:
                 logger.error(
-                    f"批改失败: 试题解析失败, markdown_content 前200字符: {markdown_content[:200]}"
+                    f"批改失败: 试题解析失败, json_content 前200字符: {json_content[:200]}"
                 )
                 await self.answer_service.mark_grading_failed(answer_id, "试题解析失败")
                 return False
@@ -111,84 +110,42 @@ class AnswerGrader:
             await self.answer_service.mark_grading_failed(answer_id, str(e))
             return False
 
-    def _parse_questions(self, markdown_content: str) -> dict[str, dict]:
-        """解析 Markdown 试题内容"""
-        questions = {}
+    def _parse_questions(self, json_content: str) -> dict[str, dict]:
+        """解析 JSON 格式试题内容，返回 {q1: {...}, q2: {...}} 字典。"""
+        try:
+            data = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON 解析失败: {e}")
+            return {}
 
-        # 匹配题目模式：## 题目 N [type]
-        pattern = r"##\s+题目\s+(\d+)\s+\[(\w+)\](.*?)(?=##\s+题目|\Z)"
-        matches = re.findall(pattern, markdown_content, re.DOTALL)
-
-        for match in matches:
-            q_num = match[0]
-            q_type = match[1]
-            q_content = match[2].strip()
-
+        result: dict[str, dict] = {}
+        questions = data.get("questions", [])
+        for q in questions:
+            num = q.get("number")
+            if num is None:
+                continue
+            q_type = q.get("type", "")
+            options_list = q.get("options")
+            # 将 [{key, value}] 转为 {key: value} 供批改逻辑使用
+            options_dict = (
+                {item["key"]: item["value"] for item in options_list if "key" in item}
+                if options_list
+                else {}
+            )
+            answer = q.get("answer", "")
             question_data = {
-                "number": q_num,
+                "number": str(num),
                 "type": q_type,
-                "raw_content": q_content,
+                "content": q.get("content", ""),
+                "options": options_dict,
+                "correct_answer": answer,
+                "reference_answer": answer,  # 简答题用同一字段
+                "scoring_points": q.get("scoring_points") or "",
+                "explanation": q.get("explanation", ""),
             }
+            result[f"q{num}"] = question_data
 
-            # 解析题目内容
-            content_match = re.search(
-                r"\*\*题目内容\*\*[：:]\s*(.+?)(?=\*\*选项|\*\*正确答案|\*\*参考答案|\Z)",
-                q_content,
-                re.DOTALL,
-            )
-            if content_match:
-                question_data["content"] = content_match.group(1).strip()
-
-            # 解析选项（选择题）
-            if q_type in ["single_choice", "multiple_choice"]:
-                options = {}
-                option_pattern = (
-                    r"\*\*选项\s*([A-Z])\*\*[：:]\s*(.+?)(?=\*\*选项|\*\*正确答案|\Z)"
-                )
-                option_matches = re.findall(option_pattern, q_content, re.DOTALL)
-                for opt_letter, opt_content in option_matches:
-                    options[opt_letter] = opt_content.strip()
-                question_data["options"] = options
-
-            # 解析正确答案
-            answer_match = re.search(
-                r"\*\*正确答案\*\*[：:]\s*(.+?)(?=\*\*解析|\*\*评分要点|\Z)",
-                q_content,
-                re.DOTALL,
-            )
-            if answer_match:
-                question_data["correct_answer"] = answer_match.group(1).strip()
-
-            # 解析参考答案（简答题）
-            ref_answer_match = re.search(
-                r"\*\*参考答案\*\*[：:]\s*(.+?)(?=\*\*评分要点|\Z)",
-                q_content,
-                re.DOTALL,
-            )
-            if ref_answer_match:
-                question_data["reference_answer"] = ref_answer_match.group(1).strip()
-
-            # 解析评分要点
-            scoring_match = re.search(
-                r"\*\*评分要点\*\*[：:]\s*(.+?)(?=\Z)",
-                q_content,
-                re.DOTALL,
-            )
-            if scoring_match:
-                question_data["scoring_points"] = scoring_match.group(1).strip()
-
-            # 解析解析
-            explanation_match = re.search(
-                r"\*\*解析\*\*[：:]\s*(.+?)(?=\Z)",
-                q_content,
-                re.DOTALL,
-            )
-            if explanation_match:
-                question_data["explanation"] = explanation_match.group(1).strip()
-
-            questions[f"q{q_num}"] = question_data
-
-        return questions
+        return result
 
     async def _grade_question(
         self,

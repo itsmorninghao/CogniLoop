@@ -1,6 +1,7 @@
-"""试题生成器：基于 RAG 检索知识库并使用 LLM 生成试题"""
+"""试题生成器：基于 RAG 检索知识库并使用 LLM 生成试题（JSON 格式）"""
 
-import re
+import json
+import logging
 from datetime import UTC, datetime
 
 from langchain_openai import ChatOpenAI
@@ -16,6 +17,30 @@ from backend.app.models.question_set import QuestionSet
 from backend.app.rag.retriever import KnowledgeRetriever
 from backend.app.services.config_service import get_config, get_config_int
 from backend.app.services.question_service import QuestionService
+
+logger = logging.getLogger(__name__)
+
+_MAX_RETRY = 3
+
+
+def _parse_json_response(raw: str) -> dict:
+    """从 LLM 响应中提取并解析 JSON，剥除可能的 markdown 代码块包裹。"""
+    text = raw.strip()
+    # 去掉可能的 ```json ... ``` 包裹
+    if text.startswith("```"):
+        lines = text.splitlines()
+        inner = []
+        in_block = False
+        for line in lines:
+            if line.startswith("```") and not in_block:
+                in_block = True
+                continue
+            if line.startswith("```") and in_block:
+                break
+            if in_block:
+                inner.append(line)
+        text = "\n".join(inner)
+    return json.loads(text)
 
 
 class QuestionGenerator:
@@ -67,21 +92,36 @@ class QuestionGenerator:
             {"role": "system", "content": QUESTION_GENERATION_SYSTEM},
             {"role": "user", "content": user_prompt},
         ]
-        response = await self.llm.ainvoke(messages)
-        markdown_content = response.content
 
-        title = (
-            self._extract_title(markdown_content)
-            or f"试题集_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
-        )
+        last_error: Exception | None = None
+        for attempt in range(_MAX_RETRY):
+            response = await self.llm.ainvoke(messages)
+            try:
+                data = _parse_json_response(response.content)
+            except (json.JSONDecodeError, ValueError) as e:
+                last_error = e
+                logger.warning(f"普通生成 JSON 解析失败（第 {attempt + 1} 次）: {e}")
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"你的输出不是合法 JSON，解析错误：{e}。请只输出合法 JSON，不要有任何其他文字。",
+                    }
+                )
+                continue
 
-        return await self.question_service.create_question_set(
-            title=title,
-            course_id=course_id,
-            teacher_id=teacher_id,
-            markdown_content=markdown_content,
-            description=f"根据需求自动生成：{request[:100]}...",
-        )
+            title: str = data.get("title") or f"试题集_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}"
+            json_content = json.dumps(data, ensure_ascii=False)
+
+            return await self.question_service.create_question_set(
+                title=title,
+                course_id=course_id,
+                teacher_id=teacher_id,
+                json_content=json_content,
+                description=f"根据需求自动生成：{request[:100]}...",
+            )
+
+        raise RuntimeError(f"生成试题集失败（JSON 解析连续 {_MAX_RETRY} 次失败）: {last_error}")
 
     async def modify(self, question_set_id: int, request: str) -> bool:
         current_content = await self.question_service.get_question_set_content(
@@ -98,12 +138,27 @@ class QuestionGenerator:
             {"role": "system", "content": QUESTION_MODIFY_SYSTEM},
             {"role": "user", "content": user_prompt},
         ]
-        response = await self.llm.ainvoke(messages)
 
-        return await self.question_service.update_question_set_content(
-            question_set_id, response.content
-        )
+        last_error: Exception | None = None
+        for attempt in range(_MAX_RETRY):
+            response = await self.llm.ainvoke(messages)
+            try:
+                data = _parse_json_response(response.content)
+            except (json.JSONDecodeError, ValueError) as e:
+                last_error = e
+                logger.warning(f"修改 JSON 解析失败（第 {attempt + 1} 次）: {e}")
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"你的输出不是合法 JSON，解析错误：{e}。请只输出合法 JSON，不要有任何其他文字。",
+                    }
+                )
+                continue
 
-    def _extract_title(self, markdown_content: str) -> str | None:
-        match = re.search(r"^#\s+(.+)$", markdown_content, re.MULTILINE)
-        return match.group(1).strip() if match else None
+            json_content = json.dumps(data, ensure_ascii=False)
+            return await self.question_service.update_question_set_content(
+                question_set_id, json_content
+            )
+
+        raise RuntimeError(f"修改试题集失败（JSON 解析连续 {_MAX_RETRY} 次失败）: {last_error}")

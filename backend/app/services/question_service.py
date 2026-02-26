@@ -25,15 +25,14 @@ class QuestionService:
         title: str,
         course_id: int,
         teacher_id: int,
-        markdown_content: str,
+        json_content: str,
         description: str | None = None,
     ) -> QuestionSet:
-        """创建试题集"""
-        # 创建试题集记录（先获取 ID）
+        """创建试题集（内容为 JSON 字符串）"""
         question_set = QuestionSet(
             title=title,
             description=description,
-            markdown_path="",  # 稍后更新
+            markdown_path="",  # 稍后更新（字段名保留但存 .json 文件）
             course_id=course_id,
             teacher_id=teacher_id,
         )
@@ -41,15 +40,13 @@ class QuestionService:
         await self.session.flush()
         await self.session.refresh(question_set)
 
-        # 创建存储目录并保存文件
         storage_dir = settings.question_sets_dir / f"course_{course_id}"
         storage_dir.mkdir(parents=True, exist_ok=True)
-        file_path = storage_dir / f"question_set_{question_set.id}.md"
+        file_path = storage_dir / f"question_set_{question_set.id}.json"
 
         async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-            await f.write(markdown_content)
+            await f.write(json_content)
 
-        # 更新文件路径
         question_set.markdown_path = str(file_path)
         await self.session.flush()
 
@@ -71,8 +68,38 @@ class QuestionService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_all_teacher_question_sets(self, teacher_id: int) -> list[dict]:
+        """获取教师的全部试题集（含课程名称）"""
+        from backend.app.models.course import Course
+
+        stmt = (
+            select(QuestionSet, Course.name.label("course_name"))
+            .join(Course, QuestionSet.course_id == Course.id)
+            .where(QuestionSet.teacher_id == teacher_id)
+            .order_by(QuestionSet.created_at.desc())
+        )
+        result = await self.session.execute(stmt)
+        rows = result.all()
+        output = []
+        for qs, course_name in rows:
+            d = {
+                "id": qs.id,
+                "title": qs.title,
+                "description": qs.description,
+                "course_id": qs.course_id,
+                "course_name": course_name,
+                "teacher_id": qs.teacher_id,
+                "is_public": qs.is_public,
+                "status": qs.status,
+                "shared_to_plaza_at": qs.shared_to_plaza_at,
+                "created_at": qs.created_at,
+                "updated_at": qs.updated_at,
+            }
+            output.append(d)
+        return output
+
     async def get_question_set_content(self, question_set_id: int) -> str | None:
-        """获取试题集 Markdown 内容"""
+        """获取试题集内容（JSON 字符串）"""
         question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
             return None
@@ -85,16 +112,16 @@ class QuestionService:
             return await f.read()
 
     async def update_question_set_content(
-        self, question_set_id: int, markdown_content: str
+        self, question_set_id: int, json_content: str
     ) -> bool:
-        """更新试题集内容"""
+        """更新试题集内容（JSON 字符串）"""
         question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
             return False
 
         file_path = Path(question_set.markdown_path)
         async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-            await f.write(markdown_content)
+            await f.write(json_content)
 
         return True
 
@@ -343,7 +370,10 @@ class QuestionService:
         """删除试题集（包括相关的分配记录和答案）"""
         from pathlib import Path
 
+        from sqlalchemy import update
+
         from backend.app.models.answer import Answer
+        from backend.app.models.exam_paper import ExamPaperGenerationJob
 
         # 1. 删除相关的答案记录
         delete_answers_stmt = Answer.__table__.delete().where(
@@ -357,18 +387,25 @@ class QuestionService:
         )
         await self.session.execute(delete_sqs_stmt)
 
-        # 3. 获取并删除试题集
+        # 3. 解除高考组卷任务对该 QS 的外键引用（避免 FK 冲突）
+        await self.session.execute(
+            update(ExamPaperGenerationJob)
+            .where(ExamPaperGenerationJob.question_set_id == question_set_id)
+            .values(question_set_id=None)
+        )
+
+        # 4. 获取并删除试题集
         question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
             return False
 
-        # 4. 删除 markdown 文件
+        # 5. 删除内容文件（.json）
         if question_set.markdown_path:
             file_path = Path(question_set.markdown_path)
             if file_path.exists():
                 file_path.unlink()
 
-        # 5. 删除数据库记录
+        # 6. 删除数据库记录
         await self.session.delete(question_set)
         await self.session.flush()
         return True

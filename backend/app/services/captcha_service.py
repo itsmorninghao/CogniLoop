@@ -1,5 +1,6 @@
 """验证码服务"""
 
+import asyncio
 import base64
 import logging
 import random
@@ -64,7 +65,8 @@ class CaptchaService:
         self.session.add(record)
         await self.session.flush()
 
-        image_base64 = _generate_image_base64(code)
+        loop = asyncio.get_event_loop()
+        image_base64 = await loop.run_in_executor(None, _generate_image_base64, code)
 
         logger.debug("验证码已生成: captcha_id=%s", captcha_id)
         return {

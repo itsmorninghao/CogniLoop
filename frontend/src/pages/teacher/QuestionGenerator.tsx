@@ -1,5 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { parseQuestionSetData, type ParsedQuestion } from '@/types/question';
+import { MarkdownWithLatex } from '@/components/MarkdownWithLatex';
 import {
   Sparkles,
   Loader2,
@@ -81,68 +83,27 @@ export function QuestionGeneratorPage() {
     short_answer: { label: '简答题', color: 'bg-orange-500', icon: MessageSquare },
   };
 
-  // 解析试题内容
-  const parsedQuestions = useMemo(() => {
+  // 解析试题内容（JSON）
+  const parsedQuestions = useMemo((): ParsedQuestion[] => {
     if (!previewContent) return [];
-    
-    const questions: Array<{
-      number: number;
-      type: string;
-      content: string;
-      options: string[];
-      answer: string;
-      explanation: string;
-      scoringPoints?: string;
-    }> = [];
-
-    // 按题目分割
-    const questionBlocks = previewContent.split(/## 题目 \d+/).slice(1);
-    
-    questionBlocks.forEach((block, index) => {
-      const typeMatch = block.match(/\[(\w+)\]/);
-      const type = typeMatch ? typeMatch[1] : 'unknown';
-      
-      // 提取题目内容
-      const contentMatch = block.match(/\*\*题目内容\*\*[：:]\s*([^\n]+)/);
-      const content = contentMatch ? contentMatch[1].trim() : '';
-      
-      // 提取选项
-      const options: string[] = [];
-      const optionMatches = block.matchAll(/\*\*选项 ([A-E])\*\*[：:]\s*([^\n]+)/g);
-      for (const match of optionMatches) {
-        options.push(`${match[1]}. ${match[2].trim()}`);
-      }
-      
-      // 提取答案
-      const answerMatch = block.match(/\*\*(?:正确答案|参考答案)\*\*[：:]\s*([\s\S]*?)(?=\n\*\*|$)/);
-      let answer = answerMatch ? answerMatch[1].trim() : '';
-      
-      // 提取解析
-      const explanationMatch = block.match(/\*\*解析\*\*[：:]\s*([\s\S]*?)(?=\n\*\*评分要点|$)/);
-      const explanation = explanationMatch ? explanationMatch[1].trim() : '';
-      
-      // 提取评分要点（简答题）
-      const scoringMatch = block.match(/\*\*评分要点\*\*[：:]\s*([\s\S]*?)$/);
-      const scoringPoints = scoringMatch ? scoringMatch[1].trim() : undefined;
-      
-      questions.push({
-        number: index + 1,
-        type,
-        content,
-        options,
-        answer,
-        explanation,
-        scoringPoints,
-      });
-    });
-    
-    return questions;
+    try {
+      return parseQuestionSetData(previewContent).questions;
+    } catch (e) {
+      console.error('试题 JSON 解析失败', e);
+      return [];
+    }
   }, [previewContent]);
 
   // 获取试题标题
   const questionSetTitle = useMemo(() => {
-    const match = previewContent.match(/^# (.+)$/m);
-    return match ? match[1] : selectedQuestionSet?.title || '试题预览';
+    if (previewContent) {
+      try {
+        return parseQuestionSetData(previewContent).title || selectedQuestionSet?.title || '试题预览';
+      } catch {
+        // ignore
+      }
+    }
+    return selectedQuestionSet?.title || '试题预览';
   }, [previewContent, selectedQuestionSet]);
 
   // 分发
@@ -251,7 +212,7 @@ export function QuestionGeneratorPage() {
   const handlePreview = async (qs: QuestionSet) => {
     try {
       const response = await questionApi.getContent(qs.id);
-      setPreviewContent(response.data.markdown_content);
+      setPreviewContent(response.data.json_content);
       setSelectedQuestionSet(qs);
       setCurrentQuestionIndex(0);
       setShowAnswers(false);
@@ -647,19 +608,18 @@ export function QuestionGeneratorPage() {
                       {/* 题目内容 */}
                       <div className="mb-8">
                         <h3 className="text-lg font-semibold mb-4 leading-relaxed">
-                          {parsedQuestions[currentQuestionIndex].content}
+                          <MarkdownWithLatex compact>{parsedQuestions[currentQuestionIndex].content}</MarkdownWithLatex>
                         </h3>
                       </div>
 
                       {/* 选项列表 */}
-                      {parsedQuestions[currentQuestionIndex].options.length > 0 && (
+                      {parsedQuestions[currentQuestionIndex].options && parsedQuestions[currentQuestionIndex].options!.length > 0 && (
                         <div className="space-y-3 mb-8">
-                          {parsedQuestions[currentQuestionIndex].options.map((option, idx) => {
-                            const optionLetter = option.charAt(0);
-                            const isCorrect = showAnswers && parsedQuestions[currentQuestionIndex].answer.includes(optionLetter);
+                          {parsedQuestions[currentQuestionIndex].options!.map((opt) => {
+                            const isCorrect = showAnswers && parsedQuestions[currentQuestionIndex].answer.includes(opt.key);
                             return (
                               <div
-                                key={idx}
+                                key={opt.key}
                                 className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-all ${
                                   isCorrect
                                     ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
@@ -671,11 +631,11 @@ export function QuestionGeneratorPage() {
                                     ? 'bg-green-500 text-white'
                                     : 'bg-muted text-muted-foreground'
                                 }`}>
-                                  {optionLetter}
+                                  {opt.key}
                                 </div>
                                 <div className="flex-1 pt-2">
                                   <p className={`${isCorrect ? 'text-green-700 dark:text-green-300 font-medium' : ''}`}>
-                                    {option.slice(3)}
+                                    <MarkdownWithLatex compact>{opt.value}</MarkdownWithLatex>
                                   </p>
                                 </div>
                                 {isCorrect && (
@@ -697,7 +657,7 @@ export function QuestionGeneratorPage() {
                               <span className="font-semibold text-green-700 dark:text-green-300">正确答案</span>
                             </div>
                             <p className="text-green-800 dark:text-green-200 whitespace-pre-wrap leading-relaxed">
-                              {parsedQuestions[currentQuestionIndex].answer}
+                              <MarkdownWithLatex compact>{parsedQuestions[currentQuestionIndex].answer}</MarkdownWithLatex>
                             </p>
                           </div>
 
@@ -709,20 +669,20 @@ export function QuestionGeneratorPage() {
                                 <span className="font-semibold text-blue-700 dark:text-blue-300">解析</span>
                               </div>
                               <p className="text-blue-800 dark:text-blue-200 whitespace-pre-wrap leading-relaxed">
-                                {parsedQuestions[currentQuestionIndex].explanation}
+                                <MarkdownWithLatex compact>{parsedQuestions[currentQuestionIndex].explanation}</MarkdownWithLatex>
                               </p>
                             </div>
                           )}
 
                           {/* 评分要点（简答题） */}
-                          {parsedQuestions[currentQuestionIndex].scoringPoints && (
+                          {parsedQuestions[currentQuestionIndex].scoring_points && (
                             <div className="bg-orange-50 dark:bg-orange-950/30 rounded-xl p-5 border border-orange-200 dark:border-orange-800">
                               <div className="flex items-center gap-2 mb-3">
                                 <ListChecks className="w-5 h-5 text-orange-600" />
                                 <span className="font-semibold text-orange-700 dark:text-orange-300">评分要点</span>
                               </div>
                               <p className="text-orange-800 dark:text-orange-200 whitespace-pre-wrap leading-relaxed">
-                                {parsedQuestions[currentQuestionIndex].scoringPoints}
+                                <MarkdownWithLatex compact>{parsedQuestions[currentQuestionIndex].scoring_points}</MarkdownWithLatex>
                               </p>
                             </div>
                           )}

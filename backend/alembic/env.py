@@ -16,6 +16,10 @@ from backend.app.models import (  # noqa: F401
     ConfigAuditLog,
     Course,
     Document,
+    ExamPaper,
+    ExamPaperGenerationJob,
+    ExamQuestion,
+    ExamQuestionDraftLog,
     KnowledgeChunk,
     QuestionSet,
     Student,
@@ -23,6 +27,7 @@ from backend.app.models import (  # noqa: F401
     StudentQuestionSet,
     SystemConfig,
     Teacher,
+    TeacherExamPermission,
 )
 
 # 目标元数据
