@@ -29,7 +29,18 @@ QUESTION_AGENT_SYSTEM = """你是一位资深高考命题专家。你正在为�
 3. 不得与上述参考题题干雷同，须换情境/换数字/换材料，体现该位置的命题规律而非抄袭
 4. 若提供了热点材料，情境应围绕热点展开
 5. 答案必须唯一且无争议
-6. 提供详细解析；简答题须列出评分要点"""
+6. 提供详细解析；简答题须列出评分要点
+
+你必须以合法 JSON 对象输出，结构如下（选择题示例）：
+{{"content":"题干","options":[{{"key":"A","value":"..."}},{{"key":"B","value":"..."}},{{"key":"C","value":"..."}},{{"key":"D","value":"..."}}],"answer":"B","explanation":"解析"}}
+
+填空题（options 为 null）：
+{{"content":"含___的题干","options":null,"answer":"答案文字","explanation":"解析"}}
+
+简答题（options 为 null，需含 scoring_points）：
+{{"content":"题干","options":null,"answer":"参考答案","explanation":"解析","scoring_points":"评分要点"}}
+
+只输出 JSON 对象，不要有任何其他文字或 markdown 标记。"""
 
 QUESTION_AGENT_USER_RAG = """课程知识库相关内容（请在此范围内出题）：
 {rag_context}
@@ -42,20 +53,8 @@ QUESTION_AGENT_USER_RAG = """课程知识库相关内容（请在此范围内出
 
 {retry_section}
 
-请严格按以下 Markdown 格式输出，不要有任何其他说明：
-
-## 题目 {position_index} [{question_type}]
-
-**题目内容**：{{题干}}
-
-**选项 A**：{{A}}
-**选项 B**：{{B}}
-**选项 C**：{{C}}
-**选项 D**：{{D}}
-
-**正确答案**：{{答案字母，单选一个字母如 B，多选多个字母如 AB}}
-
-**解析**：{{详细解析}}"""
+题目位置：第 {position_index} 题，题型：{question_type}
+请输出合法 JSON，不要有任何其他说明。"""
 
 QUESTION_AGENT_USER_NO_RAG = """（无课程知识库，请按高考标准和历年真题风格出题）
 
@@ -67,22 +66,9 @@ QUESTION_AGENT_USER_NO_RAG = """（无课程知识库，请按高考标准和历
 
 {retry_section}
 
-请严格按以下 Markdown 格式输出，不要有任何其他说明：
+题目位置：第 {position_index} 题，题型：{question_type}
+请输出合法 JSON，不要有任何其他说明。"""
 
-## 题目 {position_index} [{question_type}]
-
-**题目内容**：{{题干}}
-
-**选项 A**：{{A}}
-**选项 B**：{{B}}
-**选项 C**：{{C}}
-**选项 D**：{{D}}
-
-**正确答案**：{{答案字母，单选一个字母如 B，多选多个字母如 AB}}
-
-**解析**：{{详细解析}}"""
-
-# 填空题专用格式模板
 QUESTION_AGENT_USER_FILL_BLANK_RAG = """课程知识库相关内容（请在此范围内出题）：
 {rag_context}
 
@@ -94,15 +80,8 @@ QUESTION_AGENT_USER_FILL_BLANK_RAG = """课程知识库相关内容（请在此�
 
 {retry_section}
 
-请严格按以下 Markdown 格式输出，不要有任何其他说明：
-
-## 题目 {position_index} [{question_type}]
-
-**题目内容**：{{含横线（___）空格的题干}}
-
-**正确答案**：{{简洁的填空答案文字，多空用"；"分隔}}
-
-**解析**：{{详细解析}}"""
+题目位置：第 {position_index} 题，题型：{question_type}（填空题，options 为 null）
+请输出合法 JSON，不要有任何其他说明。"""
 
 QUESTION_AGENT_USER_FILL_BLANK_NO_RAG = """（无课程知识库，请按高考标准和历年真题风格出题）
 
@@ -114,15 +93,8 @@ QUESTION_AGENT_USER_FILL_BLANK_NO_RAG = """（无课程知识库，请按高考�
 
 {retry_section}
 
-请严格按以下 Markdown 格式输出，不要有任何其他说明：
-
-## 题目 {position_index} [{question_type}]
-
-**题目内容**：{{含横线（___）空格的题干}}
-
-**正确答案**：{{简洁的填空答案文字，多空用"；"分隔}}
-
-**解析**：{{详细解析}}"""
+题目位置：第 {position_index} 题，题型：{question_type}（填空题，options 为 null）
+请输出合法 JSON，不要有任何其他说明。"""
 
 QUESTION_AGENT_USER_SHORT_ANSWER = """（{rag_or_norag}）
 
@@ -134,19 +106,8 @@ QUESTION_AGENT_USER_SHORT_ANSWER = """（{rag_or_norag}）
 
 {retry_section}
 
-请严格按以下 Markdown 格式输出：
-
-## 题目 {position_index} [{question_type}]
-
-**题目内容**：{{题干（含材料）}}
-
-**参考答案**：{{分点作答的参考答案}}
-
-**评分要点**：
-- {{要点1}}（X分）
-- {{要点2}}（X分）
-
-**解析**：{{命题意图及答题思路}}"""
+题目位置：第 {position_index} 题，题型：{question_type}（简答题，options 为 null，需含 scoring_points）
+请输出合法 JSON，不要有任何其他说明。"""
 
 RETRY_SECTION_TEMPLATE = """⚠️ 上次生成被拒绝，原因如下，请针对性改进：
 {retry_feedback}"""
@@ -176,9 +137,9 @@ QUALITY_CHECK_SYSTEM = """你是一位经验丰富的高考命题审核专家。
 若不通过，输出：{"passed": false, "rejection_reasons": ["原因1（必须是上述明确拒绝情形）"]}
 只输出 JSON，不要有其他说明。"""
 
-QUALITY_CHECK_USER = """待审核题目：
+QUALITY_CHECK_USER = """待审核题目（JSON 格式）：
 
-{question_markdown}"""
+{question_json}"""
 
 
 # ---------------------------------------------------------------------------

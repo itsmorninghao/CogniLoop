@@ -1,28 +1,24 @@
-"""仿高考组卷 API 端点
-
-路由：
-  GET    /exam-paper/regions                         可用卷型（含题目数量）
-  GET    /exam-paper/subjects                        数据库中有真题的科目列表
-  GET    /exam-paper/estimate                        Token 配额预估
-  POST   /exam-paper/generate                        发起组卷任务
-  GET    /exam-paper/jobs                            我的任务列表
-  GET    /exam-paper/jobs/{job_id}                   任务详情
-  GET    /exam-paper/jobs/{job_id}/stream            SSE 实时进度
-  POST   /exam-paper/jobs/{job_id}/resume            续做任务
-  POST   /exam-paper/jobs/{job_id}/questions/{pos}/regenerate  单题重生成
-
-管理员路由（/admin/exam-permissions）：
-  GET    /admin/exam-permissions                     教师授权列表
-  POST   /admin/exam-permissions/{teacher_id}/grant  授权
-  DELETE /admin/exam-permissions/{teacher_id}/revoke 撤权
-"""
+"""仿高考组卷 API 端点"""
 
 import asyncio
 import json
+import logging
+import shutil
+import tempfile
 import uuid
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from pathlib import Path as _Path
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -42,6 +38,13 @@ from backend.app.services.exam_paper_task import (
     subscribe_job_progress,
     unsubscribe_job_progress,
 )
+from backend.app.services.gaokao_import_task import (
+    get_import_status,
+    run_github_import_in_background,
+    run_import_in_background,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()  # 教师路由（挂载在 /exam-paper）
 admin_router = APIRouter()  # 管理员路由（挂载在 /admin/exam-paper）
@@ -253,16 +256,20 @@ async def get_job(
     if not job or job.teacher_id != teacher.id:
         raise HTTPException(status_code=404, detail="任务不存在")
 
+    from backend.app.services.exam_paper_task import _job_completed_counts
+
     requirement = json.loads(job.requirement)
+    db_completed = (
+        len(json.loads(job.completed_questions)) if job.completed_questions else 0
+    )
+    live_completed = _job_completed_counts.get(job.id, 0)
     return {
         "job_id": job.id,
         "status": job.status,
         "requirement": requirement,
         "progress": json.loads(job.progress) if job.progress else {},
         "warnings": json.loads(job.warnings) if job.warnings else [],
-        "completed_questions_count": len(json.loads(job.completed_questions))
-        if job.completed_questions
-        else 0,
+        "completed_questions_count": max(db_completed, live_completed),
         "question_set_id": job.question_set_id,
         "token_consumed": job.token_consumed,
         "error_message": job.error_message,
@@ -278,7 +285,7 @@ async def get_job_paper_content(
     session: SessionDep,
     teacher: CurrentTeacher,
 ):
-    """获取已完成任务的试卷 Markdown 内容"""
+    """获取已完成任务的试卷 JSON 内容"""
     from backend.app.services.question_service import QuestionService
 
     job_service = ExamJobService(session)
@@ -296,7 +303,7 @@ async def get_job_paper_content(
     return {
         "job_id": job_id,
         "question_set_id": job.question_set_id,
-        "content": content,
+        "content": content,  # JSON 字符串
     }
 
 
@@ -358,7 +365,7 @@ async def stream_job_progress(
                     yield f"event: {event}\ndata: {data}\n\n"
                     if event in ("job_completed", "job_failed"):
                         break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # 心跳
                     yield ": heartbeat\n\n"
         finally:
@@ -405,13 +412,11 @@ async def regenerate_question(
     data: SingleRegenerateRequest,
     session: SessionDep,
     teacher: CurrentTeacher,
-    background_tasks: BackgroundTasks,
 ):
     """单题重新生成（消耗 Token 配额）"""
     from backend.app.graph.exam_agents.quality_check_agent import QualityCheckAgent
     from backend.app.graph.exam_agents.question_agent import QuestionAgent
     from backend.app.graph.exam_agents.schemas import PaperRequirement
-    from backend.app.services.config_service import get_config_int
 
     job_service = ExamJobService(session)
     perm_service = ExamPermissionService(session)
@@ -498,16 +503,30 @@ async def regenerate_question(
     if not final_question:
         raise HTTPException(status_code=500, detail="重生成失败")
 
-    # 更新 completed_questions
-    import re as _re
+    # 序列化新题目 JSON
+    new_q_dict = {
+        "type": final_question.question_type,
+        "content": final_question.question_text,
+        "options": (
+            [{"key": k, "value": v} for k, v in final_question.options.items()]
+            if final_question.options
+            else None
+        ),
+        "answer": final_question.correct_answer,
+        "explanation": final_question.explanation,
+        "scoring_points": final_question.scoring_points,
+    }
 
+    # 更新 completed_questions
     completed_questions = (
         json.loads(job.completed_questions) if job.completed_questions else {}
     )
-    completed_questions[str(position_index)] = final_question.raw_markdown
+    completed_questions[str(position_index)] = json.dumps(
+        new_q_dict, ensure_ascii=False
+    )
     job.completed_questions = json.dumps(completed_questions, ensure_ascii=False)
 
-    # 更新关联 QuestionSet
+    # 更新关联 QuestionSet（JSON 替换对应题目）
     if job.question_set_id:
         from backend.app.services.question_service import QuestionService
 
@@ -516,12 +535,22 @@ async def regenerate_question(
             job.question_set_id
         )
         if existing_content:
-            pattern = rf"(## 题目 {position_index} \[.*?\][\s\S]*?)(?=## 题目 \d+|$)"
-            new_block = final_question.raw_markdown + "\n\n"
-            updated = _re.sub(pattern, new_block, existing_content)
-            if updated == existing_content:
-                updated = existing_content + "\n\n" + final_question.raw_markdown
-            await qs_service.update_question_set_content(job.question_set_id, updated)
+            try:
+                paper_data = json.loads(existing_content)
+                questions = paper_data.get("questions", [])
+                for i, q in enumerate(questions):
+                    if q.get("number") == position_index:
+                        new_entry = dict(new_q_dict)
+                        new_entry["number"] = position_index
+                        questions[i] = new_entry
+                        break
+                paper_data["questions"] = questions
+                await qs_service.update_question_set_content(
+                    job.question_set_id,
+                    json.dumps(paper_data, ensure_ascii=False),
+                )
+            except Exception as _e:
+                logger.error(f"更新 QuestionSet JSON 失败: {_e}")
 
     # Token 消耗（单题重生成：仅生成+质检，使用固定小估算）
     await perm_service.consume_tokens(teacher.id, estimate_tokens(1, 1))
@@ -530,7 +559,7 @@ async def regenerate_question(
     return {
         "position_index": position_index,
         "question_type": question_type,
-        "raw_markdown": final_question.raw_markdown,
+        "question_json": new_q_dict,
         "message": "单题重新生成成功",
     }
 
@@ -575,7 +604,7 @@ async def delete_job(
 @admin_router.get("/permissions", tags=["管理员-组卷权限"])
 async def list_exam_permissions(
     session: SessionDep,
-    admin: CurrentAdmin,
+    _admin: CurrentAdmin,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
 ):
@@ -652,7 +681,7 @@ async def grant_exam_permission(
 async def revoke_exam_permission(
     teacher_id: int,
     session: SessionDep,
-    admin: CurrentAdmin,
+    _admin: CurrentAdmin,
 ):
     """撤销教师的仿高考组卷权限"""
     perm_service = ExamPermissionService(session)
@@ -667,17 +696,6 @@ async def revoke_exam_permission(
 # 真题库导入 API
 # ---------------------------------------------------------------------------
 
-import tempfile
-from pathlib import Path as _Path
-
-from fastapi import File, Form, UploadFile
-
-from backend.app.services.gaokao_import_task import (
-    get_import_status,
-    run_github_import_in_background,
-    run_import_in_background,
-)
-
 
 class ImportFromPathRequest(BaseModel):
     data_dir: str
@@ -691,7 +709,7 @@ class ImportFromGitHubRequest(BaseModel):
 @admin_router.post("/import/from-github", tags=["管理员-真题库导入"])
 async def import_from_github(
     data: ImportFromGitHubRequest,
-    admin: CurrentAdmin,
+    _admin: CurrentAdmin,
     background_tasks: BackgroundTasks,
 ):
     """一键从 GitHub 下载 GAOKAO-Bench 并导入（自动尝试国内镜像）"""
@@ -709,7 +727,7 @@ async def import_from_github(
 @admin_router.post("/import/from-path", tags=["管理员-真题库导入"])
 async def import_from_server_path(
     data: ImportFromPathRequest,
-    admin: CurrentAdmin,
+    _admin: CurrentAdmin,
     background_tasks: BackgroundTasks,
 ):
     """从服务器本地目录导入 GAOKAO-Bench 数据"""
@@ -734,7 +752,7 @@ async def import_from_server_path(
 
 @admin_router.post("/import/from-upload", tags=["管理员-真题库导入"])
 async def import_from_upload(
-    admin: CurrentAdmin,
+    _admin: CurrentAdmin,
     background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     skip_embedding: bool = Form(default=False),
@@ -763,8 +781,6 @@ async def import_from_upload(
         saved += 1
 
     if saved == 0:
-        import shutil
-
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise HTTPException(
             status_code=400, detail="没有有效的 JSON 文件（文件名须以 .json 结尾）"
@@ -779,18 +795,28 @@ async def import_from_upload(
     return {"message": f"已接收 {saved} 个文件，导入任务已启动"}
 
 
+@admin_router.get("/import/check-embedding", tags=["管理员-真题库导入"])
+async def check_embedding_api(_admin: CurrentAdmin):
+    """测试 Embedding API 是否可用（导入前预检）"""
+    try:
+        from backend.app.rag.embeddings import get_embedding_service
+
+        svc = get_embedding_service()
+        await svc.embed_text("test")
+        return {"ok": True, "message": "Embedding API 可用"}
+    except Exception as e:
+        return {"ok": False, "message": f"Embedding API 不可用：{e}"}
+
+
 @admin_router.get("/import/status", tags=["管理员-真题库导入"])
-async def get_exam_import_status(admin: CurrentAdmin):
+async def get_exam_import_status(_admin: CurrentAdmin):
     """查询当前导入任务进度"""
     return get_import_status()
 
 
 @admin_router.get("/import/stats", tags=["管理员-真题库导入"])
-async def get_exam_question_stats(session: SessionDep, admin: CurrentAdmin):
+async def get_exam_question_stats(session: SessionDep, _admin: CurrentAdmin):
     """查询数据库中已有的真题统计（按科目/卷型）"""
-    from sqlalchemy import distinct, func
-
-    from backend.app.models.exam_paper import ExamPaper, ExamQuestion
 
     # 总题数
     total_stmt = select(func.count(ExamQuestion.id))

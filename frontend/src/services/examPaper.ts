@@ -146,7 +146,7 @@ export const examPaperApi = {
 
   /** 单题重生成（超时 120s：后端只做生成+质检，约 20-60s） */
   regenerateQuestion: (jobId: string, positionIndex: number, extraInstructions = '') =>
-    api.post<{ position_index: number; question_type: string; raw_markdown: string; message: string }>(
+    api.post<{ position_index: number; question_type: string; question_json: Record<string, unknown>; message: string }>(
       `${BASE}/jobs/${jobId}/questions/${positionIndex}/regenerate`,
       { extra_instructions: extraInstructions },
       { timeout: 120000 },
@@ -215,24 +215,28 @@ export const examPaperAdminApi = {
   revokePermission: (teacherId: number) =>
     api.delete(`${ADMIN_BASE}/permissions/${teacherId}/revoke`),
 
+  /** 测试 Embedding API 是否可用（导入前预检） */
+  checkEmbedding: () =>
+    api.get<{ ok: boolean; message: string }>(`${ADMIN_BASE}/import/check-embedding`),
+
   /** 一键从 GitHub 下载并导入（自动尝试国内镜像） */
-  importFromGitHub: (skipEmbedding = false) =>
+  importFromGitHub: () =>
     api.post<{ message: string }>(`${ADMIN_BASE}/import/from-github`, {
-      skip_embedding: skipEmbedding,
+      skip_embedding: false,
     }),
 
   /** 从服务器本地路径导入 */
-  importFromPath: (dataDir: string, skipEmbedding = false) =>
+  importFromPath: (dataDir: string) =>
     api.post<{ message: string; data_dir: string }>(`${ADMIN_BASE}/import/from-path`, {
       data_dir: dataDir,
-      skip_embedding: skipEmbedding,
+      skip_embedding: false,
     }),
 
   /** 上传 JSON 文件并导入 */
-  importFromUpload: (files: File[], skipEmbedding = false) => {
+  importFromUpload: (files: File[]) => {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
-    formData.append('skip_embedding', String(skipEmbedding));
+    formData.append('skip_embedding', 'false');
     return api.post<{ message: string }>(`${ADMIN_BASE}/import/from-upload`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       timeout: 120000,

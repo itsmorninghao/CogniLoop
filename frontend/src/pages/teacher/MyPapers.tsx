@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { MarkdownWithLatex } from '@/components/MarkdownWithLatex';
+import { parseQuestionSetData, type ParsedQuestion as JsonParsedQuestion } from '@/types/question';
 import { useNavigate } from 'react-router-dom';
 import {
   BookMarked,
@@ -87,37 +88,15 @@ const QUESTION_TYPE_MAP: Record<
 // Preview Dialog (identical style to QuestionGenerator)
 // ------------------------------------------------------------------ //
 
-interface ParsedQuestion {
-  number: number;
-  type: string;
-  content: string;
-  options: string[];
-  answer: string;
-  explanation: string;
-  scoringPoints?: string;
-}
+type ParsedQuestion = JsonParsedQuestion;
 
-function parseMarkdown(content: string): ParsedQuestion[] {
-  const questions: ParsedQuestion[] = [];
-  const blocks = content.split(/## 题目 \d+/).slice(1);
-  blocks.forEach((block, index) => {
-    const typeMatch = block.match(/\[(\w+)\]/);
-    const type = typeMatch ? typeMatch[1] : 'unknown';
-    const contentMatch = block.match(/\*\*题目内容\*\*[：:]\s*([^\n]+)/);
-    const qContent = contentMatch ? contentMatch[1].trim() : '';
-    const options: string[] = [];
-    for (const m of block.matchAll(/\*\*选项 ([A-E])\*\*[：:]\s*([^\n]+)/g)) {
-      options.push(`${m[1]}. ${m[2].trim()}`);
-    }
-    const answerMatch = block.match(/\*\*(?:正确答案|参考答案)\*\*[：:]\s*([\s\S]*?)(?=\n\*\*|$)/);
-    const answer = answerMatch ? answerMatch[1].trim() : '';
-    const explanationMatch = block.match(/\*\*解析\*\*[：:]\s*([\s\S]*?)(?=\n\*\*评分要点|$)/);
-    const explanation = explanationMatch ? explanationMatch[1].trim() : '';
-    const scoringMatch = block.match(/\*\*评分要点\*\*[：:]\s*([\s\S]*?)$/);
-    const scoringPoints = scoringMatch ? scoringMatch[1].trim() : undefined;
-    questions.push({ number: index + 1, type, content: qContent, options, answer, explanation, scoringPoints });
-  });
-  return questions;
+function parseJsonContent(content: string): ParsedQuestion[] {
+  try {
+    return parseQuestionSetData(content).questions;
+  } catch (e) {
+    console.error('试题 JSON 解析失败', e);
+    return [];
+  }
 }
 
 function PreviewDialog({
@@ -136,10 +115,14 @@ function PreviewDialog({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showAnswers, setShowAnswers] = useState(false);
 
-  const parsedQuestions = useMemo(() => parseMarkdown(content), [content]);
+  const parsedQuestions = useMemo(() => parseJsonContent(content), [content]);
   const displayTitle = useMemo(() => {
-    const m = content.match(/^# (.+)$/m);
-    return m ? m[1] : title;
+    try {
+      const d = parseQuestionSetData(content);
+      return d.title || title;
+    } catch {
+      return title;
+    }
   }, [content, title]);
 
   // reset on open
@@ -275,15 +258,14 @@ function PreviewDialog({
                     </div>
 
                     {/* 选项列表 */}
-                    {current.options.length > 0 && (
+                    {current.options && current.options.length > 0 && (
                       <div className="space-y-3 mb-8">
-                        {current.options.map((option, idx) => {
-                          const letter = option.charAt(0);
+                        {current.options.map((opt) => {
                           const isCorrect =
-                            showAnswers && current.answer.includes(letter);
+                            showAnswers && current.answer.includes(opt.key);
                           return (
                             <div
-                              key={idx}
+                              key={opt.key}
                               className={`flex items-start gap-4 p-4 rounded-xl border-2 transition-all ${
                                 isCorrect
                                   ? 'border-green-500 bg-green-50 dark:bg-green-950/30'
@@ -297,7 +279,7 @@ function PreviewDialog({
                                     : 'bg-muted text-muted-foreground'
                                 }`}
                               >
-                                {letter}
+                                {opt.key}
                               </div>
                               <div className="flex-1 pt-2">
                                 <div
@@ -307,7 +289,7 @@ function PreviewDialog({
                                       : ''
                                   }
                                 >
-                                  <MarkdownWithLatex compact>{option.slice(3)}</MarkdownWithLatex>
+                                  <MarkdownWithLatex compact>{opt.value}</MarkdownWithLatex>
                                 </div>
                               </div>
                               {isCorrect && (
@@ -346,7 +328,7 @@ function PreviewDialog({
                             </div>
                           </div>
                         )}
-                        {current.scoringPoints && (
+                        {current.scoring_points && (
                           <div className="bg-orange-50 dark:bg-orange-950/30 rounded-xl p-5 border border-orange-200 dark:border-orange-800">
                             <div className="flex items-center gap-2 mb-3">
                               <ListChecks className="w-5 h-5 text-orange-600" />
@@ -355,7 +337,7 @@ function PreviewDialog({
                               </span>
                             </div>
                             <div className="text-orange-800 dark:text-orange-200 leading-relaxed">
-                              <MarkdownWithLatex compact>{current.scoringPoints}</MarkdownWithLatex>
+                              <MarkdownWithLatex compact>{current.scoring_points}</MarkdownWithLatex>
                             </div>
                           </div>
                         )}
@@ -633,7 +615,7 @@ function PaperCard({
         setPreviewContent(res.data.content);
       } else if (!isGaokao) {
         const res = await questionApi.getContent(qs!.id);
-        setPreviewContent(res.data.markdown_content);
+        setPreviewContent(res.data.json_content);
       } else {
         toast.error('试卷内容尚未生成');
         return;

@@ -251,7 +251,7 @@ class ExamPaperGenerator:
         requirement: PaperRequirement,
         already_done_positions: set[int] | None = None,
         existing_questions: dict[int, str]
-        | None = None,  # {position_index: raw_markdown}
+        | None = None,  # {position_index: serialized question JSON}
         quota_exhausted: asyncio.Event | None = None,
     ) -> dict:
         """
@@ -259,10 +259,10 @@ class ExamPaperGenerator:
 
         Returns:
             {
-                "markdown": str,
+                "json_content": str,          # 完整试卷 JSON 字符串
                 "title": str,
                 "warnings": list[str],
-                "completed_questions": dict,  # {position_index: markdown}
+                "completed_questions": dict,  # {position_index: serialized question JSON}
                 "trace_spans": list[dict],    # LLM 调用追踪数据
             }
         """
@@ -330,13 +330,74 @@ class ExamPaperGenerator:
                 approved_questions.append(question)
                 if diff_result:
                     difficulty_results.append(diff_result)
-                completed_questions[task.position_index] = question.raw_markdown
+                # 序列化单题 JSON（供 resume 时恢复用）
+                completed_questions[task.position_index] = json.dumps(
+                    {
+                        "type": question.question_type,
+                        "content": question.question_text,
+                        "options": (
+                            [{"key": k, "value": v} for k, v in question.options.items()]
+                            if question.options
+                            else None
+                        ),
+                        "answer": question.correct_answer,
+                        "explanation": question.explanation,
+                        "scoring_points": question.scoring_points,
+                    },
+                    ensure_ascii=False,
+                )
 
-        # 合并已存在题目（续做）
+        # 合并已存在题目（续做）：将 existing_questions 反序列化，按位置合并排序
         if existing_questions:
             logger.info(f"续做：从已完成 {len(existing_questions)} 题继续")
+            # position → 新生成题目
+            new_q_by_pos: dict[int, GeneratedQuestion] = {
+                task.position_index: q
+                for task, result in zip(tasks, results)
+                if not isinstance(result, Exception)
+                for q, _, _ in [result]
+                if q is not None
+            }
+            # position → 所有题目（新题优先，否则复原旧题）
+            merged: dict[int, GeneratedQuestion] = {}
+            for pos, q_json_str in existing_questions.items():
+                if pos in new_q_by_pos:
+                    merged[pos] = new_q_by_pos[pos]
+                    continue
+                try:
+                    q_data = json.loads(q_json_str)
+                    opts = q_data.get("options")
+                    options_dict: dict[str, str] | None = None
+                    if opts and isinstance(opts, list):
+                        options_dict = {
+                            item["key"]: item["value"]
+                            for item in opts
+                            if "key" in item
+                        }
+                    elif opts and isinstance(opts, dict):
+                        options_dict = opts
+                    merged[pos] = GeneratedQuestion(
+                        task_id=f"resume_{pos}",
+                        question_type=q_data.get("type", "short_answer"),
+                        question_text=q_data.get("content", ""),
+                        options=options_dict,
+                        correct_answer=q_data.get("answer", ""),
+                        explanation=q_data.get("explanation", ""),
+                        scoring_points=q_data.get("scoring_points"),
+                        knowledge_point="",
+                        target_difficulty_level="",
+                    )
+                except Exception as e:
+                    logger.warning(f"续做：恢复题目 pos={pos} 失败: {e}")
+            # 追加本次新增的非续做位置的题目
+            for task, result in zip(tasks, results):
+                if task.position_index not in merged and not isinstance(result, Exception):
+                    q, _, _ = result
+                    if q is not None:
+                        merged[task.position_index] = q
+            approved_questions = [q for _, q in sorted(merged.items())]
 
-        if not approved_questions and not existing_questions:
+        if not approved_questions:
             raise RuntimeError("所有题目均未通过审核，组卷失败")
 
         # ---- Step 4: AssembleAgent ----
@@ -359,7 +420,7 @@ class ExamPaperGenerator:
         )
 
         return {
-            "markdown": assemble_result.markdown_content,
+            "json_content": assemble_result.json_content,
             "title": assemble_result.title,
             "warnings": all_warnings,
             "completed_questions": completed_questions,

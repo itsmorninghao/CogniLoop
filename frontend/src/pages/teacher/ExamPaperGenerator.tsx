@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { MarkdownWithLatex } from '@/components/MarkdownWithLatex';
+import { PaperViewer } from '@/components/QuestionRenderer';
+import { parseQuestionSetData, type QuestionSetData } from '@/types/question';
 import {
   Activity,
   BookOpen,
@@ -160,8 +161,9 @@ export function ExamPaperGeneratorPage() {
   }>({ open: false, jobId: '', position: 0, instructions: '' });
   const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // 试卷内容预览
-  const [paperContent, setPaperContent] = useState<string | null>(null);
+  // 试卷内容预览（JSON 解析后的结构化数据）
+  const [paperData, setPaperData] = useState<QuestionSetData | null>(null);
+  const [paperContent, setPaperContent] = useState<string | null>(null); // 原始 JSON 字符串（供复制）
   const [isLoadingPaper, setIsLoadingPaper] = useState(false);
 
   // Trace 追踪面板
@@ -193,7 +195,7 @@ export function ExamPaperGeneratorPage() {
 
   // 进入完成步骤时自动加载试卷内容
   useEffect(() => {
-    if (step === 'done' && finalJobDetail && !paperContent) {
+    if (step === 'done' && finalJobDetail && !paperData) {
       handleViewPaper(finalJobDetail.job_id);
     }
   }, [step, finalJobDetail]);
@@ -362,7 +364,7 @@ export function ExamPaperGeneratorPage() {
       setStep('progress');
 
       // 连接 SSE
-      connectSSE(jobId);
+      connectSSE(jobId, totalQuestions);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '发起组卷失败');
     } finally {
@@ -391,7 +393,7 @@ export function ExamPaperGeneratorPage() {
     setStep(target);
   };
 
-  const connectSSE = (jobId: string) => {
+  const connectSSE = (jobId: string, total: number) => {
     if (sseRef.current) {
       sseRef.current.close();
     }
@@ -405,7 +407,7 @@ export function ExamPaperGeneratorPage() {
         const job = resp.data;
         const done = job.completed_questions_count;
         setCompletedCount(done);
-        setProgressPercent(totalCount > 0 ? Math.round((done / totalCount) * 100) : 0);
+        setProgressPercent(total > 0 ? Math.round((done / total) * 100) : 0);
 
         if (job.status === 'completed') {
           clearInterval(pollInterval);
@@ -478,7 +480,7 @@ export function ExamPaperGeneratorPage() {
             if (evt === 'question_approved') {
               setCompletedCount(c => {
                 const newCount = c + 1;
-                setProgressPercent(totalCount > 0 ? Math.round((newCount / totalCount) * 100) : 0);
+                setProgressPercent(total > 0 ? Math.round((newCount / total) * 100) : 0);
                 return newCount;
               });
             }
@@ -518,11 +520,15 @@ export function ExamPaperGeneratorPage() {
   const handleResume = async (jobId: string) => {
     try {
       await examPaperApi.resumeJob(jobId);
+      const jobResp = await examPaperApi.getJob(jobId);
+      const total = jobResp.data.requirement?.total_questions ?? 0;
+      setTotalCount(total);
+      setCompletedCount(jobResp.data.completed_questions_count ?? 0);
       setCurrentJobId(jobId);
       setTraceSpans([]);
       setSelectedSpanId(null);
       setStep('progress');
-      connectSSE(jobId);
+      connectSSE(jobId, total);
       toast.success('已恢复组卷，请等待完成');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : '续做失败');
@@ -555,13 +561,17 @@ export function ExamPaperGeneratorPage() {
   };
 
   const handleViewPaper = async (jobId: string, forceReload = false) => {
-    if (paperContent && !forceReload) return; // 已缓存
+    if (paperData && !forceReload) return; // 已缓存
     setIsLoadingPaper(true);
     try {
       const resp = await examPaperApi.getJobContent(jobId);
-      setPaperContent(resp.data.content);
-    } catch {
+      const raw = resp.data.content;
+      const parsed = parseQuestionSetData(raw); // 先解析，成功后再更新状态
+      setPaperContent(raw);
+      setPaperData(parsed);
+    } catch (e) {
       toast.error('无法加载试卷内容');
+      console.error(e);
     } finally {
       setIsLoadingPaper(false);
     }
@@ -711,16 +721,30 @@ export function ExamPaperGeneratorPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUseHotspot(v => !v)}
+                  className={`w-full flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors ${
+                    useHotspot
+                      ? 'border-primary bg-primary/8 text-primary'
+                      : 'border-border bg-muted/30 text-muted-foreground hover:bg-muted/60'
+                  }`}
+                >
                   <Checkbox
                     id="hotspot"
                     checked={useHotspot}
                     onCheckedChange={v => setUseHotspot(!!v)}
+                    className="pointer-events-none shrink-0 border-foreground/40"
                   />
-                  <label htmlFor="hotspot" className="text-sm cursor-pointer">
-                    融入时事热点（自动抓取最近 30 天官媒热点作为命题素材）
-                  </label>
-                </div>
+                  <div>
+                    <p className={`text-sm font-medium ${useHotspot ? 'text-primary' : 'text-foreground'}`}>
+                      融入时事热点
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      自动抓取最近 30 天官媒热点作为命题素材
+                    </p>
+                  </div>
+                </button>
               </CardContent>
             </Card>
 
@@ -1225,7 +1249,7 @@ export function ExamPaperGeneratorPage() {
                       }}
                       disabled={!paperContent || isLoadingPaper}
                     >
-                      <Copy className="w-3.5 h-3.5" /> 复制 Markdown
+                      <Copy className="w-3.5 h-3.5" /> 复制 JSON
                     </Button>
                     <Button
                       variant="ghost"
@@ -1246,12 +1270,10 @@ export function ExamPaperGeneratorPage() {
                     <Loader2 className="w-5 h-5 animate-spin" />
                     加载中…
                   </div>
-                ) : paperContent ? (
+                ) : paperData ? (
                   <ScrollArea className="h-[580px]">
-                    <div className="p-5 space-y-0">
-                      <MarkdownWithLatex paperStyle>
-                        {paperContent}
-                      </MarkdownWithLatex>
+                    <div className="p-5">
+                      <PaperViewer data={paperData} showAnswers={true} />
                     </div>
                   </ScrollArea>
                 ) : (

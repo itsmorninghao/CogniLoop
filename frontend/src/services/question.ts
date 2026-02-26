@@ -73,9 +73,9 @@ export const questionApi = {
   modify: (questionSetId: number, data: ModifyQuestionRequest) =>
     api.post<QuestionSet>(`/question/${questionSetId}/modify`, data),
 
-  // 获取试题集内容
+  // 获取试题集内容（JSON 字符串）
   getContent: (questionSetId: number) =>
-    api.get<{ id: number; title: string; markdown_content: string }>(`/question/${questionSetId}/content`),
+    api.get<{ id: number; title: string; json_content: string }>(`/question/${questionSetId}/content`),
 
   // 分配试题集
   assign: (questionSetId: number, data: AssignQuestionRequest) =>
@@ -108,8 +108,8 @@ export const studentQuestionApi = {
       params: courseId ? { course_id: courseId } : {},
     }),
 
-  // 获取试题集内容（学生端）
+  // 获取试题集内容（学生端，JSON 字符串）
   getContent: (questionSetId: number) =>
-    api.get<{ id: number; title: string; markdown_content: string }>(`/student-question/${questionSetId}/content`),
+    api.get<{ id: number; title: string; json_content: string }>(`/student-question/${questionSetId}/content`),
 };
 

@@ -14,6 +14,7 @@ import {
   Server,
   Upload,
   X,
+  Zap,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,6 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from '@/components/ui/sonner';
 import { examPaperAdminApi, type ImportStats, type ImportStatus } from '@/services/examPaper';
 
@@ -53,23 +53,48 @@ export function ExamDataImportPage() {
   // ---------------------------------------------------------------- //
   // 一键从 GitHub 导入
   // ---------------------------------------------------------------- //
-  const [skipEmbGitHub, setSkipEmbGitHub] = useState(false);
   const [isStartingGitHub, setIsStartingGitHub] = useState(false);
 
   // ---------------------------------------------------------------- //
   // 高级：服务器路径
   // ---------------------------------------------------------------- //
   const [serverPath, setServerPath] = useState('');
-  const [skipEmbPath, setSkipEmbPath] = useState(false);
   const [isImportingPath, setIsImportingPath] = useState(false);
 
   // ---------------------------------------------------------------- //
   // 高级：文件上传
   // ---------------------------------------------------------------- //
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [skipEmbUpload, setSkipEmbUpload] = useState(false);
   const [isImportingUpload, setIsImportingUpload] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ---------------------------------------------------------------- //
+  // Embedding 预检
+  // ---------------------------------------------------------------- //
+  const [embCheckState, setEmbCheckState] = useState<'idle' | 'checking' | 'ok' | 'fail'>('idle');
+  const [embCheckMsg, setEmbCheckMsg] = useState('');
+
+  const checkEmbeddingAndProceed = async (onProceed: () => Promise<void>) => {
+    setEmbCheckState('checking');
+    setEmbCheckMsg('');
+    try {
+      const resp = await examPaperAdminApi.checkEmbedding();
+      if (resp.data.ok) {
+        setEmbCheckState('ok');
+        setEmbCheckMsg(resp.data.message);
+        await onProceed();
+      } else {
+        setEmbCheckState('fail');
+        setEmbCheckMsg(resp.data.message);
+        toast.error(`向量化 API 不可用，请先在系统配置中设置 Embedding。\n${resp.data.message}`);
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : '预检请求失败';
+      setEmbCheckState('fail');
+      setEmbCheckMsg(msg);
+      toast.error(`向量化 API 预检失败：${msg}`);
+    }
+  };
 
   // ---------------------------------------------------------------- //
   // 初始化
@@ -135,17 +160,18 @@ export function ExamDataImportPage() {
   // ---------------------------------------------------------------- //
   const handleImportFromGitHub = async () => {
     setIsStartingGitHub(true);
-    try {
-      const resp = await examPaperAdminApi.importFromGitHub(skipEmbGitHub);
-      toast.success(resp.data.message);
-      startPolling();
-      const statusResp = await examPaperAdminApi.getImportStatus();
-      setImportStatus(statusResp.data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '启动失败');
-    } finally {
-      setIsStartingGitHub(false);
-    }
+    await checkEmbeddingAndProceed(async () => {
+      try {
+        const resp = await examPaperAdminApi.importFromGitHub();
+        toast.success(resp.data.message);
+        startPolling();
+        const statusResp = await examPaperAdminApi.getImportStatus();
+        setImportStatus(statusResp.data);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : '启动失败');
+      }
+    });
+    setIsStartingGitHub(false);
   };
 
   // ---------------------------------------------------------------- //
@@ -154,17 +180,18 @@ export function ExamDataImportPage() {
   const handleImportFromPath = async () => {
     if (!serverPath.trim()) { toast.error('请输入服务器路径'); return; }
     setIsImportingPath(true);
-    try {
-      const resp = await examPaperAdminApi.importFromPath(serverPath.trim(), skipEmbPath);
-      toast.success(resp.data.message);
-      startPolling();
-      const statusResp = await examPaperAdminApi.getImportStatus();
-      setImportStatus(statusResp.data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '启动失败');
-    } finally {
-      setIsImportingPath(false);
-    }
+    await checkEmbeddingAndProceed(async () => {
+      try {
+        const resp = await examPaperAdminApi.importFromPath(serverPath.trim());
+        toast.success(resp.data.message);
+        startPolling();
+        const statusResp = await examPaperAdminApi.getImportStatus();
+        setImportStatus(statusResp.data);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : '启动失败');
+      }
+    });
+    setIsImportingPath(false);
   };
 
   // ---------------------------------------------------------------- //
@@ -188,18 +215,19 @@ export function ExamDataImportPage() {
   const handleImportFromUpload = async () => {
     if (selectedFiles.length === 0) { toast.error('请先选择 JSON 文件'); return; }
     setIsImportingUpload(true);
-    try {
-      const resp = await examPaperAdminApi.importFromUpload(selectedFiles, skipEmbUpload);
-      toast.success(resp.data.message);
-      setSelectedFiles([]);
-      startPolling();
-      const statusResp = await examPaperAdminApi.getImportStatus();
-      setImportStatus(statusResp.data);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : '上传失败');
-    } finally {
-      setIsImportingUpload(false);
-    }
+    await checkEmbeddingAndProceed(async () => {
+      try {
+        const resp = await examPaperAdminApi.importFromUpload(selectedFiles);
+        toast.success(resp.data.message);
+        setSelectedFiles([]);
+        startPolling();
+        const statusResp = await examPaperAdminApi.getImportStatus();
+        setImportStatus(statusResp.data);
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : '上传失败');
+      }
+    });
+    setIsImportingUpload(false);
   };
 
   // ---------------------------------------------------------------- //
@@ -254,38 +282,44 @@ export function ExamDataImportPage() {
           <CardDescription>
             点击按钮后系统自动下载{' '}
             <a
-              href="https://github.com/OpenLMLab/GAOKAO-Bench"
+              href="https://github.com/itsmorninghao/GAOKAO-Bench"
               target="_blank"
               rel="noopener noreferrer"
               className="underline text-primary"
             >
               GAOKAO-Bench
             </a>
-            {' '}并完成导入。优先使用国内镜像，遇到网络问题自动重试其他镜像源。
+            {' '}并完成导入并且自动向量化。优先使用国内镜像，遇到网络问题自动重试其他镜像源。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="skip-emb-github"
-                checked={skipEmbGitHub}
-                onCheckedChange={v => setSkipEmbGitHub(!!v)}
-                disabled={isRunning}
-              />
-              <label htmlFor="skip-emb-github" className="text-sm cursor-pointer select-none">
-                跳过向量化（导入更快，后续可在系统后台补跑）
-              </label>
+          {/* Embedding 预检状态 */}
+          {embCheckState !== 'idle' && (
+            <div className={`flex items-center gap-2 text-sm rounded-lg px-3 py-2 ${
+              embCheckState === 'checking' ? 'bg-muted text-muted-foreground' :
+              embCheckState === 'ok' ? 'bg-green-50 text-green-700 border border-green-200' :
+              'bg-red-50 text-red-700 border border-red-200'
+            }`}>
+              {embCheckState === 'checking' && <Loader2 className="w-4 h-4 animate-spin shrink-0" />}
+              {embCheckState === 'ok' && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+              {embCheckState === 'fail' && <AlertCircle className="w-4 h-4 shrink-0" />}
+              <span>
+                {embCheckState === 'checking' && '正在检测向量化 API…'}
+                {embCheckState === 'ok' && embCheckMsg}
+                {embCheckState === 'fail' && embCheckMsg}
+              </span>
             </div>
-          </div>
+          )}
 
           <Button
             size="lg"
             onClick={handleImportFromGitHub}
-            disabled={isRunning || isStartingGitHub}
+            disabled={isRunning || isStartingGitHub || embCheckState === 'checking'}
             className="gap-2 w-full sm:w-auto"
           >
-            {isStartingGitHub || (isRunning && ['downloading', 'extracting', 'importing'].includes(phase)) ? (
+            {embCheckState === 'checking' ? (
+              <><Loader2 className="w-4 h-4 animate-spin" /> 检测向量化 API…</>
+            ) : isStartingGitHub || (isRunning && ['downloading', 'extracting', 'importing'].includes(phase)) ? (
               <><Loader2 className="w-4 h-4 animate-spin" /> {PHASE_LABELS[phase] ?? '处理中…'}</>
             ) : (
               <><Download className="w-4 h-4" /> 一键导入真题库</>
@@ -293,7 +327,8 @@ export function ExamDataImportPage() {
           </Button>
 
           <p className="text-xs text-muted-foreground">
-            约 20 MB，包含 2010–2022 年全国卷全科目，首次导入约需 2–5 分钟（不含向量化）。
+            约 20 MB，包含 2010–2022 年全国卷全科目，首次导入约需 5–10 分钟。
+            导入前将自动检测向量化 API 是否可用。
           </p>
         </CardContent>
       </Card>
@@ -550,23 +585,19 @@ export function ExamDataImportPage() {
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="skip-emb-upload"
-                  checked={skipEmbUpload}
-                  onCheckedChange={v => setSkipEmbUpload(!!v)}
-                />
-                <label htmlFor="skip-emb-upload" className="text-sm cursor-pointer">
-                  跳过向量化（导入更快，后续可补跑）
-                </label>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                导入前将自动检测向量化 API 是否可用
               </div>
 
               <Button
                 onClick={handleImportFromUpload}
-                disabled={isImportingUpload || selectedFiles.length === 0 || isRunning}
+                disabled={isImportingUpload || selectedFiles.length === 0 || isRunning || embCheckState === 'checking'}
                 className="gap-2"
               >
-                {isImportingUpload ? (
+                {embCheckState === 'checking' ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 检测向量化 API…</>
+                ) : isImportingUpload ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> 上传中…</>
                 ) : (
                   <><Upload className="w-4 h-4" /> 开始导入{selectedFiles.length > 0 ? ` (${selectedFiles.length} 个文件)` : ''}</>
@@ -598,23 +629,19 @@ export function ExamDataImportPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="skip-emb-path"
-                  checked={skipEmbPath}
-                  onCheckedChange={v => setSkipEmbPath(!!v)}
-                />
-                <label htmlFor="skip-emb-path" className="text-sm cursor-pointer">
-                  跳过向量化（导入更快，后续可补跑）
-                </label>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Zap className="w-3.5 h-3.5 text-amber-500" />
+                导入前将自动检测向量化 API 是否可用
               </div>
 
               <Button
                 onClick={handleImportFromPath}
-                disabled={isImportingPath || !serverPath.trim() || isRunning}
+                disabled={isImportingPath || !serverPath.trim() || isRunning || embCheckState === 'checking'}
                 className="gap-2"
               >
-                {isImportingPath ? (
+                {embCheckState === 'checking' ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" /> 检测向量化 API…</>
+                ) : isImportingPath ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> 启动中…</>
                 ) : (
                   <><Server className="w-4 h-4" /> 从服务器路径导入</>

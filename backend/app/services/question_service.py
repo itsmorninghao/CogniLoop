@@ -25,15 +25,14 @@ class QuestionService:
         title: str,
         course_id: int,
         teacher_id: int,
-        markdown_content: str,
+        json_content: str,
         description: str | None = None,
     ) -> QuestionSet:
-        """创建试题集"""
-        # 创建试题集记录（先获取 ID）
+        """创建试题集（内容为 JSON 字符串）"""
         question_set = QuestionSet(
             title=title,
             description=description,
-            markdown_path="",  # 稍后更新
+            markdown_path="",  # 稍后更新（字段名保留但存 .json 文件）
             course_id=course_id,
             teacher_id=teacher_id,
         )
@@ -41,15 +40,13 @@ class QuestionService:
         await self.session.flush()
         await self.session.refresh(question_set)
 
-        # 创建存储目录并保存文件
         storage_dir = settings.question_sets_dir / f"course_{course_id}"
         storage_dir.mkdir(parents=True, exist_ok=True)
-        file_path = storage_dir / f"question_set_{question_set.id}.md"
+        file_path = storage_dir / f"question_set_{question_set.id}.json"
 
         async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-            await f.write(markdown_content)
+            await f.write(json_content)
 
-        # 更新文件路径
         question_set.markdown_path = str(file_path)
         await self.session.flush()
 
@@ -102,7 +99,7 @@ class QuestionService:
         return output
 
     async def get_question_set_content(self, question_set_id: int) -> str | None:
-        """获取试题集 Markdown 内容"""
+        """获取试题集内容（JSON 字符串）"""
         question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
             return None
@@ -115,16 +112,16 @@ class QuestionService:
             return await f.read()
 
     async def update_question_set_content(
-        self, question_set_id: int, markdown_content: str
+        self, question_set_id: int, json_content: str
     ) -> bool:
-        """更新试题集内容"""
+        """更新试题集内容（JSON 字符串）"""
         question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
             return False
 
         file_path = Path(question_set.markdown_path)
         async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-            await f.write(markdown_content)
+            await f.write(json_content)
 
         return True
 
@@ -402,7 +399,7 @@ class QuestionService:
         if not question_set:
             return False
 
-        # 5. 删除 markdown 文件
+        # 5. 删除内容文件（.json）
         if question_set.markdown_path:
             file_path = Path(question_set.markdown_path)
             if file_path.exists():

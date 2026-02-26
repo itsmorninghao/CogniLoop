@@ -116,7 +116,7 @@ export const plazaApi = {
 
   // 题目内容（需登录）
   getContent: (questionSetId: number) =>
-    api.get<{ id: number; title: string; markdown_content: string }>(
+    api.get<{ id: number; title: string; json_content: string }>(
       `/plaza/question-sets/${questionSetId}/content`
     ),
 

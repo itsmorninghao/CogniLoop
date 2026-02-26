@@ -30,10 +30,10 @@ logger = logging.getLogger(__name__)
 
 GITHUB_ZIP_URLS = [
     # 镜像源（国内优先）
-    "https://mirror.ghproxy.com/https://github.com/OpenLMLab/GAOKAO-Bench/archive/refs/heads/main.zip",
-    "https://ghfast.top/https://github.com/OpenLMLab/GAOKAO-Bench/archive/refs/heads/main.zip",
+    "https://mirror.ghproxy.com/https://github.com/itsmorninghao/GAOKAO-Bench/archive/refs/heads/main.zip",
+    "https://ghfast.top/https://github.com/itsmorninghao/GAOKAO-Bench/archive/refs/heads/main.zip",
     # 官方源
-    "https://github.com/OpenLMLab/GAOKAO-Bench/archive/refs/heads/main.zip",
+    "https://github.com/itsmorninghao/GAOKAO-Bench/archive/refs/heads/main.zip",
 ]
 
 DOWNLOAD_TIMEOUT = 300  # 5 分钟超时
@@ -76,6 +76,7 @@ def _log(msg: str) -> None:
 # ---------------------------------------------------------------------------
 
 FILENAME_MAP: dict[str, tuple[str, str]] = {
+    # ---- 原始 OpenLMLab 命名 ----
     "Political_Science_MCQs": ("政治", "single_choice"),
     "History_MCQs": ("历史", "single_choice"),
     "Geography_MCQs": ("地理", "single_choice"),
@@ -99,6 +100,29 @@ FILENAME_MAP: dict[str, tuple[str, str]] = {
     "Math_I_Subjective": ("数学（文）", "short_answer"),
     "Math_II_Subjective": ("数学（理）", "short_answer"),
     "Chinese_Subjective": ("语文", "short_answer"),
+    # ---- itsmorninghao fork 命名（英语） ----
+    "English_Language_Cloze_Passage": ("英语", "fill_blank"),
+    "English_Language_Error_Correction": ("英语", "fill_blank"),
+    # ---- itsmorninghao fork 命名（理科） ----
+    "Physics_Open-ended_Questions": ("物理", "short_answer"),
+    "Chemistry_Open-ended_Questions": ("化学", "short_answer"),
+    "Biology_Open-ended_Questions": ("生物", "short_answer"),
+    # ---- itsmorninghao fork 命名（数学） ----
+    "Math_I_Open-ended_Questions": ("数学（文）", "short_answer"),
+    "Math_I_Fill-in-the-Blank": ("数学（文）", "fill_blank"),
+    "Math_II_Open-ended_Questions": ("数学（理）", "short_answer"),
+    "Math_II_Fill-in-the-Blank": ("数学（理）", "fill_blank"),
+    # ---- itsmorninghao fork 命名（文科） ----
+    "History_Open-ended_Questions": ("历史", "short_answer"),
+    "Geography_Open-ended_Questions": ("地理", "short_answer"),
+    "Political_Science_Open-ended_Questions": ("政治", "short_answer"),
+    # ---- itsmorninghao fork 命名（语文） ----
+    "Chinese_Language_Practical_Text_Reading": ("语文", "short_answer"),
+    "Chinese_Language_Literary_Text_Reading": ("语文", "short_answer"),
+    "Chinese_Language_Language_and_Writing_Skills_Open-ended_Questions": ("语文", "short_answer"),
+    "Chinese_Language_Famous_Passages_and_Sentences_Dictation": ("语文", "short_answer"),
+    "Chinese_Language_Classical_Chinese_Reading": ("语文", "short_answer"),
+    "Chinese_Language_Ancient_Poetry_Reading": ("语文", "short_answer"),
 }
 
 

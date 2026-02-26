@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -18,6 +18,33 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
+
+/** 独立时钟组件，每秒更新不影响父级 Layout 及其子页面 */
+const LiveClock = memo(function LiveClock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const month = now.getMonth() + 1;
+  const day = now.getDate();
+  const weekday = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][now.getDay()];
+  const hh = now.getHours().toString().padStart(2, '0');
+  const mm = now.getMinutes().toString().padStart(2, '0');
+  const ss = now.getSeconds().toString().padStart(2, '0');
+  return (
+    <div className="hidden md:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/10">
+      <Clock className="w-4 h-4 text-primary/70" />
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-muted-foreground">{month}月{day}日 {weekday}</span>
+        <span className="text-primary/30">|</span>
+        <span className="text-sm font-mono font-medium tracking-wider text-foreground">
+          {hh}:{mm}:{ss}
+        </span>
+      </div>
+    </div>
+  );
+});
 
 interface NavItem {
   to: string;
@@ -43,32 +70,8 @@ const studentNavItems: NavItem[] = [
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
   const { user, userType, logout } = useAuthStore();
   const navigate = useNavigate();
-
-  // 实时更新时间
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const formatDate = (date: Date) => {
-    const month = date.getMonth() + 1;
-    const day = date.getDate();
-    const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-    const weekday = weekdays[date.getDay()];
-    return `${month}月${day}日 ${weekday}`;
-  };
-
-  const formatTime = (date: Date) => {
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const seconds = date.getSeconds().toString().padStart(2, '0');
-    return `${hours}:${minutes}:${seconds}`;
-  };
 
   const navItems = userType === 'teacher' ? teacherNavItems : studentNavItems;
   const portalLabel = userType === 'teacher' ? '教师端' : '学生端';
@@ -162,16 +165,7 @@ export function Layout() {
           </button>
 
           <div className="flex items-center gap-4">
-            <div className="hidden md:flex items-center gap-3 px-4 py-2 rounded-xl bg-gradient-to-r from-primary/5 to-primary/10 border border-primary/10">
-              <Clock className="w-4 h-4 text-primary/70" />
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">{formatDate(currentTime)}</span>
-                <span className="text-primary/30">|</span>
-                <span className="text-sm font-mono font-medium tracking-wider text-foreground">
-                  {formatTime(currentTime)}
-                </span>
-              </div>
-            </div>
+            <LiveClock />
           </div>
         </header>
 

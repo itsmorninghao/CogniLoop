@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { parseQuestionSetData, type ParsedQuestion } from '@/types/question';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Search,
@@ -41,38 +42,14 @@ const questionTypeMap: Record<string, { label: string; color: string; icon: type
   short_answer: { label: '简答题', color: 'bg-orange-500', icon: MessageSquare },
 };
 
-function parseMarkdownQuestions(markdown: string) {
-  const questions: Array<{
-    number: number;
-    type: string;
-    content: string;
-    options: string[];
-    answer: string;
-    explanation: string;
-    scoringPoints?: string;
-  }> = [];
-
-  const questionBlocks = markdown.split(/## 题目 \d+/).slice(1);
-  questionBlocks.forEach((block, index) => {
-    const typeMatch = block.match(/\[(\w+)\]/);
-    const type = typeMatch ? typeMatch[1] : 'unknown';
-    const contentMatch = block.match(/\*\*题目内容\*\*[：:]\s*([^\n]+)/);
-    const content = contentMatch ? contentMatch[1].trim() : '';
-    const options: string[] = [];
-    const optionMatches = block.matchAll(/\*\*选项 ([A-E])\*\*[：:]\s*([^\n]+)/g);
-    for (const match of optionMatches) {
-      options.push(`${match[1]}. ${match[2].trim()}`);
-    }
-    const answerMatch = block.match(/\*\*(?:正确答案|参考答案)\*\*[：:]\s*([\s\S]*?)(?=\n\*\*|$)/);
-    const answer = answerMatch ? answerMatch[1].trim() : '';
-    const explanationMatch = block.match(/\*\*解析\*\*[：:]\s*([\s\S]*?)(?=\n\*\*评分要点|$)/);
-    const explanation = explanationMatch ? explanationMatch[1].trim() : '';
-    const scoringMatch = block.match(/\*\*评分要点\*\*[：:]\s*([\s\S]*?)$/);
-    const scoringPoints = scoringMatch ? scoringMatch[1].trim() : undefined;
-
-    questions.push({ number: index + 1, type, content, options, answer, explanation, scoringPoints });
-  });
-  return questions;
+function parseJsonQuestions(jsonContent: string): ParsedQuestion[] {
+  if (!jsonContent) return [];
+  try {
+    return parseQuestionSetData(jsonContent).questions;
+  } catch (e) {
+    console.error('试题 JSON 解析失败', e);
+    return [];
+  }
 }
 
 const HOT_THRESHOLD = 10;
@@ -105,7 +82,7 @@ export function PlazaDiscover() {
   const [previewTab, setPreviewTab] = useState<'questions' | 'leaderboard'>('questions');
   const [currentQIdx, setCurrentQIdx] = useState(0);
 
-  const parsedQuestions = useMemo(() => parseMarkdownQuestions(previewContent), [previewContent]);
+  const parsedQuestions = useMemo(() => parseJsonQuestions(previewContent), [previewContent]);
 
   const openPreview = async (item: PlazaQuestionSetItem) => {
     setPreviewItem(item);
@@ -123,7 +100,7 @@ export function PlazaDiscover() {
 
     setPreviewContentLoading(true);
     plazaApi.getContent(item.id)
-      .then(res => setPreviewContent(res.data.markdown_content))
+      .then(res => setPreviewContent(res.data.json_content))
       .catch(() => setPreviewContent(''))
       .finally(() => setPreviewContentLoading(false));
   };
@@ -559,24 +536,21 @@ export function PlazaDiscover() {
                               </h3>
                             </div>
 
-                            {parsedQuestions[currentQIdx].options.length > 0 && (
+                            {parsedQuestions[currentQIdx].options && parsedQuestions[currentQIdx].options!.length > 0 && (
                               <div className="space-y-3 mb-8">
-                                {parsedQuestions[currentQIdx].options.map((option, idx) => {
-                                  const optionLetter = option.charAt(0);
-                                  return (
+                                {parsedQuestions[currentQIdx].options!.map((opt) => (
                                     <div
-                                      key={idx}
+                                      key={opt.key}
                                       className="flex items-start gap-4 p-4 rounded-xl border-2 border-border hover:border-primary/30 hover:bg-muted/50 transition-all"
                                     >
                                       <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0 bg-muted text-muted-foreground">
-                                        {optionLetter}
+                                        {opt.key}
                                       </div>
                                       <div className="flex-1 pt-2">
-                                        <p>{option.slice(3)}</p>
+                                        <p>{opt.value}</p>
                                       </div>
                                     </div>
-                                  );
-                                })}
+                                  ))}
                               </div>
                             )}
                           </div>

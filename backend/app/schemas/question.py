@@ -72,8 +72,8 @@ class StudentQuestionSetResponse(BaseModel):
 
 
 class QuestionSetContentResponse(BaseModel):
-    """试题集内容响应"""
+    """试题集内容响应（json_content 为 JSON 字符串）"""
 
     id: int
     title: str
-    markdown_content: str
+    json_content: str

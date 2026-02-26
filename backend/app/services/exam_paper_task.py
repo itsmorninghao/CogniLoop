@@ -7,9 +7,9 @@
 """
 
 import asyncio
+import contextlib
 import json
 import logging
-from collections import defaultdict
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -26,6 +26,18 @@ logger = logging.getLogger(__name__)
 _sse_queues: dict[str, asyncio.Queue] = {}
 _sse_lock = asyncio.Lock()
 
+# 进度内存计数器
+_job_completed_counts: dict[str, int] = {}
+
+# 主事件循环引用
+_main_loop: asyncio.AbstractEventLoop | None = None
+
+
+def set_main_loop(loop: asyncio.AbstractEventLoop) -> None:
+    """在应用启动时调用，保存主事件循环引用供跨线程使用。"""
+    global _main_loop
+    _main_loop = loop
+
 
 async def subscribe_job_progress(job_id: str) -> asyncio.Queue:
     async with _sse_lock:
@@ -40,11 +52,23 @@ async def unsubscribe_job_progress(job_id: str) -> None:
 
 
 def _push_to_queue(job_id: str, event: str, data: dict) -> None:
-    """线程安全地向 SSE 队列推送事件（非阻塞）"""
+    """跨线程安全地向主 loop 的 SSE 队列推送事件。
+
+    后台任务通过 asyncio.run() 在独立线程运行，直接调用 queue.put_nowait()
+    无法唤醒主 loop 里正在 await queue.get() 的协程（跨 loop 的 Future.set_result
+    不会触发正确的 call_soon 唤醒）。必须用 call_soon_threadsafe 调度到主 loop。
+    """
     queue = _sse_queues.get(job_id)
-    if queue:
+    if not queue:
+        return
+    msg = {"event": event, "data": data}
+    if _main_loop is not None and _main_loop.is_running():
+        with contextlib.suppress(RuntimeError):
+            _main_loop.call_soon_threadsafe(queue.put_nowait, msg)
+    else:
+        # 回退：同一 loop 内直接 put
         try:
-            queue.put_nowait({"event": event, "data": data})
+            queue.put_nowait(msg)
         except asyncio.QueueFull:
             logger.warning(f"SSE 队列已满（job_id={job_id}），丢弃事件 {event}")
 
@@ -95,7 +119,6 @@ async def _run_async(job_id: str) -> None:
 
             from backend.app.graph.exam_agents.schemas import PaperRequirement
             from backend.app.graph.exam_paper_generator import ExamPaperGenerator
-            from backend.app.models.exam_paper import ExamPaperGenerationJob
             from backend.app.services.config_service import get_config_int
             from backend.app.services.exam_paper_service import (
                 ExamJobService,
@@ -152,6 +175,7 @@ async def _run_async(job_id: str) -> None:
 
                     if event == "question_approved":
                         tracker.completed += 1
+                        _job_completed_counts[job_id] = tracker.completed
                         tracker.current_actions.pop(pos, None)
                     elif event == "question_skipped":
                         tracker.skipped += 1
@@ -193,7 +217,7 @@ async def _run_async(job_id: str) -> None:
                 title=result["title"],
                 course_id=requirement.course_id,
                 teacher_id=job.teacher_id,
-                markdown_content=result["markdown"],
+                json_content=result["json_content"],
                 description=f"仿高考模拟卷 · {requirement.subject} · {requirement.target_region}",
             )
 
@@ -244,4 +268,5 @@ async def _run_async(job_id: str) -> None:
 
             _push_to_queue(job_id, "job_failed", {"job_id": job_id, "error": str(e)})
         finally:
+            _job_completed_counts.pop(job_id, None)
             await engine.dispose()

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { MarkdownWithLatex } from '@/components/MarkdownWithLatex';
+import { parseQuestionSetData } from '@/types/question';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -29,7 +30,7 @@ import { plazaApi } from '@/services/plaza';
 import { useAuthStore } from '@/stores/auth';
 
 interface ParsedQuestion {
-  id: string;
+  id: string;  // "q1", "q2" ...（由 number 派生）
   type: 'single_choice' | 'multiple_choice' | 'fill_blank' | 'short_answer';
   content: string;
   options?: { key: string; value: string }[];
@@ -76,50 +77,23 @@ export function StudentExamPage() {
     }
   };
 
-  // 解析 Markdown 内容
-  const parseQuestions = (content: string | undefined): ParsedQuestion[] => {
-    if (!content) return [];
-    const questions: ParsedQuestion[] = [];
-    const questionBlocks = content.split(/^## /gm).filter(Boolean);
-
-    questionBlocks.forEach((block) => {
-      const lines = block.trim().split('\n');
-      const titleLine = lines[0];
-
-      // 匹配题目编号和类型：题目 N [type]
-      const titleMatch = titleLine.match(/题目\s*(\d+)\s*\[(single_choice|multiple_choice|fill_blank|short_answer)\]/);
-      if (!titleMatch) return;
-
-      const questionNumber = titleMatch[1];
-      const type = titleMatch[2] as ParsedQuestion['type'];
-      const id = `q${questionNumber}`;
-
-      const contentMatch = block.match(/\*\*题目内容\*\*[：:]\s*(.+?)(?=\*\*|$)/s);
-      const questionContent = contentMatch?.[1]?.trim() || '';
-
-      const options: ParsedQuestion['options'] = [];
-      const optionMatches = block.matchAll(/\*\*选项\s*([A-F])\*\*[：:]\s*(.+?)(?=\*\*|$)/gs);
-      for (const match of optionMatches) {
-        options.push({ key: match[1], value: match[2].trim() });
-      }
-
-      const answerMatch = block.match(/\*\*正确答案\*\*[：:]\s*(.+?)(?=\*\*|$)/s);
-      const answer = answerMatch?.[1]?.trim();
-
-      const explanationMatch = block.match(/\*\*解析\*\*[：:]\s*(.+?)(?=\*\*|$)/s);
-      const explanation = explanationMatch?.[1]?.trim();
-
-      questions.push({
-        id,
-        type,
-        content: questionContent,
-        options: options.length > 0 ? options : undefined,
-        answer,
-        explanation,
-      });
-    });
-
-    return questions;
+  // 解析 JSON 内容
+  const parseQuestions = (jsonContent: string | undefined): ParsedQuestion[] => {
+    if (!jsonContent) return [];
+    try {
+      const data = parseQuestionSetData(jsonContent);
+      return data.questions.map((q) => ({
+        id: `q${q.number}`,
+        type: q.type as ParsedQuestion['type'],
+        content: q.content,
+        options: q.options ?? undefined,
+        answer: q.answer || undefined,
+        explanation: q.explanation || undefined,
+      }));
+    } catch (e) {
+      console.error('试题 JSON 解析失败', e);
+      return [];
+    }
   };
 
   // 加载试题和已有答案
@@ -133,7 +107,7 @@ export function StudentExamPage() {
       const contentRes = isPlaza
         ? await plazaApi.getContent(Number(questionSetId))
         : await studentQuestionApi.getContent(Number(questionSetId));
-      const parsed = parseQuestions(contentRes.data.markdown_content);
+      const parsed = parseQuestions(contentRes.data.json_content);
       setQuestions(parsed);
 
       try {

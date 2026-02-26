@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { parseQuestionSetData } from '@/types/question';
 import {
   ArrowLeft,
   Loader2,
@@ -60,46 +61,21 @@ export function TeacherAnswersPage() {
   const [newScore, setNewScore] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // 解析 Markdown 内容
-  const parseQuestions = (content: string): ParsedQuestion[] => {
-    if (!content) return [];
-    const questions: ParsedQuestion[] = [];
-    const questionBlocks = content.split(/^## /gm).filter(Boolean);
-
-    questionBlocks.forEach((block) => {
-      const lines = block.trim().split('\n');
-      const titleLine = lines[0];
-
-      // 匹配题目编号和类型：题目 N [type]
-      const titleMatch = titleLine.match(/题目\s*(\d+)\s*\[(single_choice|multiple_choice|fill_blank|short_answer)\]/);
-      if (!titleMatch) return;
-
-      const questionNumber = titleMatch[1];
-      const type = titleMatch[2];
-      const id = `q${questionNumber}`;
-
-      const contentMatch = block.match(/\*\*题目内容\*\*[：:]\s*(.+?)(?=\*\*|$)/s);
-      const questionContent = contentMatch?.[1]?.trim() || '';
-
-      const options: ParsedQuestion['options'] = [];
-      const optionMatches = block.matchAll(/\*\*选项\s*([A-F])\*\*[：:]\s*(.+?)(?=\*\*|$)/gs);
-      for (const match of optionMatches) {
-        options.push({ key: match[1], value: match[2].trim() });
-      }
-
-      const answerMatch = block.match(/\*\*正确答案\*\*[：:]\s*(.+?)(?=\*\*|$)/s);
-      const answer = answerMatch?.[1]?.trim();
-
-      questions.push({
-        id,
-        type,
-        content: questionContent,
-        options: options.length > 0 ? options : undefined,
-        answer,
-      });
-    });
-
-    return questions;
+  // 解析 JSON 内容
+  const parseQuestions = (jsonContent: string): ParsedQuestion[] => {
+    if (!jsonContent) return [];
+    try {
+      return parseQuestionSetData(jsonContent).questions.map((q) => ({
+        id: `q${q.number}`,
+        type: q.type,
+        content: q.content,
+        options: q.options ?? undefined,
+        answer: q.answer || undefined,
+      }));
+    } catch (e) {
+      console.error('试题 JSON 解析失败', e);
+      return [];
+    }
   };
 
   // 加载数据
@@ -116,7 +92,7 @@ export function TeacherAnswersPage() {
       ]);
 
       setQuestionSetTitle(contentRes.data.title);
-      setQuestions(parseQuestions(contentRes.data.markdown_content));
+      setQuestions(parseQuestions(contentRes.data.json_content));
       setAnswers(answersRes.data);
     } catch (error) {
       toast.error('加载数据失败');

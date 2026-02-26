@@ -1,8 +1,7 @@
-"""QuestionAgent —— 依据 QuestionTask 生成题目"""
+"""QuestionAgent —— 依据 QuestionTask 生成题目（JSON 输出）"""
 
 import json
 import logging
-import re
 
 from langchain_openai import ChatOpenAI
 
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 _CHOICE_TYPES = {"single_choice", "multiple_choice"}
 _FILL_TYPES = {"fill_blank"}
+_MAX_JSON_RETRY = 3
 
 
 def _build_examples_text(task: QuestionTask) -> str:
@@ -43,112 +43,57 @@ def _build_retry_section(task: QuestionTask) -> str:
     return RETRY_SECTION_TEMPLATE.format(retry_feedback=task.retry_feedback)
 
 
-def _parse_choice_question(markdown: str, task: QuestionTask) -> GeneratedQuestion:
-    """从 Markdown 中提取选择题各字段（单选 / 多选）"""
-    content_match = re.search(
-        r"\*\*题目内容\*\*[：:]\s*(.+?)(?=\n\*\*|$)", markdown, re.DOTALL
-    )
-    question_text = content_match.group(1).strip() if content_match else markdown[:500]
+def _strip_json_wrapper(raw: str) -> str:
+    """剥除 LLM 可能输出的 ```json ... ``` 包裹。"""
+    text = raw.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        inner: list[str] = []
+        in_block = False
+        for line in lines:
+            if line.startswith("```") and not in_block:
+                in_block = True
+                continue
+            if line.startswith("```") and in_block:
+                break
+            if in_block:
+                inner.append(line)
+        text = "\n".join(inner)
+    return text
 
-    options: dict[str, str] = {}
-    for letter in "ABCD":
-        opt_match = re.search(
-            rf"\*\*选项\s*{letter}\*\*[：:]\s*(.+?)(?=\n\*\*|$)", markdown, re.DOTALL
-        )
-        if opt_match:
-            options[letter] = opt_match.group(1).strip()
 
-    # 捕获答案：支持单字母（单选）和多字母（多选），并去重排序
-    answer_match = re.search(
-        r"\*\*正确答案\*\*[：:]\s*([A-Da-d][A-Da-d\s、,]*)", markdown
-    )
-    if answer_match:
-        raw_ans = answer_match.group(1).upper()
-        letters = re.findall(r"[A-D]", raw_ans)
-        correct_answer = "".join(sorted(set(letters))) if letters else "A"
-    else:
-        correct_answer = "A"
+def _parse_question_json(raw: str, task: QuestionTask) -> GeneratedQuestion:
+    """解析 LLM 返回的 JSON，构建 GeneratedQuestion。"""
+    text = _strip_json_wrapper(raw)
+    data = json.loads(text)
 
-    explanation_match = re.search(r"\*\*解析\*\*[：:]\s*(.+?)$", markdown, re.DOTALL)
-    explanation = explanation_match.group(1).strip() if explanation_match else ""
+    content: str = data.get("content") or data.get("question_text", "")
+    options_raw = data.get("options")
+    options: dict[str, str] | None = None
+    if options_raw and isinstance(options_raw, list):
+        options = {item["key"]: item["value"] for item in options_raw if "key" in item}
+    elif options_raw and isinstance(options_raw, dict):
+        options = options_raw
+
+    answer: str = str(data.get("answer") or "")
+    if task.question_type in _CHOICE_TYPES and answer:
+        # 规范化：大写 + 排序去重
+        letters = sorted(set(c.upper() for c in answer if c.upper() in "ABCDE"))
+        answer = "".join(letters) if letters else answer.upper()
+
+    explanation: str = data.get("explanation") or data.get("analysis", "")
+    scoring_points: str | None = data.get("scoring_points") or data.get("scoring_point")
 
     return GeneratedQuestion(
         task_id=task.task_id,
         question_type=task.question_type,
-        question_text=question_text,
+        question_text=content,
         options=options if options else None,
-        correct_answer=correct_answer,
+        correct_answer=answer,
         explanation=explanation,
+        scoring_points=scoring_points if scoring_points else None,
         knowledge_point=task.knowledge_point,
         target_difficulty_level=task.target_difficulty_level,
-        raw_markdown=markdown,
-    )
-
-
-def _parse_fill_blank_question(markdown: str, task: QuestionTask) -> GeneratedQuestion:
-    """从 Markdown 中提取填空题各字段（答案为文本而非字母）"""
-    content_match = re.search(
-        r"\*\*题目内容\*\*[：:]\s*(.+?)(?=\n\*\*|$)", markdown, re.DOTALL
-    )
-    question_text = content_match.group(1).strip() if content_match else markdown[:500]
-
-    # 填空题答案是文本，不限于字母
-    answer_match = re.search(
-        r"\*\*正确答案\*\*[：:]\s*(.+?)(?=\n\*\*|$)", markdown, re.DOTALL
-    )
-    correct_answer = answer_match.group(1).strip() if answer_match else ""
-
-    explanation_match = re.search(r"\*\*解析\*\*[：:]\s*(.+?)$", markdown, re.DOTALL)
-    explanation = explanation_match.group(1).strip() if explanation_match else ""
-
-    return GeneratedQuestion(
-        task_id=task.task_id,
-        question_type=task.question_type,
-        question_text=question_text,
-        options=None,
-        correct_answer=correct_answer,
-        explanation=explanation,
-        knowledge_point=task.knowledge_point,
-        target_difficulty_level=task.target_difficulty_level,
-        raw_markdown=markdown,
-    )
-
-
-def _parse_short_answer_question(
-    markdown: str, task: QuestionTask
-) -> GeneratedQuestion:
-    """从 Markdown 中提取主观题各字段"""
-    content_match = re.search(
-        r"\*\*题目内容\*\*[：:]\s*(.+?)(?=\n\*\*|$)", markdown, re.DOTALL
-    )
-    question_text = content_match.group(1).strip() if content_match else markdown[:800]
-
-    answer_match = re.search(
-        r"\*\*参考答案\*\*[：:]\s*(.+?)(?=\n\*\*评分要点|\n\*\*解析|$)",
-        markdown,
-        re.DOTALL,
-    )
-    correct_answer = answer_match.group(1).strip() if answer_match else ""
-
-    scoring_match = re.search(
-        r"\*\*评分要点\*\*[：:]\s*([\s\S]+?)(?=\n\*\*解析|$)", markdown
-    )
-    scoring_points = scoring_match.group(1).strip() if scoring_match else None
-
-    explanation_match = re.search(r"\*\*解析\*\*[：:]\s*(.+?)$", markdown, re.DOTALL)
-    explanation = explanation_match.group(1).strip() if explanation_match else ""
-
-    return GeneratedQuestion(
-        task_id=task.task_id,
-        question_type=task.question_type,
-        question_text=question_text,
-        options=None,
-        correct_answer=correct_answer,
-        explanation=explanation,
-        scoring_points=scoring_points,
-        knowledge_point=task.knowledge_point,
-        target_difficulty_level=task.target_difficulty_level,
-        raw_markdown=markdown,
     )
 
 
@@ -164,7 +109,7 @@ class QuestionAgent:
         )
 
     async def run(self, task: QuestionTask, tracer=None) -> GeneratedQuestion:
-        """生成单道题目"""
+        """生成单道题目，输出解析后的 GeneratedQuestion。"""
         is_choice = task.question_type in _CHOICE_TYPES
         examples_text = _build_examples_text(task)
         retry_section = _build_retry_section(task)
@@ -188,7 +133,7 @@ class QuestionAgent:
         )
 
         if is_choice:
-            rag_or_norag = (
+            user_prompt = (
                 QUESTION_AGENT_USER_RAG.format(
                     rag_context=task.rag_context, **common_kwargs
                 )
@@ -196,7 +141,7 @@ class QuestionAgent:
                 else QUESTION_AGENT_USER_NO_RAG.format(**common_kwargs)
             )
         elif task.question_type in _FILL_TYPES:
-            rag_or_norag = (
+            user_prompt = (
                 QUESTION_AGENT_USER_FILL_BLANK_RAG.format(
                     rag_context=task.rag_context, **common_kwargs
                 )
@@ -204,19 +149,19 @@ class QuestionAgent:
                 else QUESTION_AGENT_USER_FILL_BLANK_NO_RAG.format(**common_kwargs)
             )
         else:
-            rag_or_norag_label = (
+            rag_label = (
                 "课程知识库相关内容（请在此范围内出题）：\n" + task.rag_context
                 if task.rag_context
                 else "（无课程知识库，请按高考标准出题）"
             )
-            rag_or_norag = QUESTION_AGENT_USER_SHORT_ANSWER.format(
-                rag_or_norag=rag_or_norag_label,
+            user_prompt = QUESTION_AGENT_USER_SHORT_ANSWER.format(
+                rag_or_norag=rag_label,
                 **common_kwargs,
             )
 
         messages = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": rag_or_norag},
+            {"role": "user", "content": user_prompt},
         ]
 
         span_id = None
@@ -225,19 +170,35 @@ class QuestionAgent:
                 agent="QuestionAgent",
                 model=self.model_name,
                 system_prompt=system_prompt,
-                user_prompt=rag_or_norag,
+                user_prompt=user_prompt,
                 position_index=task.position_index,
             )
 
-        resp = await self.llm.ainvoke(messages)
-        markdown = resp.content.strip()
+        last_error: Exception | None = None
+        for attempt in range(_MAX_JSON_RETRY):
+            resp = await self.llm.ainvoke(messages)
+            raw = resp.content.strip()
+
+            try:
+                question = _parse_question_json(raw, task)
+                if tracer is not None and span_id:
+                    tracer.end_span(span_id, output=raw)
+                return question
+            except (json.JSONDecodeError, KeyError, ValueError) as e:
+                last_error = e
+                logger.warning(
+                    f"QuestionAgent JSON 解析失败（第 {attempt + 1} 次），pos={task.position_index}: {e}"
+                )
+                messages.append({"role": "assistant", "content": raw})
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": f"你的输出不是合法 JSON，解析错误：{e}。请只输出合法 JSON 对象，不要有任何其他文字。",
+                    }
+                )
 
         if tracer is not None and span_id:
-            tracer.end_span(span_id, output=markdown)
-
-        if is_choice:
-            return _parse_choice_question(markdown, task)
-        elif task.question_type in _FILL_TYPES:
-            return _parse_fill_blank_question(markdown, task)
-        else:
-            return _parse_short_answer_question(markdown, task)
+            tracer.end_span(span_id, output=f"[JSON 解析失败: {last_error}]")
+        raise ValueError(
+            f"QuestionAgent JSON 解析连续 {_MAX_JSON_RETRY} 次失败，pos={task.position_index}: {last_error}"
+        )

@@ -93,7 +93,6 @@ class GeneratedQuestion(BaseModel):
     scoring_points: str | None = None  # 简答题评分要点
     knowledge_point: str
     target_difficulty_level: str
-    raw_markdown: str  # 兼容现有 Markdown 格式
 
 
 # ---------------------------------------------------------------------------
@@ -158,8 +157,21 @@ class AssembleInput(BaseModel):
     difficulty_results: list[DifficultyResult]
 
 
+class AssembledQuestion(BaseModel):
+    """组装后试卷中的单道题（含难度系数）"""
+
+    number: int
+    type: str
+    content: str
+    options: list[dict] | None = None  # [{"key": "A", "value": "..."}, ...]
+    answer: str
+    explanation: str
+    scoring_points: str | None = None
+    difficulty_coefficient: float | None = None
+
+
 class AssembleResult(BaseModel):
-    markdown_content: str
+    json_content: str  # 完整试卷 JSON 字符串
     title: str
     warnings: list[str] = Field(default_factory=list)
 

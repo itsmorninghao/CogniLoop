@@ -33,7 +33,21 @@ class QualityCheckAgent:
         tracer=None,
         position_index: int | None = None,
     ) -> QualityCheckResult:
-        user_prompt = QUALITY_CHECK_USER.format(question_markdown=question.raw_markdown)
+        question_json = json.dumps(
+            {
+                "type": question.question_type,
+                "content": question.question_text,
+                "options": (
+                    [{"key": k, "value": v} for k, v in question.options.items()]
+                    if question.options
+                    else None
+                ),
+                "answer": question.correct_answer,
+                "explanation": question.explanation,
+            },
+            ensure_ascii=False,
+        )
+        user_prompt = QUALITY_CHECK_USER.format(question_json=question_json)
 
         span_id = None
         if tracer is not None:
@@ -72,5 +86,5 @@ class QualityCheckAgent:
             return QualityCheckResult(
                 task_id=question.task_id,
                 passed=True,
-                rejection_reasons=[f"质检服务异常（已降级放行）: {e}"],
+                rejection_reasons=[f"质检服务异常,降级放行: {e}"],
             )

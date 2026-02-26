@@ -125,7 +125,7 @@ async def get_question_set_content(
     return QuestionSetContentResponse(
         id=question_set.id,
         title=question_set.title,
-        markdown_content=content,
+        json_content=content,
     )
 
 
