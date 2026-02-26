@@ -25,6 +25,7 @@ import {
   MessageSquare,
   CheckCircle2,
 } from 'lucide-react';
+import { MarkdownWithLatex } from '@/components/MarkdownWithLatex';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -531,9 +532,11 @@ export function PlazaDiscover() {
                             </div>
 
                             <div className="mb-8">
-                              <h3 className="text-lg font-semibold mb-4 leading-relaxed">
-                                {parsedQuestions[currentQIdx].content}
-                              </h3>
+                              <div className="text-lg font-semibold mb-4 leading-relaxed">
+                                <MarkdownWithLatex compact>
+                                  {parsedQuestions[currentQIdx].content}
+                                </MarkdownWithLatex>
+                              </div>
                             </div>
 
                             {parsedQuestions[currentQIdx].options && parsedQuestions[currentQIdx].options!.length > 0 && (
@@ -547,7 +550,9 @@ export function PlazaDiscover() {
                                         {opt.key}
                                       </div>
                                       <div className="flex-1 pt-2">
-                                        <p>{opt.value}</p>
+                                        <MarkdownWithLatex compact>
+                                          {opt.value}
+                                        </MarkdownWithLatex>
                                       </div>
                                     </div>
                                   ))}
