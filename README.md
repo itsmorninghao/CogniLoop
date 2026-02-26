@@ -6,6 +6,8 @@
 
 该项目目前正在开发阶段，后续会不断完善功能和优化体验。如果您遇到任何问题，欢迎提交 issue，我很乐意帮助您！
 
+> **声明**：本系统的核心定位是教育辅助，绝不作为任何形式的高考"押题"工具。我的初衷只是单纯地希望，无论是城市还是偏远地区的学生，都能用上先进的 AI 教育工具，体验到高质量的定制化练习。
+
 **在线演示**：https://cogniloop.morninghao.online
 
 ## 快速开始
@@ -40,6 +42,8 @@ docker-compose up -d --build
 
 首次访问任意地址（如 http://localhost:8000 ）时，系统会要求先创建超级管理员账户。按页面提示填写用户名、邮箱、密码等信息即可。创建完成后即可正常使用系统。
 
+> 如需使用**高考组卷**功能，还需完成真题库导入、教师授权和 Agent 参数配置，详见 [高考组卷功能配置指南](docs/gaokao-setup.md)。
+
 五、 配置 LLM 和 Embedding 模型
 
 使用刚创建的管理员账号登录管理员后台 http://localhost:8000/admin/login ，在「系统配置」页面填写：
@@ -69,9 +73,9 @@ docker-compose up -d --build
 
 ![试题预览-选择题](assets/teacher-question-preview-choice.png)
 
-![试题预览-简答题](assets/teacher-question-preview-essay.png)
+![高考组卷结果](assets/teacher-gaokao-paper-result.png)
 
-![学生课程列表](assets/student-courses.png)
+![生成题目全链路 Agent 追踪](assets/teacher-agent-tracing.png)
 
 ![待做试题](assets/student-pending-tests.png)
 
@@ -86,6 +90,7 @@ docker-compose up -d --build
 ## 开发计划
 
 - [x] 题目广场，教师生成试题可以共享到广场，答题后参与排行榜排行
+- [x] 仿高考组题组组题功能
 - [ ] 根据答题情况生成学生画像，做到每位同学的每一套题都是个性化定制的，而不是千篇一律的
 - [ ] 支持教师设置答题时间
 
