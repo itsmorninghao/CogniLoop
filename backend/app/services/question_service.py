@@ -71,6 +71,36 @@ class QuestionService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
+    async def get_all_teacher_question_sets(self, teacher_id: int) -> list[dict]:
+        """获取教师的全部试题集（含课程名称）"""
+        from backend.app.models.course import Course
+
+        stmt = (
+            select(QuestionSet, Course.name.label("course_name"))
+            .join(Course, QuestionSet.course_id == Course.id)
+            .where(QuestionSet.teacher_id == teacher_id)
+            .order_by(QuestionSet.created_at.desc())
+        )
+        result = await self.session.execute(stmt)
+        rows = result.all()
+        output = []
+        for qs, course_name in rows:
+            d = {
+                "id": qs.id,
+                "title": qs.title,
+                "description": qs.description,
+                "course_id": qs.course_id,
+                "course_name": course_name,
+                "teacher_id": qs.teacher_id,
+                "is_public": qs.is_public,
+                "status": qs.status,
+                "shared_to_plaza_at": qs.shared_to_plaza_at,
+                "created_at": qs.created_at,
+                "updated_at": qs.updated_at,
+            }
+            output.append(d)
+        return output
+
     async def get_question_set_content(self, question_set_id: int) -> str | None:
         """获取试题集 Markdown 内容"""
         question_set = await self.get_question_set_by_id(question_set_id)
@@ -343,7 +373,10 @@ class QuestionService:
         """删除试题集（包括相关的分配记录和答案）"""
         from pathlib import Path
 
+        from sqlalchemy import update
+
         from backend.app.models.answer import Answer
+        from backend.app.models.exam_paper import ExamPaperGenerationJob
 
         # 1. 删除相关的答案记录
         delete_answers_stmt = Answer.__table__.delete().where(
@@ -357,18 +390,25 @@ class QuestionService:
         )
         await self.session.execute(delete_sqs_stmt)
 
-        # 3. 获取并删除试题集
+        # 3. 解除高考组卷任务对该 QS 的外键引用（避免 FK 冲突）
+        await self.session.execute(
+            update(ExamPaperGenerationJob)
+            .where(ExamPaperGenerationJob.question_set_id == question_set_id)
+            .values(question_set_id=None)
+        )
+
+        # 4. 获取并删除试题集
         question_set = await self.get_question_set_by_id(question_set_id)
         if not question_set:
             return False
 
-        # 4. 删除 markdown 文件
+        # 5. 删除 markdown 文件
         if question_set.markdown_path:
             file_path = Path(question_set.markdown_path)
             if file_path.exists():
                 file_path.unlink()
 
-        # 5. 删除数据库记录
+        # 6. 删除数据库记录
         await self.session.delete(question_set)
         await self.session.flush()
         return True

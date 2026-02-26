@@ -14,6 +14,15 @@ export interface QuestionSet {
   updated_at: string;
 }
 
+export interface QuestionSetWithCourse extends QuestionSet {
+  course_name: string;
+}
+
+export interface QuestionSetAllResponse {
+  question_sets: QuestionSetWithCourse[];
+  total: number;
+}
+
 export interface GenerateQuestionRequest {
   course_id: number;
   natural_language_request: string;
@@ -72,11 +81,15 @@ export const questionApi = {
   assign: (questionSetId: number, data: AssignQuestionRequest) =>
     api.post(`/question/${questionSetId}/assign`, data),
 
-  // 获取试题集列表
+  // 获取试题集列表（按课程）
   list: (courseId: number) =>
     api.get<QuestionSetListResponse>('/question/list', {
       params: { course_id: courseId },
     }),
+
+  // 获取全部试题集（跨课程，含课程名称）
+  listAll: () =>
+    api.get<QuestionSetAllResponse>('/question/list-all'),
 
   // 发布试题集
   publish: (questionSetId: number) =>

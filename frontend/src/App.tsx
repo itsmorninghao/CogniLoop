@@ -8,7 +8,8 @@ import { SetupGuard } from '@/components/SetupGuard';
 import { HomePage } from '@/pages/HomePage';
 import { LoginPage } from '@/pages/LoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
-import { TeacherDashboard, KnowledgeBasePage, QuestionGeneratorPage, TeacherAnswersPage } from '@/pages/teacher';
+import { TeacherDashboard, KnowledgeBasePage, QuestionGeneratorPage, TeacherAnswersPage, ExamPaperGeneratorPage } from '@/pages/teacher';
+import { MyPapersPage } from '@/pages/teacher/MyPapers';
 import { StudentCoursesPage, StudentTestsPage, StudentExamPage, PendingTestsPage } from '@/pages/student';
 import { PlazaDiscover, PlazaMyAttempts, PlazaMyShared } from '@/pages/plaza';
 import {
@@ -21,6 +22,8 @@ import {
   AdminManagementPage,
   SystemSettingsPage,
 } from '@/pages/admin';
+import { ExamPermissionsPage } from '@/pages/admin/ExamPermissions';
+import { ExamDataImportPage } from '@/pages/admin/ExamDataImport';
 
 export function App() {
   return (
@@ -63,6 +66,8 @@ export function App() {
           <Route path="courses" element={<CourseManagementPage />} />
           <Route path="settings" element={<SystemSettingsPage />} />
           <Route path="admins" element={<AdminManagementPage />} />
+          <Route path="exam-permissions" element={<ExamPermissionsPage />} />
+          <Route path="exam-import" element={<ExamDataImportPage />} />
         </Route>
 
         {/* Teacher Routes */}
@@ -77,6 +82,8 @@ export function App() {
           <Route index element={<TeacherDashboard />} />
           <Route path="knowledge" element={<KnowledgeBasePage />} />
           <Route path="questions" element={<QuestionGeneratorPage />} />
+          <Route path="exam-paper" element={<ExamPaperGeneratorPage />} />
+          <Route path="my-papers" element={<MyPapersPage />} />
           <Route path="answers/:questionSetId" element={<TeacherAnswersPage />} />
           <Route path="plaza" element={<PlazaDiscover />} />
           <Route path="plaza/my-attempts" element={<PlazaMyAttempts />} />

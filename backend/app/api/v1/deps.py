@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -163,9 +163,57 @@ async def get_optional_user(
     return None
 
 
+async def get_teacher_token_from_any(
+    request: Request,
+    session: SessionDep,
+    token: str | None = Query(default=None, description="SSE 专用：query param token"),
+) -> Teacher:
+    """支持 Bearer header 或 ?token= query param（SSE/EventSource 专用）"""
+    raw_token: str | None = None
+
+    # 1. 优先从 Authorization header 读取
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        raw_token = auth_header[7:]
+
+    # 2. 回退到 query param（EventSource 不支持自定义 header）
+    if not raw_token and token:
+        raw_token = token
+
+    if not raw_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="未提供认证令牌",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    payload = decode_access_token(raw_token)
+    if not payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="无效的认证令牌",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if payload.get("type") != "teacher":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="需要教师权限"
+        )
+
+    auth_service = AuthService(session)
+    teacher = await auth_service.get_teacher_by_id(int(payload["sub"]))
+    if not teacher or not teacher.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在或已禁用"
+        )
+    return teacher
+
+
 CurrentTeacher = Annotated[Teacher, Depends(get_current_teacher)]
 CurrentStudent = Annotated[Student, Depends(get_current_student)]
 CurrentAdmin = Annotated[Admin, Depends(get_current_admin)]
 CurrentSuperAdmin = Annotated[Admin, Depends(get_current_super_admin)]
 CurrentUser = Annotated[Student | Teacher, Depends(get_current_user)]
 OptionalUser = Annotated[Student | Teacher | None, Depends(get_optional_user)]
+# SSE 专用：支持 Authorization header 和 ?token= query param
+SSETeacher = Annotated[Teacher, Depends(get_teacher_token_from_any)]

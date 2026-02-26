@@ -6,13 +6,21 @@ export interface ConfigItem {
   key: string;
   value: string;
   label: string;
-  type: 'string' | 'integer';
+  type: 'string' | 'integer' | 'password' | 'json';
+  description: string;
+}
+
+/** Agent 信息（能力描述） */
+export interface AgentInfo {
+  name: string;
   description: string;
 }
 
 /** 配置分组（包含分组名称和配置项列表） */
 export interface ConfigGroup {
   label: string;
+  description?: string;
+  agent_info?: Record<string, AgentInfo>;
   items: ConfigItem[];
 }
 

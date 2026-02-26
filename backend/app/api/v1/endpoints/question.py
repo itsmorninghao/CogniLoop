@@ -159,6 +159,17 @@ async def assign_question_set(
     return {"message": f"已分配给 {len(assignments)} 名学生"}
 
 
+@router.get("/list-all")
+async def list_all_question_sets(
+    session: SessionDep,
+    teacher: CurrentTeacher,
+) -> dict:
+    """获取当前教师的全部试题集（跨课程，含课程名称）"""
+    question_service = QuestionService(session)
+    items = await question_service.get_all_teacher_question_sets(teacher.id)
+    return {"question_sets": items, "total": len(items)}
+
+
 @router.get("/list", response_model=QuestionSetListResponse)
 async def list_question_sets(
     course_id: int,

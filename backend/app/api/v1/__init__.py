@@ -9,6 +9,7 @@ from backend.app.api.v1.endpoints import (
     config,
     course,
     document,
+    exam_paper,
     plaza,
     question,
     statistics,
@@ -33,3 +34,7 @@ api_router.include_router(answer.router, prefix="/answer", tags=["答案"])
 api_router.include_router(plaza.router, prefix="/plaza", tags=["题目广场"])
 api_router.include_router(statistics.router, prefix="/statistics", tags=["统计"])
 api_router.include_router(config.router, prefix="/admin", tags=["系统配置"])
+api_router.include_router(exam_paper.router, prefix="/exam-paper", tags=["仿高考组卷"])
+api_router.include_router(
+    exam_paper.admin_router, prefix="/admin/exam-paper", tags=["管理员-组卷权限"]
+)

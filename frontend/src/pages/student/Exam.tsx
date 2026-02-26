@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { MarkdownWithLatex } from '@/components/MarkdownWithLatex';
 import { useParams, Link, useLocation } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -433,7 +434,7 @@ export function StudentExamPage() {
                 className={`flex-1 cursor-pointer p-3 rounded-lg border transition-colors ${optionClass}`}
               >
                 <span className="font-medium mr-2">{opt.key}.</span>
-                {opt.value}
+                <MarkdownWithLatex compact>{opt.value}</MarkdownWithLatex>
                 {showResults && gradingResult && opt.key === gradingResult.correct_answer && (
                   <CheckCircle className="w-4 h-4 text-success inline ml-2" />
                 )}
@@ -486,7 +487,7 @@ export function StudentExamPage() {
                 disabled={!isEditable}
               />
               <span className="font-medium mr-2">{opt.key}.</span>
-              <span className="flex-1">{opt.value}</span>
+              <span className="flex-1"><MarkdownWithLatex compact>{opt.value}</MarkdownWithLatex></span>
             </Label>
           );
         })}
@@ -657,7 +658,7 @@ export function StudentExamPage() {
                   </span>
                 </div>
                 <CardTitle className="mt-4 text-lg leading-relaxed">
-                  {currentQuestion.content}
+                  <MarkdownWithLatex compact>{currentQuestion.content}</MarkdownWithLatex>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-6">

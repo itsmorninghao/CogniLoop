@@ -8,6 +8,8 @@ import {
   LogOut,
   Crown,
   Settings,
+  BookMarked,
+  Database,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/stores/auth';
@@ -28,6 +30,8 @@ export function AdminLayout() {
     { to: '/admin/teachers', icon: GraduationCap, label: '教师管理' },
     { to: '/admin/students', icon: Users, label: '学生管理' },
     { to: '/admin/courses', icon: BookOpen, label: '课程管理' },
+    { to: '/admin/exam-permissions', icon: BookMarked, label: '组卷授权' },
+    { to: '/admin/exam-import', icon: Database, label: '真题库导入' },
     { to: '/admin/settings', icon: Settings, label: '系统配置' },
     ...(user?.is_super_admin
       ? [{ to: '/admin/admins', icon: Crown, label: '管理员' }]

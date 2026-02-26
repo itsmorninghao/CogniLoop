@@ -5,6 +5,13 @@ from backend.app.models.answer import Answer, AnswerStatus
 from backend.app.models.captcha_store import CaptchaStore
 from backend.app.models.course import Course
 from backend.app.models.document import Document, DocumentStatus, FileType
+from backend.app.models.exam_paper import (
+    ExamPaper,
+    ExamPaperGenerationJob,
+    ExamQuestion,
+    ExamQuestionDraftLog,
+    TeacherExamPermission,
+)
 from backend.app.models.knowledge_chunk import KnowledgeChunk
 from backend.app.models.question_set import QuestionSet, QuestionSetStatus
 from backend.app.models.student import Student
@@ -22,6 +29,10 @@ __all__ = [
     "Course",
     "Document",
     "DocumentStatus",
+    "ExamPaper",
+    "ExamPaperGenerationJob",
+    "ExamQuestion",
+    "ExamQuestionDraftLog",
     "FileType",
     "KnowledgeChunk",
     "QuestionSet",
@@ -31,4 +42,5 @@ __all__ = [
     "StudentQuestionSet",
     "SystemConfig",
     "Teacher",
+    "TeacherExamPermission",
 ]

@@ -13,6 +13,8 @@ import {
   ClipboardList,
   Clock,
   Globe,
+  BookMarked,
+  FolderOpen,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth';
 import { cn } from '@/lib/utils';
@@ -28,6 +30,8 @@ const teacherNavItems: NavItem[] = [
   { to: '/teacher', label: '仪表盘', icon: LayoutDashboard, end: true },
   { to: '/teacher/knowledge', label: '知识库', icon: FileText },
   { to: '/teacher/questions', label: '生成试题', icon: Sparkles },
+  { to: '/teacher/exam-paper', label: '高考组卷', icon: BookMarked },
+  { to: '/teacher/my-papers', label: '我的试卷', icon: FolderOpen },
   { to: '/teacher/plaza', label: '题目广场', icon: Globe },
 ];
 
