@@ -10,11 +10,15 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     full_name: str = Field(min_length=1, max_length=100)
+    captcha_id: str
+    captcha_answer: str
 
 
 class LoginRequest(BaseModel):
     username: str
     password: str
+    captcha_id: str
+    captcha_answer: str
 
 
 class TokenResponse(BaseModel):

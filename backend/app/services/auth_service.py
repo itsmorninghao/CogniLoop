@@ -3,7 +3,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
+from backend.app.core.captcha import verify_captcha
 from backend.app.core.exceptions import AlreadyExistsError, BadRequestError
+from backend.app.core.ip_block import is_ip_blocked, record_login_failure, record_login_success
 from backend.app.core.security import (
     create_access_token,
     hash_password,
@@ -48,8 +50,16 @@ async def setup_admin(req: RegisterRequest, session: AsyncSession) -> UserRespon
     return UserResponse.model_validate(user)
 
 
-async def register_user(req: RegisterRequest, session: AsyncSession) -> UserResponse:
-    # Check username uniqueness
+async def register_user(req: RegisterRequest, session: AsyncSession, client_ip: str) -> UserResponse:
+    # Step 1: IP blocked?
+    if await is_ip_blocked(client_ip):
+        raise BadRequestError("您的 IP 已被临时封锁，请稍后再试或联系管理员")
+
+    # Step 2: Captcha valid?
+    if not await verify_captcha(req.captcha_id, req.captcha_answer):
+        raise BadRequestError("验证码错误或已过期")
+
+    # Step 3: Check username / email uniqueness
     existing = await session.execute(
         select(User).where((User.username == req.username) | (User.email == req.email))
     )
@@ -68,16 +78,28 @@ async def register_user(req: RegisterRequest, session: AsyncSession) -> UserResp
     return UserResponse.model_validate(user)
 
 
-async def login_user(req: LoginRequest, session: AsyncSession) -> TokenResponse:
+async def login_user(req: LoginRequest, session: AsyncSession, client_ip: str) -> TokenResponse:
+    # Step 1: IP blocked?
+    if await is_ip_blocked(client_ip):
+        raise BadRequestError("您的 IP 已被临时封锁，请稍后再试或联系管理员")
+
+    # Step 2: Captcha valid?
+    if not await verify_captcha(req.captcha_id, req.captcha_answer):
+        raise BadRequestError("验证码错误或已过期")
+
+    # Step 3: Credentials
     result = await session.execute(
         select(User).where(User.username == req.username)
     )
     user = result.scalar_one_or_none()
     if not user or not verify_password(req.password, user.hashed_password):
+        await record_login_failure(client_ip, req.username)
         raise BadRequestError("Invalid username or password")
     if not user.is_active:
         raise BadRequestError("Account is disabled")
 
+    # Step 4: Success — reset failure counter + record history
+    await record_login_success(client_ip, req.username)
     token = create_access_token(data={"sub": str(user.id)})
     return TokenResponse(access_token=token)
 

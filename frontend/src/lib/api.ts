@@ -20,14 +20,28 @@ async function request<T>(
         ...((options.headers as Record<string, string>) || {}),
     }
 
-    const res = await fetch(`${BASE_URL}${path}`, {
-        ...options,
-        headers,
-    })
+    let res: Response
+    try {
+        res = await fetch(`${BASE_URL}${path}`, {
+            ...options,
+            headers,
+        })
+    } catch {
+        throw new ApiError(0, '无法连接到服务器，请检查网络连接')
+    }
 
     if (!res.ok) {
         const body = await res.json().catch(() => ({ detail: res.statusText }))
-        throw new ApiError(res.status, body.detail || '请求失败')
+        let message: string
+        if (res.status === 422 && Array.isArray(body.detail)) {
+            const first = body.detail[0]
+            message = first?.msg || '输入内容格式有误'
+        } else if (res.status >= 500) {
+            message = '服务器错误，请稍后重试'
+        } else {
+            message = typeof body.detail === 'string' ? body.detail : '请求失败'
+        }
+        throw new ApiError(res.status, message)
     }
 
     // 204 No Content
@@ -43,11 +57,16 @@ async function upload<T>(path: string, file: File, fieldName = 'file'): Promise<
     const form = new FormData()
     form.append(fieldName, file)
 
-    const res = await fetch(`${BASE_URL}${path}`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: form,
-    })
+    let res: Response
+    try {
+        res = await fetch(`${BASE_URL}${path}`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: form,
+        })
+    } catch {
+        throw new ApiError(0, '无法连接到服务器，请检查网络连接')
+    }
 
     if (!res.ok) {
         const body = await res.json().catch(() => ({ detail: res.statusText }))
@@ -507,6 +526,17 @@ export const adminApi = {
         return api.get<AdminCircleItem[]>(url)
     },
     deleteCircle: (id: number) => api.delete(`/admin/circles/${id}`),
+    listBlockedIps: () =>
+        api.get<{ ip: string; ttl_seconds: number; fail_count: number }[]>('/admin/blocked-ips'),
+    unblockIp: (ip: string) => api.delete(`/admin/blocked-ips/${encodeURIComponent(ip)}`),
+    blockIp: (ip: string) => api.post(`/admin/blocked-ips/${encodeURIComponent(ip)}`),
+    loginHistory: (limit = 100) =>
+        api.get<{ ip: string; username: string; success: boolean; timestamp: string }[]>(
+            `/admin/login-history?limit=${limit}`
+        ),
+    getIpBlockConfig: () => api.get<{ enabled: boolean }>('/admin/ip-block-config'),
+    setIpBlockConfig: (enabled: boolean) =>
+        api.post<{ enabled: boolean }>('/admin/ip-block-config', { enabled }),
 }
 
 // Circle API

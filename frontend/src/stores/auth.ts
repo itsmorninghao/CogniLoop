@@ -22,8 +22,8 @@ interface AuthState {
     user: User | null
     isLoading: boolean
 
-    login: (username: string, password: string) => Promise<void>
-    register: (data: { username: string; email: string; password: string; full_name: string }) => Promise<void>
+    login: (username: string, password: string, captchaId: string, captchaAnswer: string) => Promise<void>
+    register: (data: { username: string; email: string; password: string; full_name: string }, captchaId: string, captchaAnswer: string) => Promise<void>
     logout: () => void
     fetchUser: () => Promise<void>
     setUser: (partial: Partial<User>) => void
@@ -35,8 +35,13 @@ export const useAuthStore = create<AuthState>((set) => ({
     user: null,
     isLoading: true,
 
-    login: async (username, password) => {
-        const res = await api.post<{ access_token: string }>('/auth/login', { username, password })
+    login: async (username, password, captchaId, captchaAnswer) => {
+        const res = await api.post<{ access_token: string }>('/auth/login', {
+            username,
+            password,
+            captcha_id: captchaId,
+            captcha_answer: captchaAnswer,
+        })
         localStorage.setItem('token', res.access_token)  // needed for getAuthHeaders() in next call
         try {
             const user = await api.get<User>('/auth/me')
@@ -47,8 +52,12 @@ export const useAuthStore = create<AuthState>((set) => ({
         }
     },
 
-    register: async (data) => {
-        await api.post('/auth/register', data)
+    register: async (data, captchaId, captchaAnswer) => {
+        await api.post('/auth/register', {
+            ...data,
+            captcha_id: captchaId,
+            captcha_answer: captchaAnswer,
+        })
     },
 
     logout: () => {

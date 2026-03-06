@@ -46,6 +46,11 @@ class Settings(BaseSettings):
     # Encryption
     ENCRYPTION_KEY: str = ""
 
+    # Login brute-force protection
+    LOGIN_MAX_ATTEMPTS: int = 5
+    LOGIN_FAIL_WINDOW_MINUTES: int = 10
+    LOGIN_BLOCK_MINUTES: int = 30
+
     @property
     def upload_path(self) -> Path:
         p = Path(self.UPLOAD_DIR)

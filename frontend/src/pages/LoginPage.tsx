@@ -5,47 +5,99 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuthStore } from '@/stores/auth'
-import { setupApi } from '@/lib/api'
-import { Loader2, Sparkles, Shield, CheckCircle } from 'lucide-react'
+import { api, setupApi, ApiError } from '@/lib/api'
+import { Loader2, Sparkles, Shield, CheckCircle, Eye, EyeOff } from 'lucide-react'
 
 type PageMode = 'loading' | 'setup' | 'login' | 'register'
+
+function translateError(msg: string): string {
+    const map: [string, string][] = [
+        ['Invalid username or password', '用户名或密码错误'],
+        ['Account is disabled', '账号已被禁用，请联系管理员'],
+        ['Username or email already exists', '该用户名或邮箱已被注册'],
+        ['Username or email', '该用户名或邮箱已被注册'],
+        ['System is already set up', '系统已完成初始化，请直接登录'],
+    ]
+    for (const [key, val] of map) {
+        if (msg.includes(key)) return val
+    }
+    return msg
+}
 
 export default function LoginPage() {
     const [mode, setMode] = useState<PageMode>('loading')
     const [form, setForm] = useState({ username: '', email: '', password: '', full_name: '' })
     const [error, setError] = useState('')
+    const [successMsg, setSuccessMsg] = useState('')
     const [loading, setLoading] = useState(false)
     const [setupDone, setSetupDone] = useState(false)
+    const [showPassword, setShowPassword] = useState(false)
+    const [captchaId, setCaptchaId] = useState('')
+    const [captchaSvg, setCaptchaSvg] = useState('')
+    const [captchaAnswer, setCaptchaAnswer] = useState('')
+    const [captchaLoading, setCaptchaLoading] = useState(false)
     const { login, register } = useAuthStore()
     const navigate = useNavigate()
 
     useEffect(() => {
         setupApi.check().then(({ needs_setup }) => {
             setMode(needs_setup ? 'setup' : 'login')
-        }).catch(() => {
+        }).catch((err) => {
             setMode('login')
+            if (err instanceof ApiError && err.status === 0) {
+                setError('无法连接到服务器，请刷新页面后重试')
+            }
         })
     }, [])
 
+    const loadCaptcha = async () => {
+        setCaptchaLoading(true)
+        setCaptchaAnswer('')
+        try {
+            const data = await api.get<{ captcha_id: string; svg: string }>('/auth/captcha')
+            setCaptchaId(data.captcha_id)
+            setCaptchaSvg(data.svg)
+        } finally {
+            setCaptchaLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        if (mode === 'login' || mode === 'register') loadCaptcha()
+    }, [mode])
+
+    function validateForm(): string | null {
+        if (!form.username.trim()) return '请输入用户名'
+        if (mode === 'register' || mode === 'setup') {
+            if (form.username.length < 3) return '用户名至少需要 3 个字符'
+            if (form.username.length > 50) return '用户名不能超过 50 个字符'
+            if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+                return '请输入有效的邮箱地址'
+            if (!form.full_name.trim()) return '请输入姓名'
+        }
+        if (!form.password) return '请输入密码'
+        if (mode !== 'login' && form.password.length < 6) return '密码至少需要 6 个字符'
+        if ((mode === 'login' || mode === 'register') && !captchaAnswer.trim()) return '请输入验证码'
+        return null
+    }
+
     const handleSetup = async (e: React.FormEvent) => {
         e.preventDefault()
+        const validationError = validateForm()
+        if (validationError) { setError(validationError); return }
         setError('')
         setLoading(true)
         try {
             await setupApi.createAdmin(form)
             setSetupDone(true)
-            // Auto-login after 1.5s
-            setTimeout(async () => {
-                try {
-                    await login(form.username, form.password)
-                    navigate('/')
-                } catch {
-                    setMode('login')
-                    setSetupDone(false)
-                }
+            // Transition to login after 1.5s (captcha required, so can't auto-login)
+            setTimeout(() => {
+                setMode('login')
+                setSetupDone(false)
+                setSuccessMsg('管理员账户创建成功！请使用您的账号和密码登录')
             }, 1500)
         } catch (err) {
-            setError(err instanceof Error ? err.message : '创建失败，请重试')
+            setError(translateError(err instanceof Error ? err.message : '创建失败，请重试'))
         } finally {
             setLoading(false)
         }
@@ -53,19 +105,23 @@ export default function LoginPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        const validationError = validateForm()
+        if (validationError) { setError(validationError); return }
         setError('')
+        setSuccessMsg('')
         setLoading(true)
         try {
             if (mode === 'login') {
-                await login(form.username, form.password)
+                await login(form.username, form.password, captchaId, captchaAnswer)
                 navigate('/')
             } else {
-                await register(form)
-                await login(form.username, form.password)
-                navigate('/')
+                await register(form, captchaId, captchaAnswer)
+                setMode('login')
+                setSuccessMsg('注册成功！请使用您的账号和密码登录')
             }
         } catch (err) {
-            setError(err instanceof Error ? err.message : '操作失败，请重试')
+            setError(translateError(err instanceof Error ? err.message : '操作失败，请重试'))
+            if (mode === 'login' || mode === 'register') loadCaptcha()
         } finally {
             setLoading(false)
         }
@@ -78,6 +134,17 @@ export default function LoginPage() {
             </div>
         )
     }
+
+    const passwordToggleBtn = (
+        <button
+            type="button"
+            onClick={() => setShowPassword(v => !v)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            tabIndex={-1}
+        >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+        </button>
+    )
 
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
@@ -110,6 +177,14 @@ export default function LoginPage() {
                     </div>
                 )}
 
+                {/* Success Message */}
+                {successMsg && (
+                    <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400 animate-fade-in">
+                        <CheckCircle className="size-5 shrink-0" />
+                        <span>{successMsg}</span>
+                    </div>
+                )}
+
                 {/* Card */}
                 <div className="rounded-2xl border border-border bg-card/80 p-8 shadow-xl backdrop-blur-sm">
                     {/* Setup mode */}
@@ -134,7 +209,6 @@ export default function LoginPage() {
                                         onChange={(e) => setForm({ ...form, username: e.target.value })}
                                         className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                         placeholder="如 admin"
-                                        required
                                     />
                                 </div>
                                 <div>
@@ -145,7 +219,6 @@ export default function LoginPage() {
                                         onChange={(e) => setForm({ ...form, email: e.target.value })}
                                         className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                         placeholder="admin@example.com"
-                                        required
                                     />
                                 </div>
                                 <div>
@@ -156,20 +229,20 @@ export default function LoginPage() {
                                         onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                                         className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                         placeholder="管理员"
-                                        required
                                     />
                                 </div>
                                 <div>
                                     <label className="mb-1.5 block text-sm font-medium text-foreground">密码</label>
-                                    <input
-                                        type="password"
-                                        value={form.password}
-                                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                        className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                        placeholder="至少 6 位"
-                                        required
-                                        minLength={6}
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={form.password}
+                                            onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                            className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                            placeholder="至少 6 个字符"
+                                        />
+                                        {passwordToggleBtn}
+                                    </div>
                                 </div>
                                 <button
                                     type="submit"
@@ -187,7 +260,7 @@ export default function LoginPage() {
                             {/* Login / Register Tabs */}
                             <div className="mb-6 flex rounded-lg bg-muted p-1">
                                 <button
-                                    onClick={() => setMode('login')}
+                                    onClick={() => { setMode('login'); setError(''); setSuccessMsg('') }}
                                     className={`flex-1 rounded-md py-2.5 text-sm font-medium transition-all duration-200 ${mode === 'login'
                                         ? 'bg-card text-foreground shadow-sm'
                                         : 'text-muted-foreground hover:text-foreground'
@@ -196,7 +269,7 @@ export default function LoginPage() {
                                     登录
                                 </button>
                                 <button
-                                    onClick={() => setMode('register')}
+                                    onClick={() => { setMode('register'); setError(''); setSuccessMsg('') }}
                                     className={`flex-1 rounded-md py-2.5 text-sm font-medium transition-all duration-200 ${mode === 'register'
                                         ? 'bg-card text-foreground shadow-sm'
                                         : 'text-muted-foreground hover:text-foreground'
@@ -221,7 +294,6 @@ export default function LoginPage() {
                                         onChange={(e) => setForm({ ...form, username: e.target.value })}
                                         className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                         placeholder="输入用户名"
-                                        required
                                     />
                                 </div>
 
@@ -235,7 +307,6 @@ export default function LoginPage() {
                                                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                                                 className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                                 placeholder="输入邮箱"
-                                                required
                                             />
                                         </div>
                                         <div>
@@ -246,7 +317,6 @@ export default function LoginPage() {
                                                 onChange={(e) => setForm({ ...form, full_name: e.target.value })}
                                                 className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
                                                 placeholder="输入姓名"
-                                                required
                                             />
                                         </div>
                                     </>
@@ -254,16 +324,40 @@ export default function LoginPage() {
 
                                 <div>
                                     <label className="mb-1.5 block text-sm font-medium text-foreground">密码</label>
-                                    <input
-                                        type="password"
-                                        value={form.password}
-                                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                                        className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                                        placeholder="输入密码"
-                                        required
-                                        minLength={6}
-                                    />
+                                    <div className="relative">
+                                        <input
+                                            type={showPassword ? 'text' : 'password'}
+                                            value={form.password}
+                                            onChange={(e) => setForm({ ...form, password: e.target.value })}
+                                            className="w-full rounded-lg border border-border bg-input-background px-3.5 py-2.5 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                            placeholder={mode === 'login' ? '输入密码' : '至少 6 个字符'}
+                                        />
+                                        {passwordToggleBtn}
+                                    </div>
                                 </div>
+
+                                {(mode === 'login' || mode === 'register') && (
+                                    <div>
+                                        <label className="mb-1.5 block text-sm font-medium text-foreground">验证码</label>
+                                        <div className="flex items-center gap-2">
+                                            <input
+                                                type="text"
+                                                value={captchaAnswer}
+                                                onChange={(e) => setCaptchaAnswer(e.target.value.toUpperCase())}
+                                                className="flex-1 rounded-lg border border-border bg-input-background px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all tracking-widest"
+                                                placeholder="输入验证码"
+                                                maxLength={4}
+                                                autoComplete="off"
+                                            />
+                                            <div
+                                                className={`flex-shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border transition-opacity ${captchaLoading ? 'opacity-40' : 'opacity-100 hover:opacity-80'}`}
+                                                dangerouslySetInnerHTML={{ __html: captchaSvg }}
+                                                onClick={captchaLoading ? undefined : loadCaptcha}
+                                                title="点击刷新验证码"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
 
                                 <button
                                     type="submit"

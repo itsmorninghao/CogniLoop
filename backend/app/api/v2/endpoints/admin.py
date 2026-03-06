@@ -466,3 +466,56 @@ async def admin_delete_circle(
     circle.is_active = False
     session.add(circle)
     await session.commit()
+
+
+# IP Blocking
+
+from backend.app.core.ip_block import (
+    block_ip_manually,
+    get_ip_block_enabled,
+    get_login_history,
+    list_blocked_ips,
+    set_ip_block_enabled,
+    unblock_ip,
+)
+
+
+class IpBlockConfigRequest(BaseModel):
+    enabled: bool
+
+
+@router.get("/ip-block-config")
+async def get_ip_block_config():
+    return {"enabled": await get_ip_block_enabled()}
+
+
+@router.post("/ip-block-config")
+async def update_ip_block_config(req: IpBlockConfigRequest):
+    await set_ip_block_enabled(req.enabled)
+    return {"enabled": req.enabled}
+
+
+@router.get("/blocked-ips")
+async def get_blocked_ips(_: User = Depends(get_admin_user)):
+    return await list_blocked_ips()
+
+
+@router.delete("/blocked-ips/{ip}")
+async def delete_blocked_ip(ip: str, _: User = Depends(get_admin_user)):
+    await unblock_ip(ip)
+    return {"ok": True}
+
+
+@router.post("/blocked-ips/{ip}")
+async def manually_block_ip(ip: str, _: User = Depends(get_admin_user)):
+    """Admin manually blocks an IP for LOGIN_BLOCK_MINUTES."""
+    await block_ip_manually(ip)
+    return {"ok": True}
+
+
+@router.get("/login-history")
+async def get_login_history_endpoint(
+    limit: int = 100, _: User = Depends(get_admin_user)
+):
+    """Recent login attempts (up to 200 records stored in Redis)."""
+    return await get_login_history(limit)
