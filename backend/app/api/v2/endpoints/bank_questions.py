@@ -1,8 +1,8 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
 from backend.app.core.database import get_session
 from backend.app.core.deps import get_current_user
@@ -10,7 +10,10 @@ from backend.app.models.bank_question import BankQuestion
 from backend.app.models.user import User
 from backend.app.services import kb_service
 
-router = APIRouter(prefix="/knowledge-bases/{kb_id}/bank-questions", tags=["Bank Questions"])
+router = APIRouter(
+    prefix="/knowledge-bases/{kb_id}/bank-questions", tags=["Bank Questions"]
+)
+
 
 @router.get("", response_model=dict[str, Any])
 async def list_bank_questions(
@@ -30,13 +33,19 @@ async def list_bank_questions(
         )
 
     # count
-    count_stmt = select(func.count(BankQuestion.id)).where(BankQuestion.knowledge_base_id == kb_id)
+    count_stmt = select(func.count(BankQuestion.id)).where(
+        BankQuestion.knowledge_base_id == kb_id
+    )
     total = (await session.execute(count_stmt)).scalar_one()
 
     # details
-    stmt = select(BankQuestion).where(
-        BankQuestion.knowledge_base_id == kb_id
-    ).order_by(BankQuestion.id.desc()).offset(offset).limit(limit)
+    stmt = (
+        select(BankQuestion)
+        .where(BankQuestion.knowledge_base_id == kb_id)
+        .order_by(BankQuestion.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
 
     questions = (await session.execute(stmt)).scalars().all()
 
@@ -48,10 +57,13 @@ async def list_bank_questions(
                 "question_type": q.question_type,
                 "subject": q.subject,
                 "difficulty": q.difficulty,
-                "content": q.content[:100] + "..." if len(q.content) > 100 else q.content,
+                "content": q.content[:100] + "..."
+                if len(q.content) > 100
+                else q.content,
                 "answer": q.answer[:50] + "..." if len(q.answer) > 50 else q.answer,
                 "source_info": q.source_info,
-                "created_at": q.created_at.isoformat()
-            } for q in questions
-        ]
+                "created_at": q.created_at.isoformat(),
+            }
+            for q in questions
+        ],
     }

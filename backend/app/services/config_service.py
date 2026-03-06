@@ -14,14 +14,13 @@ SENSITIVE_KEYS = {"OPENAI_API_KEY", "EMBEDDING_API_KEY"}
 
 async def get_config(key: str, session: AsyncSession) -> str | None:
     """Get a single config value by key (decrypted if sensitive)."""
-    result = await session.execute(
-        select(SystemConfig).where(SystemConfig.key == key)
-    )
+    result = await session.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if cfg is None:
         return None
     if key in SENSITIVE_KEYS and cfg.value:
         from backend.app.core.encryption import decrypt
+
         return decrypt(cfg.value)
     return cfg.value
 
@@ -40,13 +39,12 @@ async def set_config(
     """Upsert a config entry (encrypts sensitive values)."""
     if key in SENSITIVE_KEYS:
         from backend.app.core.encryption import encrypt
+
         stored_value = encrypt(value)
     else:
         stored_value = value
 
-    result = await session.execute(
-        select(SystemConfig).where(SystemConfig.key == key)
-    )
+    result = await session.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if cfg:
         cfg.value = stored_value
@@ -67,9 +65,7 @@ async def list_configs(session: AsyncSession) -> list[SystemConfig]:
 
 
 async def delete_config(key: str, session: AsyncSession) -> None:
-    result = await session.execute(
-        select(SystemConfig).where(SystemConfig.key == key)
-    )
+    result = await session.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()
     if not cfg:
         raise NotFoundError(f"System config '{key}'")

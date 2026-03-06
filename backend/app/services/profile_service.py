@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.models.profile import UserProfile, ProfileShare
-from backend.app.models.quiz import QuizSession, QuizQuestion, QuizResponse
+from backend.app.models.profile import ProfileShare, UserProfile
+from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 
 
 async def get_or_create_profile(user_id: int, session: AsyncSession) -> UserProfile:
@@ -37,7 +37,9 @@ async def incremental_update(
     with data from the just-completed quiz session.
     """
     profile = await get_or_create_profile(user_id, db)
-    data: dict = dict(profile.profile_data) if profile.profile_data else _empty_profile(user_id)
+    data: dict = (
+        dict(profile.profile_data) if profile.profile_data else _empty_profile(user_id)
+    )
 
     # Fetch session + questions + responses
     sess_result = await db.execute(
@@ -97,7 +99,9 @@ async def incremental_update(
         qt_entry = qt_profiles[qt]
         qt_entry["count"] = qt_entry.get("count", 0) + 1
         qt_entry["correct"] = qt_entry.get("correct", 0) + (1 if is_correct else 0)
-        qt_entry["accuracy"] = qt_entry["correct"] / qt_entry["count"] if qt_entry["count"] > 0 else 0
+        qt_entry["accuracy"] = (
+            qt_entry["correct"] / qt_entry["count"] if qt_entry["count"] > 0 else 0
+        )
 
     # Update overall stats
     new_total = total_answered + session_total
@@ -120,7 +124,9 @@ async def incremental_update(
     dp = domain_profiles[subject]
     dp["correct"] = dp.get("correct", 0) + session_correct
     dp["question_count"] = dp.get("question_count", 0) + session_total
-    dp["accuracy"] = dp["correct"] / dp["question_count"] if dp["question_count"] > 0 else 0
+    dp["accuracy"] = (
+        dp["correct"] / dp["question_count"] if dp["question_count"] > 0 else 0
+    )
 
     # Update avg_time_per_question (running mean)
     if session_time_count > 0:
@@ -146,12 +152,16 @@ async def incremental_update(
 
     # Update learning trajectory (keep last 30)
     trajectory: list = data.get("learning_trajectory", [])
-    trajectory.append({
-        "date": datetime.now(timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d"),
-        "accuracy": session_correct / session_total if session_total > 0 else 0,
-        "question_count": session_total,
-        "session_id": session_id,
-    })
+    trajectory.append(
+        {
+            "date": datetime.now(timezone.utc)
+            .replace(tzinfo=None)
+            .strftime("%Y-%m-%d"),
+            "accuracy": session_correct / session_total if session_total > 0 else 0,
+            "question_count": session_total,
+            "session_id": session_id,
+        }
+    )
     data["learning_trajectory"] = trajectory[-30:]
 
     # Determine overall level
@@ -186,10 +196,12 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
 
     # Fetch all graded sessions for this user
     sess_result = await db.execute(
-        select(QuizSession).where(
+        select(QuizSession)
+        .where(
             QuizSession.solver_id == user_id,
             QuizSession.status == "graded",
-        ).order_by(QuizSession.created_at)
+        )
+        .order_by(QuizSession.created_at)
     )
     sessions = sess_result.scalars().all()
 
@@ -239,7 +251,9 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
         qt_profiles[qt]["correct"] += 1 if is_correct else 0
 
         # Domain tracking
-        sess = session_map.get(str(q.session_id) if not isinstance(q.session_id, str) else q.session_id)
+        sess = session_map.get(
+            str(q.session_id) if not isinstance(q.session_id, str) else q.session_id
+        )
         if sess:
             quiz_config = sess.quiz_config or {}
             subject = str(quiz_config.get("subject", "") or "").strip() or "综合"
@@ -250,8 +264,10 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
 
         if subject not in domain_acc:
             domain_acc[subject] = {
-                "correct": 0, "total": 0,
-                "time_total": 0, "time_count": 0,
+                "correct": 0,
+                "total": 0,
+                "time_total": 0,
+                "time_count": 0,
                 "difficulty_stats": {},
             }
         domain_acc[subject]["total"] += 1
@@ -277,7 +293,9 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
 
     # Finalize question type accuracies
     for qt_data in qt_profiles.values():
-        qt_data["accuracy"] = qt_data["correct"] / qt_data["count"] if qt_data["count"] > 0 else 0
+        qt_data["accuracy"] = (
+            qt_data["correct"] / qt_data["count"] if qt_data["count"] > 0 else 0
+        )
 
     # Finalize domain profiles
     domain_profiles: dict = {}
@@ -289,19 +307,23 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
             "correct": da["correct"],
             "avg_time_per_question": round(avg_time, 1),
             "difficulty_stats": da["difficulty_stats"],
-            "preferred_difficulty": _compute_preferred_difficulty(da["difficulty_stats"]),
+            "preferred_difficulty": _compute_preferred_difficulty(
+                da["difficulty_stats"]
+            ),
         }
 
     # Build trajectory
     for s in sessions:
         stats = session_stats.get(str(s.id))
         if stats and stats["total"] > 0:
-            trajectory.append({
-                "date": s.created_at.strftime("%Y-%m-%d") if s.created_at else "",
-                "accuracy": stats["correct"] / stats["total"],
-                "question_count": stats["total"],
-                "session_id": str(s.id),
-            })
+            trajectory.append(
+                {
+                    "date": s.created_at.strftime("%Y-%m-%d") if s.created_at else "",
+                    "accuracy": stats["correct"] / stats["total"],
+                    "question_count": stats["total"],
+                    "session_id": str(s.id),
+                }
+            )
 
     # Overall
     acc = total_correct / total_answered if total_answered > 0 else 0

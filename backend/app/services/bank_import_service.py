@@ -11,13 +11,13 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi import UploadFile, HTTPException
 
+from backend.app.core.llm import get_embeddings_model
 from backend.app.models.bank_question import BankQuestion
 from backend.app.models.knowledge_base import KnowledgeBase
-from backend.app.core.llm import get_embeddings_model
 
 logger = logging.getLogger(__name__)
 
@@ -65,22 +65,28 @@ FILENAME_MAP: dict[str, tuple[str, str]] = {
     "Chinese_Language_Ancient_Poetry_Reading": ("语文", "short_answer"),
     "Chinese_Language_Classical_Chinese_Reading": ("语文", "short_answer"),
     "Chinese_Language_Famous_Passages_and_Sentences_Dictation": ("语文", "fill_blank"),
-    "Chinese_Language_Language_and_Writing_Skills_Open-ended_Questions": ("语文", "short_answer"),
+    "Chinese_Language_Language_and_Writing_Skills_Open-ended_Questions": (
+        "语文",
+        "short_answer",
+    ),
     "Chinese_Language_Literary_Text_Reading": ("语文", "short_answer"),
     "Chinese_Language_Practical_Text_Reading": ("语文", "short_answer"),
     "English_Language_Error_Correction": ("英语", "short_answer"),
     "English_Language_Cloze_Passage": ("英语", "fill_blank"),
 }
 
+
 def _parse_filename(filename: str) -> tuple[str, str] | None:
     stem = Path(filename).stem
     name = re.sub(r"^\d{4}-\d{4}_", "", stem)
     return FILENAME_MAP.get(name)
 
+
 def _format_answer(answer: Any) -> str:
     if isinstance(answer, list):
         return "、".join(str(a) for a in answer)
     return str(answer)
+
 
 async def import_json_files(
     session: AsyncSession,
@@ -119,7 +125,9 @@ async def import_json_files(
                 if isinstance(data, list):
                     items = data
                 else:
-                    errors.append(f"{file.filename}: No 'example' array found or not a JSON array.")
+                    errors.append(
+                        f"{file.filename}: No 'example' array found or not a JSON array."
+                    )
                     continue
 
             # Determine subject and type
@@ -172,7 +180,9 @@ async def import_json_files(
                         embed_text = f"Question: {question_text}\nAnswer: {answer_text}"
                         # aembed_documents expects a list, returns a list of vectors
                         # we take the first item
-                        vectors = await embed_service.aembed_documents([embed_text[:2000]])
+                        vectors = await embed_service.aembed_documents(
+                            [embed_text[:2000]]
+                        )
                         if vectors:
                             embedding = vectors[0]
                     except Exception as e:
@@ -193,7 +203,7 @@ async def import_json_files(
                 session.add(bank_q)
                 existing_contents.add(question_text)  # prevent intra-batch duplicates
                 total_imported += 1
-                
+
         except json.JSONDecodeError:
             errors.append(f"{file.filename}: Invalid JSON format.")
         except Exception as e:
@@ -207,19 +217,12 @@ async def import_json_files(
         kb.document_count = (kb.document_count or 0) + total_imported
 
     await session.commit()
-    return {
-        "imported": total_imported,
-        "skipped": total_skipped,
-        "errors": errors
-    }
-
+    return {"imported": total_imported, "skipped": total_skipped, "errors": errors}
 
 
 async def _download_github_zip(url: str, dest_dir: Path) -> Path:
     """Convert GitHub repo URL to ZIP download URL and download."""
-    match = re.match(
-        r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?(?:/.*)?$", url
-    )
+    match = re.match(r"https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?(?:/.*)?$", url)
     if not match:
         raise ValueError("不支持的 URL 格式，请提供 GitHub 仓库地址")
 

@@ -8,9 +8,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import UploadFile
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import update as sa_update
-from sqlmodel import delete as sql_delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlmodel import delete as sql_delete
+from sqlmodel import func, select
 
 from backend.app.core.config import settings
 from backend.app.core.exceptions import (
@@ -98,9 +99,7 @@ async def list_acquired_kbs(
     return [KBResponse.model_validate(kb) for kb in result.scalars().all()]
 
 
-async def get_kb(
-    kb_id: int, user: User, session: AsyncSession
-) -> KBResponse:
+async def get_kb(kb_id: int, user: User, session: AsyncSession) -> KBResponse:
     kb = await _get_kb_or_404(kb_id, session)
     await _check_kb_access(kb, user, session)
     return KBResponse.model_validate(kb)
@@ -155,7 +154,9 @@ async def upload_document(
 
     content = await file.read()
     if len(content) > _MAX_FILE_SIZE:
-        raise BadRequestError(f"File too large. Maximum: {_MAX_FILE_SIZE // 1024 // 1024} MB")
+        raise BadRequestError(
+            f"File too large. Maximum: {_MAX_FILE_SIZE // 1024 // 1024} MB"
+        )
 
     with open(file_path, "wb") as f:
         f.write(content)
@@ -201,9 +202,9 @@ async def _process_document_background(
 ) -> None:
     """Background task: parse → chunk → embed a document."""
     from backend.app.core.database import async_session_factory
-    from backend.app.rag.parser import parse_document
     from backend.app.rag.chunker import chunk_sections
     from backend.app.rag.embeddings import embed_and_store_chunks
+    from backend.app.rag.parser import parse_document
 
     async with async_session_factory() as session:
         try:
@@ -212,7 +213,11 @@ async def _process_document_background(
             parse_result = await parse_document(file_path, file_type)
 
             # Step 2: Chunk
-            logger.info("Processing doc %d: chunking %d sections", document_id, len(parse_result.sections))
+            logger.info(
+                "Processing doc %d: chunking %d sections",
+                document_id,
+                len(parse_result.sections),
+            )
             chunks = chunk_sections(
                 parse_result.sections,
                 strategy="semantic",
@@ -226,7 +231,9 @@ async def _process_document_background(
                 return
 
             # Step 3: Embed
-            logger.info("Processing doc %d: embedding %d chunks", document_id, len(chunks))
+            logger.info(
+                "Processing doc %d: embedding %d chunks", document_id, len(chunks)
+            )
             count = await embed_and_store_chunks(
                 document_id, knowledge_base_id, chunks, session
             )
@@ -234,12 +241,16 @@ async def _process_document_background(
             # Step 4: Update status
             await _update_doc_status(session, document_id, "ready", chunk_count=count)
             await session.commit()
-            logger.info("Processing doc %d: done (%d chunks stored)", document_id, count)
+            logger.info(
+                "Processing doc %d: done (%d chunks stored)", document_id, count
+            )
 
         except Exception as e:
             logger.error("Processing doc %d failed: %s", document_id, e, exc_info=True)
             try:
-                await _update_doc_status(session, document_id, "error", error_message=str(e)[:500])
+                await _update_doc_status(
+                    session, document_id, "error", error_message=str(e)[:500]
+                )
                 await session.commit()
             except Exception:
                 logger.error("Failed to update doc %d error status", document_id)
@@ -297,9 +308,7 @@ async def delete_document(
     if not doc:
         raise NotFoundError("Document")
 
-    await session.execute(
-        sql_delete(KBChunk).where(KBChunk.document_id == doc_id)
-    )
+    await session.execute(sql_delete(KBChunk).where(KBChunk.document_id == doc_id))
 
     try:
         Path(doc.file_path).unlink(missing_ok=True)
@@ -355,7 +364,9 @@ async def delete_folder(
     _check_kb_owner(kb, user)
 
     result = await session.execute(
-        select(KBFolder).where(KBFolder.id == folder_id, KBFolder.knowledge_base_id == kb_id)
+        select(KBFolder).where(
+            KBFolder.id == folder_id, KBFolder.knowledge_base_id == kb_id
+        )
     )
     folder = result.scalar_one_or_none()
     if not folder:
@@ -392,9 +403,7 @@ async def revoke_share_code(
     return KBResponse.model_validate(kb)
 
 
-async def publish_to_plaza(
-    kb_id: int, user: User, session: AsyncSession
-) -> KBResponse:
+async def publish_to_plaza(kb_id: int, user: User, session: AsyncSession) -> KBResponse:
     kb = await _get_kb_or_404(kb_id, session)
     _check_kb_owner(kb, user)
 
@@ -475,7 +484,9 @@ def _check_kb_owner(kb: KnowledgeBase, user: User) -> None:
         raise ForbiddenError("Not the owner of this knowledge base")
 
 
-async def _check_kb_access(kb: KnowledgeBase, user: User, session: AsyncSession) -> None:
+async def _check_kb_access(
+    kb: KnowledgeBase, user: User, session: AsyncSession
+) -> None:
     """Owner, admin, acquired user, or plaza-published KB can be accessed."""
     if kb.owner_id == user.id or user.is_admin:
         return
@@ -491,5 +502,3 @@ async def _check_kb_access(kb: KnowledgeBase, user: User, session: AsyncSession)
     if acq_result.scalar_one_or_none():
         return
     raise ForbiddenError("No access to this knowledge base")
-
-

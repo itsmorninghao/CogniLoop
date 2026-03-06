@@ -23,7 +23,7 @@ async def scope_resolver(state: QuizGenState) -> dict:
 
     Output: resolved_doc_ids, resolved_kb_ids
     """
-    from backend.app.core.sse import emit_node_start, emit_node_complete
+    from backend.app.core.sse import emit_node_complete, emit_node_start
 
     session_id = state.get("session_id", "")
     await emit_node_start(session_id, "scope_resolver", "正在解析知识范围...")
@@ -47,14 +47,21 @@ async def scope_resolver(state: QuizGenState) -> dict:
 
     logger.info(
         "Scope resolved: %d KBs, %d folders, %d docs",
-        len(resolved_kbs), len(folder_ids), len(resolved_docs),
+        len(resolved_kbs),
+        len(folder_ids),
+        len(resolved_docs),
     )
 
     msg = f"已解析知识范围：{len(resolved_kbs)} 个知识库，{len(resolved_docs)} 个文档"
     await emit_node_complete(
-        session_id, "scope_resolver", msg,
+        session_id,
+        "scope_resolver",
+        msg,
         input_summary={"kb_ids": kb_ids, "folder_ids": folder_ids, "doc_ids": doc_ids},
-        output_summary={"resolved_kb_count": len(resolved_kbs), "resolved_doc_count": len(resolved_docs)},
+        output_summary={
+            "resolved_kb_count": len(resolved_kbs),
+            "resolved_doc_count": len(resolved_docs),
+        },
         progress=0.1,
     )
 

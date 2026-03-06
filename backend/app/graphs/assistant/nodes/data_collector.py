@@ -10,8 +10,8 @@ from sqlmodel import select
 
 from backend.app.core.database import async_session_factory
 from backend.app.graphs.assistant.state import AssistantState
-from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 from backend.app.models.profile import UserProfile
+from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 
 logger = logging.getLogger(__name__)
 
@@ -54,24 +54,30 @@ async def data_collector(state: AssistantState) -> dict:
             question_details = []
             for q in questions:
                 resp = r_map.get(q.id)
-                question_details.append({
-                    "question_type": q.question_type,
-                    "content": q.content[:200],  # truncate for context window
-                    "is_correct": resp.is_correct if resp else None,
-                    "score": resp.score if resp else 0,
-                    "max_score": q.score,
-                    "time_spent": resp.time_spent if resp else None,
-                    "ai_feedback": resp.ai_feedback if resp else None,
-                })
+                question_details.append(
+                    {
+                        "question_type": q.question_type,
+                        "content": q.content[:200],  # truncate for context window
+                        "is_correct": resp.is_correct if resp else None,
+                        "score": resp.score if resp else 0,
+                        "max_score": q.score,
+                        "time_spent": resp.time_spent if resp else None,
+                        "ai_feedback": resp.ai_feedback if resp else None,
+                    }
+                )
 
-            recent_sessions.append({
-                "session_id": str(s.id),
-                "completed_at": s.completed_at.isoformat() if s.completed_at else None,
-                "accuracy": s.accuracy,
-                "total_score": s.total_score,
-                "quiz_config": s.quiz_config or {},
-                "questions": question_details,
-            })
+            recent_sessions.append(
+                {
+                    "session_id": str(s.id),
+                    "completed_at": s.completed_at.isoformat()
+                    if s.completed_at
+                    else None,
+                    "accuracy": s.accuracy,
+                    "total_score": s.total_score,
+                    "quiz_config": s.quiz_config or {},
+                    "questions": question_details,
+                }
+            )
 
         p_result = await db.execute(
             select(UserProfile).where(UserProfile.user_id == user_id)

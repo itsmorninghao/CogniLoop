@@ -16,8 +16,12 @@ class UserProfile(SQLModel, table=True):
     profile_version: int = Field(default=1)
     last_calculated_at: datetime | None = Field(default=None)
     next_recalculate_after: datetime | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class ProfileShare(SQLModel, table=True):
@@ -28,4 +32,6 @@ class ProfileShare(SQLModel, table=True):
     share_type: str = Field(max_length=20)
     share_token: str | None = Field(default=None, max_length=64, unique=True)
     expires_at: datetime | None = Field(default=None)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

@@ -19,5 +19,7 @@ class Notification(SQLModel, table=True):
     is_read: bool = Field(default=False)
     action_url: str | None = Field(default=None, max_length=500)
     sender_id: int | None = Field(default=None, foreign_key="users.id")
-    metadata_extra: Any = Field(default={}, sa_column=Column("metadata", JSON, server_default="{}"))
+    metadata_extra: Any = Field(
+        default={}, sa_column=Column("metadata", JSON, server_default="{}")
+    )
     created_at: datetime = Field(default_factory=datetime.utcnow)

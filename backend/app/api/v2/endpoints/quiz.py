@@ -1,6 +1,6 @@
 """Quiz session endpoints."""
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sse_starlette.sse import EventSourceResponse
 
@@ -18,7 +18,6 @@ from backend.app.schemas.quiz import (
     QuizSubmitAllRequest,
 )
 from backend.app.services import quiz_service
-
 
 router = APIRouter(prefix="/quiz-sessions", tags=["Quiz Sessions"])
 
@@ -71,7 +70,9 @@ async def list_quizzes(
     session: AsyncSession = Depends(get_session),
 ):
     """List quiz sessions for the current user."""
-    return await quiz_service.list_quiz_sessions(user, session, limit=limit, offset=offset)
+    return await quiz_service.list_quiz_sessions(
+        user, session, limit=limit, offset=offset
+    )
 
 
 @router.get("/{session_id}", response_model=QuizSessionResponse)
@@ -158,7 +159,9 @@ async def unpublish_from_plaza(
 @router.get("/{session_id}/stream")
 async def quiz_stream(
     session_id: str,
-    ticket: str = Query(..., description="One-time SSE ticket from POST /notifications/sse-ticket"),
+    ticket: str = Query(
+        ..., description="One-time SSE ticket from POST /notifications/sse-ticket"
+    ),
 ):
     """SSE endpoint for real-time quiz generation / grading progress.
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, or_
+from sqlmodel import or_, select
 
 from backend.app.core.config import settings
 from backend.app.core.database import get_session
@@ -31,7 +31,9 @@ class UserPublicInfo(BaseModel):
 
 @router.get("/search", response_model=list[UserPublicInfo])
 async def search_users(
-    q: str = Query(min_length=1, max_length=50, description="Search by username or full name"),
+    q: str = Query(
+        min_length=1, max_length=50, description="Search by username or full name"
+    ),
     limit: int = Query(default=10, ge=1, le=30),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_session),
@@ -97,12 +99,19 @@ async def upload_avatar(
     """Upload a new avatar image for the current user."""
     if file.content_type not in _ALLOWED_AVATAR_TYPES:
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Only JPEG, PNG, GIF, WEBP images are allowed")
+
+        raise HTTPException(
+            status_code=400, detail="Only JPEG, PNG, GIF, WEBP images are allowed"
+        )
 
     content = await file.read()
     if len(content) > settings.MAX_AVATAR_SIZE_BYTES:
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail=f"头像文件不能超过 {settings.MAX_AVATAR_SIZE_BYTES // (1024 * 1024)}MB")
+
+        raise HTTPException(
+            status_code=400,
+            detail=f"头像文件不能超过 {settings.MAX_AVATAR_SIZE_BYTES // (1024 * 1024)}MB",
+        )
 
     ext = Path(file.filename or "avatar.jpg").suffix or ".jpg"
     filename = f"avatar_{current_user.id}_{uuid.uuid4().hex}{ext}"

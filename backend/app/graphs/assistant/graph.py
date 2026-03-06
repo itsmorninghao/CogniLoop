@@ -11,7 +11,9 @@ from langgraph.graph import END, StateGraph
 from backend.app.graphs.assistant.nodes.data_collector import data_collector
 from backend.app.graphs.assistant.nodes.pattern_analyzer import pattern_analyzer
 from backend.app.graphs.assistant.nodes.profile_rewriter import profile_rewriter
-from backend.app.graphs.assistant.nodes.recommendation_engine import recommendation_engine
+from backend.app.graphs.assistant.nodes.recommendation_engine import (
+    recommendation_engine,
+)
 from backend.app.graphs.assistant.state import AssistantState
 
 

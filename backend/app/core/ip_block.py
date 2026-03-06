@@ -1,4 +1,5 @@
 """IP-based login failure tracking and blocking."""
+
 import json
 from datetime import datetime, timezone
 
@@ -48,17 +49,20 @@ async def reset_login_failures(ip: str) -> None:
 
 async def _append_history(ip: str, username: str, success: bool) -> None:
     r = get_redis()
-    entry = json.dumps({
-        "ip": ip,
-        "username": username,
-        "success": success,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    entry = json.dumps(
+        {
+            "ip": ip,
+            "username": username,
+            "success": success,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    )
     await r.lpush(_HISTORY_KEY, entry)
     await r.ltrim(_HISTORY_KEY, 0, _HISTORY_MAX - 1)
 
 
 # Admin helpers
+
 
 async def get_ip_block_enabled() -> bool:
     return await get_redis().get(_ENABLED_KEY) == "1"
@@ -75,7 +79,9 @@ async def list_blocked_ips() -> list[dict]:
         ip = key.removeprefix("login_blocked:")
         ttl = await r.ttl(key)
         fail_count = await r.get(f"login_fail:{ip}")
-        result.append({"ip": ip, "ttl_seconds": ttl, "fail_count": int(fail_count or 0)})
+        result.append(
+            {"ip": ip, "ttl_seconds": ttl, "fail_count": int(fail_count or 0)}
+        )
     return result
 
 
@@ -86,7 +92,8 @@ async def unblock_ip(ip: str) -> None:
 
 async def block_ip_manually(ip: str) -> None:
     await get_redis().set(
-        f"login_blocked:{ip}", "manual",
+        f"login_blocked:{ip}",
+        "manual",
         ex=settings.LOGIN_BLOCK_MINUTES * 60,
     )
 

@@ -21,7 +21,7 @@ def _get_cipher() -> Fernet | None:
             logger.warning(
                 "ENCRYPTION_KEY is set but invalid (not a Fernet key) — "
                 "encryption disabled. Set ENCRYPTION_KEY= to suppress this warning, "
-                "or generate a valid key: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+                'or generate a valid key: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
             )
             return None
     return _cipher

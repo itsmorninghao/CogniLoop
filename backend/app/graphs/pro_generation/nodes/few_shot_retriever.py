@@ -1,13 +1,17 @@
 import random
+
 from sqlalchemy import select
+
 from backend.app.core.database import async_session_factory
-from backend.app.models.bank_question import BankQuestion
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+from backend.app.models.bank_question import BankQuestion
 from backend.app.services.config_service import get_config
 
 
-async def retrieve_few_shots(qtype: str, kb_ids: list[int], limit: int = 2) -> list[dict]:
+async def retrieve_few_shots(
+    qtype: str, kb_ids: list[int], limit: int = 2
+) -> list[dict]:
     """Retrieve few-shot examples for a question type from bank KBs.
 
     Args:
@@ -24,7 +28,7 @@ async def retrieve_few_shots(qtype: str, kb_ids: list[int], limit: int = 2) -> l
     async with async_session_factory() as session:
         stmt = select(BankQuestion).where(
             BankQuestion.knowledge_base_id.in_(kb_ids),
-            BankQuestion.question_type == qtype
+            BankQuestion.question_type == qtype,
         )
         stmt = stmt.order_by(BankQuestion.id).limit(100)
 
@@ -32,7 +36,11 @@ async def retrieve_few_shots(qtype: str, kb_ids: list[int], limit: int = 2) -> l
         candidates = list(result.scalars().all())
 
         if not candidates:
-            stmt_fb = select(BankQuestion).where(BankQuestion.knowledge_base_id.in_(kb_ids)).limit(20)
+            stmt_fb = (
+                select(BankQuestion)
+                .where(BankQuestion.knowledge_base_id.in_(kb_ids))
+                .limit(20)
+            )
             candidates = list((await session.execute(stmt_fb)).scalars().all())
 
     if not candidates:
@@ -67,8 +75,9 @@ async def few_shot_retriever_node(state: ProQuizState) -> dict:
     few_shot_pool: dict[str, list[dict]] = {}
 
     if not kb_ids or not target_count:
-        await emit_node_complete(session_id, "few_shot_retriever", "未配置题库，跳过范例预取",
-                                 progress=0.14)
+        await emit_node_complete(
+            session_id, "few_shot_retriever", "未配置题库，跳过范例预取", progress=0.14
+        )
         return {"few_shot_pool": {}}
 
     for qtype, count in target_count.items():
@@ -80,7 +89,8 @@ async def few_shot_retriever_node(state: ProQuizState) -> dict:
 
     total_fetched = sum(len(v) for v in few_shot_pool.values())
     await emit_node_complete(
-        session_id, "few_shot_retriever",
+        session_id,
+        "few_shot_retriever",
         f"已预取 {len(few_shot_pool)} 种题型共 {total_fetched} 条范例",
         input_summary={
             "bank_kb_ids": kb_ids,

@@ -41,10 +41,14 @@ class CircleSessionParticipant(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     session_id: str = Field(
-        sa_column=Column(UUID(as_uuid=False), sa.ForeignKey("quiz_sessions.id"), index=True),
+        sa_column=Column(
+            UUID(as_uuid=False), sa.ForeignKey("quiz_sessions.id"), index=True
+        ),
     )
     user_id: int = Field(foreign_key="users.id", index=True)
-    status: str = Field(default="in_progress", max_length=20)  # in_progress | grading | completed
+    status: str = Field(
+        default="in_progress", max_length=20
+    )  # in_progress | grading | completed
     accuracy: float | None = Field(default=None)
     total_score: float | None = Field(default=None)
     started_at: datetime = Field(

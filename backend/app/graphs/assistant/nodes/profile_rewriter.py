@@ -19,11 +19,14 @@ async def profile_rewriter(state: AssistantState) -> dict:
     new_profile: dict = {}
     try:
         from backend.app.services import profile_service
+
         async with async_session_factory() as db:
             await profile_service.full_recalculate(user_id, db)
             # Reload the freshly saved profile
             from sqlmodel import select
+
             from backend.app.models.profile import UserProfile
+
             result = await db.execute(
                 select(UserProfile).where(UserProfile.user_id == user_id)
             )
@@ -32,7 +35,9 @@ async def profile_rewriter(state: AssistantState) -> dict:
 
         logger.info("AssistantGraph: profile fully recalculated for user %d", user_id)
     except Exception as e:
-        logger.warning("AssistantGraph: profile_rewriter failed for user %d: %s", user_id, e)
+        logger.warning(
+            "AssistantGraph: profile_rewriter failed for user %d: %s", user_id, e
+        )
         new_profile = state.get("current_profile", {})
 
     return {

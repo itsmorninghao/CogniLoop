@@ -12,7 +12,11 @@ from backend.app.core.exceptions import (
     ForbiddenError,
     NotFoundError,
 )
-from backend.app.models.circle import CircleMember, CircleSessionParticipant, StudyCircle
+from backend.app.models.circle import (
+    CircleMember,
+    CircleSessionParticipant,
+    StudyCircle,
+)
 from backend.app.models.profile import UserProfile
 from backend.app.models.quiz import QuizSession
 from backend.app.models.user import User
@@ -59,7 +63,9 @@ async def create_circle(
 
 async def list_user_circles(user: User, session: AsyncSession) -> list[CircleResponse]:
     member_count_subq = (
-        select(CircleMember.circle_id, func.count(CircleMember.id).label("member_count"))
+        select(
+            CircleMember.circle_id, func.count(CircleMember.id).label("member_count")
+        )
         .group_by(CircleMember.circle_id)
         .subquery()
     )
@@ -71,19 +77,23 @@ async def list_user_circles(user: User, session: AsyncSession) -> list[CircleRes
     )
     return [
         CircleResponse(
-            id=c.id, name=c.name, description=c.description,
-            avatar_url=c.avatar_url, creator_id=c.creator_id,
-            invite_code=c.invite_code, max_members=c.max_members,
-            is_active=c.is_active, is_public=c.is_public,
-            member_count=count, created_at=str(c.created_at),
+            id=c.id,
+            name=c.name,
+            description=c.description,
+            avatar_url=c.avatar_url,
+            creator_id=c.creator_id,
+            invite_code=c.invite_code,
+            max_members=c.max_members,
+            is_active=c.is_active,
+            is_public=c.is_public,
+            member_count=count,
+            created_at=str(c.created_at),
         )
         for c, count in result.all()
     ]
 
 
-async def get_circle(
-    circle_id: int, session: AsyncSession
-) -> CircleResponse:
+async def get_circle(circle_id: int, session: AsyncSession) -> CircleResponse:
     circle = await _get_circle_or_404(circle_id, session)
     return await _circle_to_response(circle, session)
 
@@ -112,9 +122,7 @@ async def update_circle(
     return await _circle_to_response(circle, session)
 
 
-async def delete_circle(
-    circle_id: int, user: User, session: AsyncSession
-) -> None:
+async def delete_circle(circle_id: int, user: User, session: AsyncSession) -> None:
     circle = await _get_circle_or_404(circle_id, session)
     await _check_circle_owner(circle_id, user, session)
     circle.is_active = False
@@ -172,15 +180,17 @@ async def list_members(
     )
     members = []
     for cm, usr in result.all():
-        members.append(CircleMemberResponse(
-            id=cm.id,
-            user_id=usr.id,
-            username=usr.username,
-            full_name=usr.full_name,
-            avatar_url=usr.avatar_url,
-            role=cm.role,
-            joined_at=str(cm.joined_at),
-        ))
+        members.append(
+            CircleMemberResponse(
+                id=cm.id,
+                user_id=usr.id,
+                username=usr.username,
+                full_name=usr.full_name,
+                avatar_url=usr.avatar_url,
+                role=cm.role,
+                joined_at=str(cm.joined_at),
+            )
+        )
     return members
 
 
@@ -232,22 +242,26 @@ async def get_circle_stats(
 
     for cm, usr in member_rows:
         profile = profiles_by_user.get(usr.id)
-        profile_data: dict = profile.profile_data if profile and profile.profile_data else {}
+        profile_data: dict = (
+            profile.profile_data if profile and profile.profile_data else {}
+        )
 
         domain_profiles: dict = profile_data.get("domain_profiles", {})
         for domain, dp in domain_profiles.items():
             acc = dp.get("accuracy", 0.0) if isinstance(dp, dict) else 0.0
             domain_accuracy.setdefault(domain, []).append(acc)
 
-        leaderboard.append(LeaderboardEntry(
-            user_id=usr.id,
-            username=usr.username,
-            full_name=usr.full_name,
-            avatar_url=usr.avatar_url,
-            role=cm.role,
-            total_questions=profile_data.get("total_questions_answered", 0),
-            overall_accuracy=profile_data.get("overall_accuracy", 0.0),
-        ))
+        leaderboard.append(
+            LeaderboardEntry(
+                user_id=usr.id,
+                username=usr.username,
+                full_name=usr.full_name,
+                avatar_url=usr.avatar_url,
+                role=cm.role,
+                total_questions=profile_data.get("total_questions_answered", 0),
+                overall_accuracy=profile_data.get("overall_accuracy", 0.0),
+            )
+        )
 
     # Sort leaderboard by total_questions desc
     leaderboard.sort(key=lambda e: e.total_questions, reverse=True)
@@ -305,7 +319,9 @@ async def get_circle_quiz_sessions(
         .where(CircleSessionParticipant.session_id.in_(session_ids))
         .group_by(CircleSessionParticipant.session_id)
     )
-    participant_counts: dict[str, int] = {row.session_id: row.cnt for row in count_result.all()}
+    participant_counts: dict[str, int] = {
+        row.session_id: row.cnt for row in count_result.all()
+    }
 
     # Fetch current user's participant status if user provided
     user_statuses: dict[str, str] = {}
@@ -320,20 +336,22 @@ async def get_circle_quiz_sessions(
 
     items = []
     for qs, usr in rows:
-        items.append(CircleQuizSessionItem(
-            id=qs.id,
-            creator_id=qs.creator_id,
-            creator_username=usr.username,
-            creator_full_name=usr.full_name,
-            title=qs.title,
-            mode=qs.mode,
-            status=qs.status,
-            total_score=qs.total_score,
-            accuracy=qs.accuracy,
-            created_at=str(qs.created_at),
-            participant_count=participant_counts.get(qs.id, 0),
-            current_user_status=user_statuses.get(qs.id),
-        ))
+        items.append(
+            CircleQuizSessionItem(
+                id=qs.id,
+                creator_id=qs.creator_id,
+                creator_username=usr.username,
+                creator_full_name=usr.full_name,
+                title=qs.title,
+                mode=qs.mode,
+                status=qs.status,
+                total_score=qs.total_score,
+                accuracy=qs.accuracy,
+                created_at=str(qs.created_at),
+                participant_count=participant_counts.get(qs.id, 0),
+                current_user_status=user_statuses.get(qs.id),
+            )
+        )
     return items
 
 

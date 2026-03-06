@@ -19,12 +19,14 @@ import logging
 
 from langgraph.graph import END, StateGraph
 
-from backend.app.graphs.quiz_generation.nodes.scope_resolver import scope_resolver
-from backend.app.graphs.quiz_generation.nodes.rag_retriever import rag_retriever
 from backend.app.graphs.quiz_generation.nodes.profile_analyzer import profile_analyzer
-from backend.app.graphs.quiz_generation.nodes.question_designer import question_designer
-from backend.app.graphs.quiz_generation.nodes.question_generator import question_generator
 from backend.app.graphs.quiz_generation.nodes.quality_checker import quality_checker
+from backend.app.graphs.quiz_generation.nodes.question_designer import question_designer
+from backend.app.graphs.quiz_generation.nodes.question_generator import (
+    question_generator,
+)
+from backend.app.graphs.quiz_generation.nodes.rag_retriever import rag_retriever
+from backend.app.graphs.quiz_generation.nodes.scope_resolver import scope_resolver
 from backend.app.graphs.quiz_generation.state import QuizGenState
 
 logger = logging.getLogger(__name__)

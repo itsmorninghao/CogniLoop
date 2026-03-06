@@ -8,24 +8,29 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator
 
 
-
 class QuizCreateRequest(BaseModel):
     """Create a new quiz session."""
-    mode: str = Field(default="self_test", pattern="^(self_test|challenge|circle|plaza)$")
+
+    mode: str = Field(
+        default="self_test", pattern="^(self_test|challenge|circle|plaza)$"
+    )
     generation_mode: str = Field(default="standard", pattern="^(standard|pro)$")
     title: str | None = None
     knowledge_scope: dict = Field(default_factory=dict)  # {kb_ids, folder_ids, doc_ids}
-    quiz_config: dict = Field(default_factory=lambda: {
-        "question_types": ["single_choice", "fill_blank", "short_answer"],
-        "count": 5,
-        "difficulty": "medium",
-    })
+    quiz_config: dict = Field(
+        default_factory=lambda: {
+            "question_types": ["single_choice", "fill_blank", "short_answer"],
+            "count": 5,
+            "difficulty": "medium",
+        }
+    )
     solver_id: int | None = None
     circle_id: int | None = None
 
 
 class QuizResponseSubmit(BaseModel):
     """Submit an answer to a question."""
+
     question_id: int
     user_answer: str
     time_spent: int | None = None  # seconds
@@ -33,8 +38,8 @@ class QuizResponseSubmit(BaseModel):
 
 class QuizSubmitAllRequest(BaseModel):
     """Submit all answers at once."""
-    responses: list[QuizResponseSubmit]
 
+    responses: list[QuizResponseSubmit]
 
 
 def _normalize_options(options: Any) -> dict | None:

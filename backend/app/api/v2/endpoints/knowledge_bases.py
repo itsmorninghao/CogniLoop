@@ -20,7 +20,6 @@ from backend.app.services import kb_service
 router = APIRouter(prefix="/knowledge-bases", tags=["Knowledge Bases"])
 
 
-
 @router.post("/", response_model=KBResponse, status_code=201)
 async def create_kb(
     req: KBCreateRequest,
@@ -78,7 +77,6 @@ async def delete_kb(
     await kb_service.delete_kb(kb_id, user, session)
 
 
-
 @router.post("/{kb_id}/documents", response_model=DocumentResponse, status_code=201)
 async def upload_document(
     kb_id: int,
@@ -109,7 +107,6 @@ async def delete_document(
     await kb_service.delete_document(kb_id, doc_id, user, session)
 
 
-
 @router.post("/{kb_id}/folders", response_model=FolderResponse, status_code=201)
 async def create_folder(
     kb_id: int,
@@ -137,7 +134,6 @@ async def delete_folder(
     session: AsyncSession = Depends(get_session),
 ):
     await kb_service.delete_folder(kb_id, folder_id, user, session)
-
 
 
 @router.post("/{kb_id}/share", response_model=KBResponse)
@@ -183,4 +179,3 @@ async def acquire_kb(
     session: AsyncSession = Depends(get_session),
 ):
     return await kb_service.acquire_by_share_code(req, user, session)
-

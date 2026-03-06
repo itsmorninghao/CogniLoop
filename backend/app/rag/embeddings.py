@@ -10,7 +10,7 @@ Enhanced:
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlmodel import select, delete
+from sqlmodel import delete
 
 from backend.app.core.llm import get_embeddings_model
 from backend.app.models.knowledge_base import KBChunk
@@ -43,9 +43,7 @@ async def embed_and_store_chunks(
         Number of chunks inserted.
     """
     # Delete existing chunks for this document (idempotent re-processing)
-    await session.execute(
-        delete(KBChunk).where(KBChunk.document_id == document_id)
-    )
+    await session.execute(delete(KBChunk).where(KBChunk.document_id == document_id))
     await session.flush()
 
     if not chunks:
@@ -65,7 +63,9 @@ async def embed_and_store_chunks(
         except Exception as e:
             logger.error(
                 "Embedding failed for doc %d batch %d: %s",
-                document_id, batch_start, e,
+                document_id,
+                batch_start,
+                e,
             )
             raise
 
@@ -90,7 +90,10 @@ async def embed_and_store_chunks(
         await session.flush()
         logger.info(
             "Embedded doc %d batch %d–%d (%d chunks)",
-            document_id, batch_start, batch_start + len(batch), len(batch),
+            document_id,
+            batch_start,
+            batch_start + len(batch),
+            len(batch),
         )
 
     return total_inserted

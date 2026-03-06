@@ -1,6 +1,5 @@
 """Redis Pub/Sub helper for cross-process SSE broadcasting."""
 
-import asyncio
 import json
 
 import redis.asyncio as aioredis

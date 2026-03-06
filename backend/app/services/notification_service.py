@@ -63,7 +63,9 @@ async def list_notifications(
 async def get_unread_count(user_id: int, db: AsyncSession) -> int:
     """Get the number of unread notifications."""
     result = await db.execute(
-        select(func.count()).select_from(Notification).where(
+        select(func.count())
+        .select_from(Notification)
+        .where(
             Notification.user_id == user_id,
             Notification.is_read.is_(False),
         )
@@ -107,7 +109,9 @@ async def send_system_broadcast(
     db: AsyncSession,
 ) -> int:
     """Send a system notification to multiple users. Returns count created."""
-    now = datetime.now(timezone.utc).replace(tzinfo=None)  # shared timestamp for this broadcast batch
+    now = datetime.now(timezone.utc).replace(
+        tzinfo=None
+    )  # shared timestamp for this broadcast batch
     notifications = [
         Notification(
             user_id=uid,
@@ -128,4 +132,3 @@ async def send_system_broadcast(
         await ws_manager.push_unread_count(uid, unread)
 
     return len(notifications)
-

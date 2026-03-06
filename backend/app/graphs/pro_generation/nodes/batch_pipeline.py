@@ -8,13 +8,15 @@ question_context_map and runs the pipeline: generate → quality(retry) → solv
 import asyncio
 import logging
 
-from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.nodes._progress import compute_batch_progress
-from backend.app.graphs.pro_generation.nodes.question_generator import generate_question
+from backend.app.graphs.pro_generation.nodes.difficulty_analyzer import (
+    analyze_difficulty,
+)
 from backend.app.graphs.pro_generation.nodes.quality_checker import check_quality
+from backend.app.graphs.pro_generation.nodes.question_generator import generate_question
 from backend.app.graphs.pro_generation.nodes.solve_verifier import verify_solve
-from backend.app.graphs.pro_generation.nodes.difficulty_analyzer import analyze_difficulty
+from backend.app.graphs.pro_generation.state import ProQuizState
 
 logger = logging.getLogger(__name__)
 
@@ -53,13 +55,18 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
         feedback = None
         question = None
         for attempt in range(max_retry + 1):
-
             # Step 1: Generate question
-            await emit_node_start(session_id, "question_generator", f"原创命题（{q_label}）...", question_index=qi)
+            await emit_node_start(
+                session_id,
+                "question_generator",
+                f"原创命题（{q_label}）...",
+                question_index=qi,
+            )
             question = await generate_question(qtype, ctx, examples, feedback)
             preview = (question.get("content") or "")[:80]
             await emit_node_complete(
-                session_id, "question_generator",
+                session_id,
+                "question_generator",
                 f"（{q_label}）命题完成",
                 input_summary={
                     "subject": ctx.get("subject"),
@@ -70,69 +77,114 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                     "has_feedback": feedback is not None,
                 },
                 output_summary={"question_type": qtype, "content_preview": preview},
-                progress=compute_batch_progress(completed_count, total_q, batch_size, 0.2),
+                progress=compute_batch_progress(
+                    completed_count, total_q, batch_size, 0.2
+                ),
                 question_index=qi,
             )
 
             # Step 2: Quality check
-            await emit_node_start(session_id, "quality_checker", f"质量快审（{q_label}）...", question_index=qi)
+            await emit_node_start(
+                session_id,
+                "quality_checker",
+                f"质量快审（{q_label}）...",
+                question_index=qi,
+            )
             feedback = await check_quality(question, qtype)
             if feedback and attempt < max_retry:
                 await emit_node_complete(
-                    session_id, "quality_checker",
+                    session_id,
+                    "quality_checker",
                     f"（{q_label}）质量不合格，重试 {attempt + 1}/{max_retry}",
                     output_summary={"result": "REJECT", "reason": feedback[:100]},
-                    progress=compute_batch_progress(completed_count, total_q, batch_size, 0.4),
+                    progress=compute_batch_progress(
+                        completed_count, total_q, batch_size, 0.4
+                    ),
                     question_index=qi,
                 )
                 continue
             await emit_node_complete(
-                session_id, "quality_checker",
-                f"（{q_label}）质量审查通过" if not feedback else f"（{q_label}）质量勉强接受（已达重试上限）",
-                output_summary={"result": "APPROVE" if not feedback else "FORCE_ACCEPT"},
-                progress=compute_batch_progress(completed_count, total_q, batch_size, 0.4),
+                session_id,
+                "quality_checker",
+                f"（{q_label}）质量审查通过"
+                if not feedback
+                else f"（{q_label}）质量勉强接受（已达重试上限）",
+                output_summary={
+                    "result": "APPROVE" if not feedback else "FORCE_ACCEPT"
+                },
+                progress=compute_batch_progress(
+                    completed_count, total_q, batch_size, 0.4
+                ),
                 question_index=qi,
             )
 
             # Step 3: Solve verification
-            await emit_node_start(session_id, "solve_verifier", f"AI学情模拟测算（{q_label}）...", question_index=qi)
+            await emit_node_start(
+                session_id,
+                "solve_verifier",
+                f"AI学情模拟测算（{q_label}）...",
+                question_index=qi,
+            )
             solve_results = await verify_solve(question, subject)
             scores = [r["score"] for r in solve_results]
             await emit_node_complete(
-                session_id, "solve_verifier",
+                session_id,
+                "solve_verifier",
                 f"（{q_label}）3名模拟学生已作答",
-                output_summary={"scores": scores, "names": [r["student"] for r in solve_results]},
-                progress=compute_batch_progress(completed_count, total_q, batch_size, 0.6),
+                output_summary={
+                    "scores": scores,
+                    "names": [r["student"] for r in solve_results],
+                },
+                progress=compute_batch_progress(
+                    completed_count, total_q, batch_size, 0.6
+                ),
                 question_index=qi,
             )
 
             # Step 4: Difficulty analysis
-            await emit_node_start(session_id, "difficulty_analyzer", f"难度分析与调校（{q_label}）...", question_index=qi)
+            await emit_node_start(
+                session_id,
+                "difficulty_analyzer",
+                f"难度分析与调校（{q_label}）...",
+                question_index=qi,
+            )
             score, acceptable = analyze_difficulty(solve_results, difficulty)
 
             if acceptable or attempt >= max_retry:
                 question["difficulty_score"] = score
                 await emit_node_complete(
-                    session_id, "difficulty_analyzer",
+                    session_id,
+                    "difficulty_analyzer",
                     f"（{q_label}）难度合格，已收录（得分 {score:.2f}）",
                     output_summary={"difficulty_score": score, "accepted": True},
-                    progress=compute_batch_progress(completed_count, total_q, batch_size, 0.8),
+                    progress=compute_batch_progress(
+                        completed_count, total_q, batch_size, 0.8
+                    ),
                     question_index=qi,
                 )
                 return question
             else:
                 if difficulty == "easy":
-                    feedback = "上道题太难了（即使是学霸也容易出错）。请出得更基础直白一点。"
+                    feedback = (
+                        "上道题太难了（即使是学霸也容易出错）。请出得更基础直白一点。"
+                    )
                 elif difficulty == "hard":
                     feedback = "上道题太简单了（连基础差的学生都能蒙对）。请增加思维陷阱、干扰项或考察更深层次的核心原理。"
                 else:
                     feedback = "难度偏向了极端（太难或太简单），请调整到中等水平。"
 
                 await emit_node_complete(
-                    session_id, "difficulty_analyzer",
+                    session_id,
+                    "difficulty_analyzer",
                     f"（{q_label}）难度不合格（{score:.2f}），重试",
-                    output_summary={"difficulty_score": score, "accepted": False, "retry": attempt + 1},
-                    progress=compute_batch_progress(completed_count, total_q, batch_size, 0.8),
+                    output_summary={
+                        "difficulty_score": score,
+                        "accepted": False,
+                        "retry": attempt + 1,
+                    },
+                    progress=compute_batch_progress(
+                        completed_count, total_q, batch_size, 0.8
+                    ),
                     question_index=qi,
                 )
 

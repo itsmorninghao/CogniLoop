@@ -6,7 +6,6 @@ Integrated into the FastAPI lifespan; no external broker needed.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -24,19 +23,19 @@ async def _daily_assistant_run() -> None:
     from backend.app.models.user import User
 
     async with async_session_factory() as session:
-        result = await session.execute(
-            select(User.id).where(User.is_active.is_(True))
-        )
+        result = await session.execute(select(User.id).where(User.is_active.is_(True)))
         user_ids: list[int] = [row[0] for row in result.all()]
 
     logger.info("Daily assistant run: processing %d users", len(user_ids))
     for uid in user_ids:
         try:
-            await assistant_graph.ainvoke({
-                "user_id": uid,
-                "session_id": None,
-                "trigger_type": "scheduled",
-            })
+            await assistant_graph.ainvoke(
+                {
+                    "user_id": uid,
+                    "session_id": None,
+                    "trigger_type": "scheduled",
+                }
+            )
         except Exception:
             logger.exception("Assistant graph failed for user %d", uid)
 

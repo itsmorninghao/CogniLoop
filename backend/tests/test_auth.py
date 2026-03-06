@@ -7,18 +7,24 @@ from httpx import AsyncClient
 @pytest.mark.asyncio
 async def test_register_and_login(client: AsyncClient):
     """Registering a new user and logging in should succeed."""
-    reg = await client.post("/api/v2/auth/register", json={
-        "username": "authtest",
-        "email": "authtest@example.com",
-        "password": "password123",
-        "full_name": "Auth Test",
-    })
+    reg = await client.post(
+        "/api/v2/auth/register",
+        json={
+            "username": "authtest",
+            "email": "authtest@example.com",
+            "password": "password123",
+            "full_name": "Auth Test",
+        },
+    )
     assert reg.status_code in (200, 201, 409)  # 409 if already exists
 
-    login = await client.post("/api/v2/auth/login", json={
-        "username": "authtest",
-        "password": "password123",
-    })
+    login = await client.post(
+        "/api/v2/auth/login",
+        json={
+            "username": "authtest",
+            "password": "password123",
+        },
+    )
     assert login.status_code == 200
     data = login.json()
     assert "access_token" in data

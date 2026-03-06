@@ -75,13 +75,15 @@ async def get_recommendations(
     result = []
     for n in notifications:
         if n.type == "ai_suggestion":
-            result.append(RecommendationItem(
-                id=n.id,
-                title=n.title,
-                content=n.content,
-                action_url=n.action_url,
-                created_at=str(n.created_at),
-            ))
+            result.append(
+                RecommendationItem(
+                    id=n.id,
+                    title=n.title,
+                    content=n.content,
+                    action_url=n.action_url,
+                    created_at=str(n.created_at),
+                )
+            )
     return result
 
 
@@ -93,11 +95,13 @@ async def trigger_assistant(
     from backend.app.graphs.assistant.graph import assistant_graph
 
     task = asyncio.create_task(
-        assistant_graph.ainvoke({
-            "user_id": user.id,
-            "session_id": None,
-            "trigger_type": "manual",
-        })
+        assistant_graph.ainvoke(
+            {
+                "user_id": user.id,
+                "session_id": None,
+                "trigger_type": "manual",
+            }
+        )
     )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)

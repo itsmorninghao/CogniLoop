@@ -68,10 +68,12 @@ async def question_generator(state: QuizGenState) -> dict:
     """
     Generate actual questions from the question specs using LLM.
     """
-    from backend.app.core.sse import emit_node_start, emit_node_complete
+    from backend.app.core.sse import emit_node_complete, emit_node_start
 
     session_id = state.get("session_id", "")
-    await emit_node_start(session_id, "question_generator", "LLM 正在逐题生成题目内容...")
+    await emit_node_start(
+        session_id, "question_generator", "LLM 正在逐题生成题目内容..."
+    )
 
     question_specs = state.get("question_specs", [])
     rag_chunks = state.get("rag_chunks", [])
@@ -83,7 +85,9 @@ async def question_generator(state: QuizGenState) -> dict:
 
         for i, spec in enumerate(question_specs):
             try:
-                source_idx = spec.get("source_hint", i % len(rag_chunks)) if rag_chunks else 0
+                source_idx = (
+                    spec.get("source_hint", i % len(rag_chunks)) if rag_chunks else 0
+                )
                 if rag_chunks and 0 <= source_idx < len(rag_chunks):
                     source = rag_chunks[source_idx]
                     source_content = source["content"]
@@ -117,21 +121,36 @@ async def question_generator(state: QuizGenState) -> dict:
                 question["source_chunks"] = [source_chunk_id] if source_chunk_id else []
                 questions.append(question)
 
-                logger.info("Generated question %d/%d: %s", i + 1, len(question_specs), spec.get("topic"))
+                logger.info(
+                    "Generated question %d/%d: %s",
+                    i + 1,
+                    len(question_specs),
+                    spec.get("topic"),
+                )
 
             except Exception as e:
                 logger.error("Failed to generate question %d: %s", i, e)
                 # Create a fallback question
-                questions.append({
-                    "question_type": spec.get("question_type", "single_choice"),
-                    "question_index": i,
-                    "content": f"关于{spec.get('topic', '此知识点')}的问题（生成失败，请重试）",
-                    "options": {"A": "选项A", "B": "选项B", "C": "选项C", "D": "选项D"} if spec.get("question_type") in ("single_choice", "multiple_choice") else None,
-                    "correct_answer": "A",
-                    "analysis": f"生成失败: {str(e)[:100]}",
-                    "score": 1.0,
-                    "source_chunks": [],
-                })
+                questions.append(
+                    {
+                        "question_type": spec.get("question_type", "single_choice"),
+                        "question_index": i,
+                        "content": f"关于{spec.get('topic', '此知识点')}的问题（生成失败，请重试）",
+                        "options": {
+                            "A": "选项A",
+                            "B": "选项B",
+                            "C": "选项C",
+                            "D": "选项D",
+                        }
+                        if spec.get("question_type")
+                        in ("single_choice", "multiple_choice")
+                        else None,
+                        "correct_answer": "A",
+                        "analysis": f"生成失败: {str(e)[:100]}",
+                        "score": 1.0,
+                        "source_chunks": [],
+                    }
+                )
 
     logger.info("Generated %d questions total", len(questions))
 
@@ -142,7 +161,9 @@ async def question_generator(state: QuizGenState) -> dict:
 
     msg = f"已生成 {len(questions)} 道题目"
     await emit_node_complete(
-        session_id, "question_generator", msg,
+        session_id,
+        "question_generator",
+        msg,
         input_summary={
             "specs_count": len(question_specs),
             "question_types": [s.get("question_type") for s in question_specs],

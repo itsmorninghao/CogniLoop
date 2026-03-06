@@ -43,8 +43,8 @@ async def question_designer(state: QuizGenState) -> dict:
     """
     Use LLM to design question specifications based on RAG chunks and quiz config.
     """
-    from backend.app.core.sse import emit_node_start, emit_node_complete
-    
+    from backend.app.core.sse import emit_node_complete, emit_node_start
+
     session_id = state.get("session_id", "")
     await emit_node_start(session_id, "question_designer", "正在设计题目规格...")
 
@@ -61,8 +61,10 @@ async def question_designer(state: QuizGenState) -> dict:
     else:
         # Old shape
         count = quiz_config.get("count", 5)
-        question_types = quiz_config.get("question_types", ["single_choice", "fill_blank", "short_answer"])
-        
+        question_types = quiz_config.get(
+            "question_types", ["single_choice", "fill_blank", "short_answer"]
+        )
+
     difficulty = quiz_config.get("difficulty", "medium")
     custom_prompt = quiz_config.get("custom_prompt", "")
 
@@ -82,8 +84,10 @@ async def question_designer(state: QuizGenState) -> dict:
         )
     else:
         profile_info = "新用户，无历史数据，使用标准难度"
-        
-    custom_instructions = f"\n\n## 附加出题要求（必须严格遵守）\n{custom_prompt}" if custom_prompt else ""
+
+    custom_instructions = (
+        f"\n\n## 附加出题要求（必须严格遵守）\n{custom_prompt}" if custom_prompt else ""
+    )
 
     prompt = DESIGN_PROMPT.format(
         knowledge_context=knowledge_context,
@@ -113,17 +117,21 @@ async def question_designer(state: QuizGenState) -> dict:
         if "question_counts" in quiz_config:
             for qt, c in quiz_config["question_counts"].items():
                 for i in range(c):
-                    specs.append({
-                        "question_type": qt,
-                        "topic": f"基础概念",
-                        "difficulty": difficulty,
-                        "focus": "综合理解",
-                        "source_hint": i % len(rag_chunks) if rag_chunks else 0,
-                    })
+                    specs.append(
+                        {
+                            "question_type": qt,
+                            "topic": f"基础概念",
+                            "difficulty": difficulty,
+                            "focus": "综合理解",
+                            "source_hint": i % len(rag_chunks) if rag_chunks else 0,
+                        }
+                    )
         else:
             specs = [
                 {
-                    "question_type": question_types[i % len(question_types)] if question_types else "single_choice",
+                    "question_type": question_types[i % len(question_types)]
+                    if question_types
+                    else "single_choice",
                     "topic": f"知识点{i + 1}",
                     "difficulty": difficulty,
                     "focus": "综合理解",
@@ -133,10 +141,12 @@ async def question_designer(state: QuizGenState) -> dict:
             ]
 
     logger.info("Designed %d question specs", len(specs))
-    
+
     msg = f"已设计 {len(specs)} 道题目规格"
     await emit_node_complete(
-        session_id, "question_designer", msg,
+        session_id,
+        "question_designer",
+        msg,
         input_summary={
             "requested_count": count,
             "difficulty": difficulty,

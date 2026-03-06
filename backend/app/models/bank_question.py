@@ -22,4 +22,6 @@ class BankQuestion(SQLModel, table=True):
     analysis: str | None = Field(default=None, sa_column=Column(Text))
     source_info: Any = Field(default=None, sa_column=Column(JSON))
     embedding: Any = Field(default=None, sa_column=Column(Vector()))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

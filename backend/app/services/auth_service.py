@@ -5,14 +5,23 @@ from sqlmodel import func, select
 
 from backend.app.core.captcha import verify_captcha
 from backend.app.core.exceptions import AlreadyExistsError, BadRequestError
-from backend.app.core.ip_block import is_ip_blocked, record_login_failure, record_login_success
+from backend.app.core.ip_block import (
+    is_ip_blocked,
+    record_login_failure,
+    record_login_success,
+)
 from backend.app.core.security import (
     create_access_token,
     hash_password,
     verify_password,
 )
 from backend.app.models.user import User
-from backend.app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from backend.app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    UserResponse,
+)
 
 
 async def check_needs_setup(session: AsyncSession) -> bool:
@@ -50,7 +59,9 @@ async def setup_admin(req: RegisterRequest, session: AsyncSession) -> UserRespon
     return UserResponse.model_validate(user)
 
 
-async def register_user(req: RegisterRequest, session: AsyncSession, client_ip: str) -> UserResponse:
+async def register_user(
+    req: RegisterRequest, session: AsyncSession, client_ip: str
+) -> UserResponse:
     # Step 1: IP blocked?
     if await is_ip_blocked(client_ip):
         raise BadRequestError("您的 IP 已被临时封锁，请稍后再试或联系管理员")
@@ -78,7 +89,9 @@ async def register_user(req: RegisterRequest, session: AsyncSession, client_ip: 
     return UserResponse.model_validate(user)
 
 
-async def login_user(req: LoginRequest, session: AsyncSession, client_ip: str) -> TokenResponse:
+async def login_user(
+    req: LoginRequest, session: AsyncSession, client_ip: str
+) -> TokenResponse:
     # Step 1: IP blocked?
     if await is_ip_blocked(client_ip):
         raise BadRequestError("您的 IP 已被临时封锁，请稍后再试或联系管理员")
@@ -88,9 +101,7 @@ async def login_user(req: LoginRequest, session: AsyncSession, client_ip: str) -
         raise BadRequestError("验证码错误或已过期")
 
     # Step 3: Credentials
-    result = await session.execute(
-        select(User).where(User.username == req.username)
-    )
+    result = await session.execute(select(User).where(User.username == req.username))
     user = result.scalar_one_or_none()
     if not user or not verify_password(req.password, user.hashed_password):
         await record_login_failure(client_ip, req.username)
@@ -102,4 +113,3 @@ async def login_user(req: LoginRequest, session: AsyncSession, client_ip: str) -
     await record_login_success(client_ip, req.username)
     token = create_access_token(data={"sub": str(user.id)})
     return TokenResponse(access_token=token)
-

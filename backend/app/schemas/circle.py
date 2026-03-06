@@ -52,7 +52,6 @@ class JoinCircleRequest(BaseModel):
     invite_code: str = Field(min_length=1, max_length=12)
 
 
-
 class DomainStat(BaseModel):
     domain: str
     avg_accuracy: float
@@ -74,7 +73,6 @@ class CircleStatsResponse(BaseModel):
     member_count: int
     domain_stats: list[DomainStat]
     leaderboard: list[LeaderboardEntry]
-
 
 
 class CircleSessionParticipantItem(BaseModel):

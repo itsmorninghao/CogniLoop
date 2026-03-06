@@ -1,6 +1,13 @@
 """Notification API endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
@@ -101,8 +108,8 @@ async def get_sse_ticket(current_user: User = Depends(get_current_user)):
     ?ticket=<value> to the SSE stream endpoint.
     """
     from backend.app.core.sse_ticket import issue_ticket
-    return {"ticket": issue_ticket(current_user.id)}
 
+    return {"ticket": issue_ticket(current_user.id)}
 
 
 @router.websocket("/ws")

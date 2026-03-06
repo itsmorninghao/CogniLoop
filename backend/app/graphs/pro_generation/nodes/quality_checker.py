@@ -1,10 +1,12 @@
 import json
-from langchain_core.messages import SystemMessage, HumanMessage
-from backend.app.core.llm import get_node_chat_model
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from backend.app.core.database import async_session_factory
-from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+from backend.app.core.llm import get_node_chat_model
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.nodes._progress import compute_loop_progress
+from backend.app.graphs.pro_generation.state import ProQuizState
 
 
 async def check_quality(q_dict: dict, qtype: str) -> str | None:
@@ -21,10 +23,14 @@ async def check_quality(q_dict: dict, qtype: str) -> str | None:
         return "核心字段内容(content)或(correct_answer)缺失，请重新生成完整的JSON对象。"
 
     # Fast format checks
-    if qtype == "single_choice" and (not q_dict.get("options") or len(q_dict["options"]) < 2):
+    if qtype == "single_choice" and (
+        not q_dict.get("options") or len(q_dict["options"]) < 2
+    ):
         return "这道单选题的选项(options)不足或格式不正确，必须包含A、B、C、D等有效选项结构。"
 
-    if qtype == "single_choice" and q_dict["correct_answer"] not in q_dict.get("options", {}):
+    if qtype == "single_choice" and q_dict["correct_answer"] not in q_dict.get(
+        "options", {}
+    ):
         return "正确答案(correct_answer)不在给定的选项键(options)中，请核对后重新生成。"
 
     # Basic logic LLM check — use messages directly to avoid template issues
@@ -46,10 +52,12 @@ async def check_quality(q_dict: dict, qtype: str) -> str | None:
     try:
         async with async_session_factory() as session:
             llm = await get_node_chat_model("quality_checker", session, temperature=0)
-        res = await llm.ainvoke([
-            SystemMessage(content=sys_content),
-            HumanMessage(content=user_content),
-        ])
+        res = await llm.ainvoke(
+            [
+                SystemMessage(content=sys_content),
+                HumanMessage(content=user_content),
+            ]
+        )
 
         reply = res.content.strip()
         if "[REJECT]" in reply:
@@ -67,7 +75,9 @@ async def quality_checker_node(state: ProQuizState) -> dict:
     total_q = sum(state.get("target_count", {}).values())
     q_num = len(completed) + 1
 
-    await emit_node_start(session_id, "quality_checker", f"质量快审（第 {q_num}/{total_q} 题）...")
+    await emit_node_start(
+        session_id, "quality_checker", f"质量快审（第 {q_num}/{total_q} 题）..."
+    )
 
     q_dict = state.get("current_question", {})
     qtype = state.get("current_type_generating")
@@ -75,13 +85,18 @@ async def quality_checker_node(state: ProQuizState) -> dict:
     feedback = await check_quality(q_dict, qtype)
 
     if feedback:
-        await emit_node_complete(session_id, "quality_checker", f"（第 {q_num}/{total_q} 题）质量不合格",
-                                 output_summary={"result": "REJECT", "reason": feedback[:100]},
-                                 progress=compute_loop_progress(len(completed), total_q, 0.4))
+        await emit_node_complete(
+            session_id,
+            "quality_checker",
+            f"（第 {q_num}/{total_q} 题）质量不合格",
+            output_summary={"result": "REJECT", "reason": feedback[:100]},
+            progress=compute_loop_progress(len(completed), total_q, 0.4),
+        )
         return {"quality_feedback": feedback}
 
     await emit_node_complete(
-        session_id, "quality_checker",
+        session_id,
+        "quality_checker",
         f"（第 {q_num}/{total_q} 题）质量审查通过",
         output_summary={"result": "APPROVE"},
         progress=compute_loop_progress(len(completed), total_q, 0.4),

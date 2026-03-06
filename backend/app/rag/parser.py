@@ -20,26 +20,26 @@ from dataclasses import dataclass, field
 logger = logging.getLogger(__name__)
 
 
-
 @dataclass
 class ParsedSection:
     """A section of a parsed document, preserving structural context."""
+
     content: str
     page_number: int | None = None
-    heading: str | None = None          # nearest heading above this content
-    heading_level: int = 0              # 1=H1, 2=H2, etc.  0=body text
-    section_path: str = ""              # e.g. "Chapter 1 > Section 2.1"
+    heading: str | None = None  # nearest heading above this content
+    heading_level: int = 0  # 1=H1, 2=H2, etc.  0=body text
+    section_path: str = ""  # e.g. "Chapter 1 > Section 2.1"
     metadata: dict = field(default_factory=dict)
 
 
 @dataclass
 class ParseResult:
     """Full result of parsing a document."""
+
     sections: list[ParsedSection]
     title: str = ""
     total_pages: int = 0
     metadata: dict = field(default_factory=dict)
-
 
 
 class DocumentParser(ABC):
@@ -66,7 +66,6 @@ class DocumentParser(ABC):
         }
         parser_cls = _parsers.get(file_type, PlainTextParser)
         return parser_cls()
-
 
 
 class PDFParser(DocumentParser):
@@ -103,14 +102,16 @@ class PDFParser(DocumentParser):
                         section_path_parts.pop()
                     section_path_parts.append(current_heading)
 
-                sections.append(ParsedSection(
-                    content=para,
-                    page_number=page_idx + 1,
-                    heading=current_heading if heading_level == 0 else None,
-                    heading_level=heading_level,
-                    section_path=" > ".join(section_path_parts),
-                    metadata={"source_page": page_idx + 1},
-                ))
+                sections.append(
+                    ParsedSection(
+                        content=para,
+                        page_number=page_idx + 1,
+                        heading=current_heading if heading_level == 0 else None,
+                        heading_level=heading_level,
+                        section_path=" > ".join(section_path_parts),
+                        metadata={"source_page": page_idx + 1},
+                    )
+                )
 
         # Try to extract title from first heading or first page
         title = ""
@@ -140,13 +141,15 @@ class PDFParser(DocumentParser):
         first_line = lines[0].strip()
 
         # Pattern: numbered headings like "1.", "1.1", "第一章", "Chapter 1"
-        if re.match(r'^(第[一二三四五六七八九十百]+[章节篇]|Chapter\s+\d+)\s', first_line, re.I):
+        if re.match(
+            r"^(第[一二三四五六七八九十百]+[章节篇]|Chapter\s+\d+)\s", first_line, re.I
+        ):
             return 1
-        if re.match(r'^\d+\.\s+\S', first_line) and len(first_line) < 80:
+        if re.match(r"^\d+\.\s+\S", first_line) and len(first_line) < 80:
             return 1
-        if re.match(r'^\d+\.\d+\.?\s+\S', first_line) and len(first_line) < 80:
+        if re.match(r"^\d+\.\d+\.?\s+\S", first_line) and len(first_line) < 80:
             return 2
-        if re.match(r'^\d+\.\d+\.\d+\.?\s+\S', first_line) and len(first_line) < 80:
+        if re.match(r"^\d+\.\d+\.\d+\.?\s+\S", first_line) and len(first_line) < 80:
             return 3
 
         # Short all-caps lines are likely headings
@@ -154,11 +157,14 @@ class PDFParser(DocumentParser):
             return 1
 
         # Short single lines could be headings
-        if len(lines) == 1 and len(first_line) < 50 and not first_line.endswith((".", "。", ":", "：", ",", "，")):
+        if (
+            len(lines) == 1
+            and len(first_line) < 50
+            and not first_line.endswith((".", "。", ":", "：", ",", "，"))
+        ):
             return 2
 
         return 0
-
 
 
 class DocxParser(DocumentParser):
@@ -185,13 +191,15 @@ class DocxParser(DocumentParser):
                     section_path_parts.pop()
                 section_path_parts.append(current_heading)
 
-            sections.append(ParsedSection(
-                content=text,
-                heading=current_heading if heading_level == 0 else None,
-                heading_level=heading_level,
-                section_path=" > ".join(section_path_parts),
-                metadata={"style": para.style.name},
-            ))
+            sections.append(
+                ParsedSection(
+                    content=text,
+                    heading=current_heading if heading_level == 0 else None,
+                    heading_level=heading_level,
+                    section_path=" > ".join(section_path_parts),
+                    metadata={"style": para.style.name},
+                )
+            )
 
         title = ""
         for s in sections:
@@ -221,7 +229,6 @@ class DocxParser(DocumentParser):
         return 0
 
 
-
 class PptxParser(DocumentParser):
     """PowerPoint parser — one section per slide with slide title as heading."""
 
@@ -248,14 +255,16 @@ class PptxParser(DocumentParser):
 
             content = "\n".join(body_texts) if body_texts else slide_title
             if content.strip():
-                sections.append(ParsedSection(
-                    content=content,
-                    page_number=slide_idx + 1,
-                    heading=slide_title,
-                    heading_level=2,
-                    section_path=f"Slide {slide_idx + 1}: {slide_title}",
-                    metadata={"slide_index": slide_idx + 1},
-                ))
+                sections.append(
+                    ParsedSection(
+                        content=content,
+                        page_number=slide_idx + 1,
+                        heading=slide_title,
+                        heading_level=2,
+                        section_path=f"Slide {slide_idx + 1}: {slide_title}",
+                        metadata={"slide_index": slide_idx + 1},
+                    )
+                )
 
         return ParseResult(
             sections=sections,
@@ -263,7 +272,6 @@ class PptxParser(DocumentParser):
             total_pages=len(prs.slides),
             metadata={"parser": "PptxParser"},
         )
-
 
 
 class MarkdownParser(DocumentParser):
@@ -279,17 +287,19 @@ class MarkdownParser(DocumentParser):
         buffer = []
 
         for line in content.split("\n"):
-            heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+            heading_match = re.match(r"^(#{1,6})\s+(.+)$", line)
             if heading_match:
                 # Flush buffer as body section
                 if buffer:
                     body = "\n".join(buffer).strip()
                     if body:
-                        sections.append(ParsedSection(
-                            content=body,
-                            heading=current_heading,
-                            section_path=" > ".join(section_path_parts),
-                        ))
+                        sections.append(
+                            ParsedSection(
+                                content=body,
+                                heading=current_heading,
+                                section_path=" > ".join(section_path_parts),
+                            )
+                        )
                     buffer = []
 
                 level = len(heading_match.group(1))
@@ -300,11 +310,13 @@ class MarkdownParser(DocumentParser):
                     section_path_parts.pop()
                 section_path_parts.append(heading_text)
 
-                sections.append(ParsedSection(
-                    content=heading_text,
-                    heading_level=level,
-                    section_path=" > ".join(section_path_parts),
-                ))
+                sections.append(
+                    ParsedSection(
+                        content=heading_text,
+                        heading_level=level,
+                        section_path=" > ".join(section_path_parts),
+                    )
+                )
             else:
                 buffer.append(line)
 
@@ -312,11 +324,13 @@ class MarkdownParser(DocumentParser):
         if buffer:
             body = "\n".join(buffer).strip()
             if body:
-                sections.append(ParsedSection(
-                    content=body,
-                    heading=current_heading,
-                    section_path=" > ".join(section_path_parts),
-                ))
+                sections.append(
+                    ParsedSection(
+                        content=body,
+                        heading=current_heading,
+                        section_path=" > ".join(section_path_parts),
+                    )
+                )
 
         title = ""
         for s in sections:
@@ -331,7 +345,6 @@ class MarkdownParser(DocumentParser):
         )
 
 
-
 class PlainTextParser(DocumentParser):
     """Fallback parser for plain text files."""
 
@@ -340,7 +353,7 @@ class PlainTextParser(DocumentParser):
             content = f.read()
 
         # Split by double newlines as paragraphs
-        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
+        paragraphs = [p.strip() for p in re.split(r"\n\s*\n", content) if p.strip()]
 
         sections = [
             ParsedSection(content=p, metadata={"paragraph_index": i})
@@ -353,7 +366,6 @@ class PlainTextParser(DocumentParser):
         )
 
 
-
 async def parse_document(file_path: str, file_type: str) -> ParseResult:
     """Parse a document and return structured sections."""
     parser = DocumentParser.for_type(file_type)
@@ -362,6 +374,9 @@ async def parse_document(file_path: str, file_type: str) -> ParseResult:
     result = await asyncio.to_thread(parser.parse, file_path)
     logger.info(
         "Parsed %s (%s): %d sections, title='%s'",
-        file_path, file_type, len(result.sections), result.title[:60],
+        file_path,
+        file_type,
+        len(result.sections),
+        result.title[:60],
     )
     return result

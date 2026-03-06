@@ -37,7 +37,7 @@ async def quality_checker(state: QuizGenState) -> dict:
     Validate generated questions for quality.
     If quality is below threshold and retry_count < 2, signals for retry.
     """
-    from backend.app.core.sse import emit_node_start, emit_node_complete
+    from backend.app.core.sse import emit_node_complete, emit_node_start
 
     session_id = state.get("session_id", "")
     await emit_node_start(session_id, "quality_checker", "正在进行质量校验...")
@@ -57,13 +57,15 @@ async def quality_checker(state: QuizGenState) -> dict:
 
     q_summary = []
     for i, q in enumerate(questions):
-        q_summary.append({
-            "index": i,
-            "type": q.get("question_type"),
-            "content": q.get("content", "")[:200],
-            "options": q.get("options"),
-            "answer": q.get("correct_answer", "")[:100],
-        })
+        q_summary.append(
+            {
+                "index": i,
+                "type": q.get("question_type"),
+                "content": q.get("content", "")[:200],
+                "options": q.get("options"),
+                "answer": q.get("correct_answer", "")[:100],
+            }
+        )
 
     async with async_session_factory() as session:
         try:
@@ -101,9 +103,15 @@ async def quality_checker(state: QuizGenState) -> dict:
             validated.append(q)
         else:
             low_quality_count += 1
-            logger.warning("Question %d scored %d (issue: %s) — dropped", i, q_score, issue)
+            logger.warning(
+                "Question %d scored %d (issue: %s) — dropped", i, q_score, issue
+            )
 
-    avg_score = sum(q.get("quality_score", 7) for q in validated) / len(validated) if validated else 0
+    avg_score = (
+        sum(q.get("quality_score", 7) for q in validated) / len(validated)
+        if validated
+        else 0
+    )
 
     # If too many were dropped and we haven't retried yet, signal retry
     needs_retry = (
@@ -113,12 +121,23 @@ async def quality_checker(state: QuizGenState) -> dict:
     )
 
     if needs_retry:
-        logger.info("Quality too low (avg=%.1f, dropped=%d), triggering retry", avg_score, low_quality_count)
+        logger.info(
+            "Quality too low (avg=%.1f, dropped=%d), triggering retry",
+            avg_score,
+            low_quality_count,
+        )
         retry_msg = f"质量校验未通过，正在重新生成... (第{retry_count + 1}次)"
         await emit_node_complete(
-            session_id, "quality_checker", retry_msg,
+            session_id,
+            "quality_checker",
+            retry_msg,
             input_summary={"question_count": len(questions)},
-            output_summary={"passed": len(validated), "dropped": low_quality_count, "avg_score": round(avg_score, 1), "needs_retry": True},
+            output_summary={
+                "passed": len(validated),
+                "dropped": low_quality_count,
+                "avg_score": round(avg_score, 1),
+                "needs_retry": True,
+            },
             progress=0.85,
         )
         return {
@@ -131,14 +150,23 @@ async def quality_checker(state: QuizGenState) -> dict:
 
     logger.info(
         "Quality check passed: %d/%d questions (avg score: %.1f)",
-        len(validated), len(questions), avg_score,
+        len(validated),
+        len(questions),
+        avg_score,
     )
 
     msg = f"质量校验完成，{len(validated)} 道题目通过"
     await emit_node_complete(
-        session_id, "quality_checker", msg,
+        session_id,
+        "quality_checker",
+        msg,
         input_summary={"question_count": len(questions)},
-        output_summary={"passed": len(validated), "dropped": low_quality_count, "avg_score": round(avg_score, 1), "needs_retry": False},
+        output_summary={
+            "passed": len(validated),
+            "dropped": low_quality_count,
+            "avg_score": round(avg_score, 1),
+            "needs_retry": False,
+        },
         progress=1.0,
     )
 

@@ -1,38 +1,40 @@
 import asyncio
-from langchain_core.messages import SystemMessage, HumanMessage
+
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from backend.app.core.llm import get_node_chat_model, get_solve_verifier_models
+
 from backend.app.core.database import async_session_factory
-from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+from backend.app.core.llm import get_solve_verifier_models
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.nodes._progress import compute_loop_progress
+from backend.app.graphs.pro_generation.state import ProQuizState
 
 STUDENT_PROFILES = [
     {
         "name": "Top Student",
         "desc": "年级前5%的学霸，基础极其扎实，思维敏捷，能看透出题陷阱。",
-        "style": "精准、简练、一针见血。"
+        "style": "精准、简练、一针见血。",
     },
     {
         "name": "Upper-Average Student",
         "desc": "中上等生，基础扎实，能理解大多数题型，偶尔在细节处失分。",
-        "style": "思路清晰，偶有小失误。"
+        "style": "思路清晰，偶有小失误。",
     },
     {
         "name": "Average Student",
         "desc": "中等生水平，基础概念掌握但容易记混，面对变形题容易掉坑。",
-        "style": "中规中矩，偶尔依靠直觉蒙题。"
+        "style": "中规中矩，偶尔依靠直觉蒙题。",
     },
     {
         "name": "Below-Average Student",
         "desc": "中下等生，部分知识点掌握不牢，容易被干扰选项迷惑。",
-        "style": "答题不自信，常常在两个选项间摇摆。"
+        "style": "答题不自信，常常在两个选项间摇摆。",
     },
     {
         "name": "Poor Student",
         "desc": "后进生，基础薄弱，有很多知识盲区，几乎只凭第一直觉作答。",
-        "style": "犹豫不决，答案短且缺乏逻辑。"
-    }
+        "style": "犹豫不决，答案短且缺乏逻辑。",
+    },
 ]
 
 
@@ -62,7 +64,9 @@ async def _simulate_student(
     # being misinterpreted as LangChain template variables.
     solve_messages = [
         SystemMessage(content=system_msg),
-        HumanMessage(content=f"题目：{question.get('content')}\n选项(若有)：{question.get('options', '无')}"),
+        HumanMessage(
+            content=f"题目：{question.get('content')}\n选项(若有)：{question.get('options', '无')}"
+        ),
     ]
 
     try:
@@ -73,17 +77,21 @@ async def _simulate_student(
 
     # Grade the answer (using teacher prompt)
     grade_messages = [
-        SystemMessage(content=(
-            "你是一名阅卷老师。请根据标准答案判断学生作答是否正确。\n"
-            "如果学生回答正确或切中要害，请输出：[CORRECT]\n"
-            "如果思路偏离或全错，请输出：[INCORRECT]\n"
-            "简要附上1句话阅卷理由即可。"
-        )),
-        HumanMessage(content=(
-            f"标准答案：{question.get('correct_answer')}\n"
-            f"解析：{question.get('analysis', '无')}\n\n"
-            f"学生答案：{student_answer}"
-        )),
+        SystemMessage(
+            content=(
+                "你是一名阅卷老师。请根据标准答案判断学生作答是否正确。\n"
+                "如果学生回答正确或切中要害，请输出：[CORRECT]\n"
+                "如果思路偏离或全错，请输出：[INCORRECT]\n"
+                "简要附上1句话阅卷理由即可。"
+            )
+        ),
+        HumanMessage(
+            content=(
+                f"标准答案：{question.get('correct_answer')}\n"
+                f"解析：{question.get('analysis', '无')}\n\n"
+                f"学生答案：{student_answer}"
+            )
+        ),
     ]
 
     try:
@@ -98,7 +106,7 @@ async def _simulate_student(
         "student": profile["name"],
         "student_answer": student_answer,
         "score": score,
-        "grade_reason": grade_text
+        "grade_reason": grade_text,
     }
 
 
@@ -138,12 +146,18 @@ async def solve_verifier_node(state: ProQuizState) -> dict:
     total_q = sum(state.get("target_count", {}).values())
     q_num = len(completed) + 1
 
-    await emit_node_start(session_id, "solve_verifier", f"AI学情模拟测算（第 {q_num}/{total_q} 题）...")
+    await emit_node_start(
+        session_id, "solve_verifier", f"AI学情模拟测算（第 {q_num}/{total_q} 题）..."
+    )
 
     q_dict = state.get("current_question")
     if not q_dict:
-        await emit_node_complete(session_id, "solve_verifier", "无题目可验证",
-                                 progress=compute_loop_progress(len(completed), total_q, 0.6))
+        await emit_node_complete(
+            session_id,
+            "solve_verifier",
+            "无题目可验证",
+            progress=compute_loop_progress(len(completed), total_q, 0.6),
+        )
         return {"solve_results": []}
 
     subject = state.get("subject_scope", "综合")
@@ -151,7 +165,8 @@ async def solve_verifier_node(state: ProQuizState) -> dict:
 
     scores = [r["score"] for r in results]
     await emit_node_complete(
-        session_id, "solve_verifier",
+        session_id,
+        "solve_verifier",
         f"（第 {q_num}/{total_q} 题）{len(results)}名模拟学生已作答",
         output_summary={"scores": scores, "names": [r["student"] for r in results]},
         progress=compute_loop_progress(len(completed), total_q, 0.6),

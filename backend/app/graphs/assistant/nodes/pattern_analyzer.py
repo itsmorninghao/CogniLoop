@@ -71,6 +71,7 @@ async def pattern_analyzer(state: AssistantState) -> dict:
             llm = await get_chat_model(db, temperature=0.3)
 
         from langchain_core.messages import HumanMessage, SystemMessage
+
         messages = [
             SystemMessage(content=_SYSTEM_PROMPT),
             HumanMessage(content=user_content),

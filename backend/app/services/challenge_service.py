@@ -77,6 +77,10 @@ async def get_challenge_detail(
     session = result.scalar_one_or_none()
     if not session:
         raise NotFoundError("Challenge not found")
-    if session.creator_id != user.id and session.solver_id != user.id and not user.is_admin:
+    if (
+        session.creator_id != user.id
+        and session.solver_id != user.id
+        and not user.is_admin
+    ):
         raise ForbiddenError("No access to this challenge")
     return session

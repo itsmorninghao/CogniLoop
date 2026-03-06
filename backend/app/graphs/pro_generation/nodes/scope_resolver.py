@@ -1,5 +1,6 @@
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+
 
 def parse_knowledge_scope(scope: dict) -> tuple[str, list[int]]:
     """Parse knowledge scope to get a subject string and kb_ids."""
@@ -10,14 +11,21 @@ def parse_knowledge_scope(scope: dict) -> tuple[str, list[int]]:
             continue
         if type_name == "knowledge_bases":
             kb_ids.extend([item["id"] for item in items])
-            subject_parts.append(f"知识库涵盖领域: {', '.join(item['name'] for item in items)}")
+            subject_parts.append(
+                f"知识库涵盖领域: {', '.join(item['name'] for item in items)}"
+            )
         elif type_name == "folders":
-            subject_parts.append(f"特定文件夹重点: {', '.join(item['name'] for item in items)}")
+            subject_parts.append(
+                f"特定文件夹重点: {', '.join(item['name'] for item in items)}"
+            )
         elif type_name == "documents":
-            subject_parts.append(f"特定文档: {', '.join(item['name'] for item in items)}")
-    
+            subject_parts.append(
+                f"特定文档: {', '.join(item['name'] for item in items)}"
+            )
+
     subject_scope = "；".join(subject_parts) if subject_parts else "通用综合领域"
     return subject_scope, kb_ids
+
 
 async def scope_resolver_node(state: ProQuizState) -> dict:
     """Resolve user inputs into graph state properties."""
@@ -46,9 +54,17 @@ async def scope_resolver_node(state: ProQuizState) -> dict:
     total_questions = sum(target_count.values())
     msg = f"已解析：{subject_scope[:60]}，共 {total_questions} 道题"
     await emit_node_complete(
-        session_id, "scope_resolver", msg,
-        input_summary={"subject_scope": subject_scope[:200], "target_count": target_count},
-        output_summary={"total_questions": total_questions, "difficulty": target_difficulty},
+        session_id,
+        "scope_resolver",
+        msg,
+        input_summary={
+            "subject_scope": subject_scope[:200],
+            "target_count": target_count,
+        },
+        output_summary={
+            "total_questions": total_questions,
+            "difficulty": target_difficulty,
+        },
         progress=0.05,
     )
 

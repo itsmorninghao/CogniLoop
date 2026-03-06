@@ -1,4 +1,5 @@
 """Self-hosted SVG captcha — no external image library required."""
+
 import random
 import string
 import uuid
@@ -6,7 +7,9 @@ import uuid
 from backend.app.core.redis_pubsub import get_redis
 
 _CAPTCHA_TTL = 300  # 5 minutes
-_CHARS = [c for c in string.ascii_uppercase + string.digits if c not in ('0', 'O', 'I', '1')]
+_CHARS = [
+    c for c in string.ascii_uppercase + string.digits if c not in ("0", "O", "I", "1")
+]
 
 
 def _color(light: bool = False) -> str:
@@ -43,14 +46,14 @@ def generate_captcha_svg(text: str) -> str:
             f'<text x="{x:.1f}" y="{y:.1f}" font-family="monospace" font-size="20" '
             f'font-weight="bold" fill="{_color()}" text-anchor="middle" '
             f'dominant-baseline="middle" transform="rotate({ang},{x:.1f},{y:.1f})">'
-            f'{ch}</text>'
+            f"{ch}</text>"
         )
-    p.append('</svg>')
-    return ''.join(p)
+    p.append("</svg>")
+    return "".join(p)
 
 
 async def issue_captcha() -> tuple[str, str]:
-    text = ''.join(random.choices(_CHARS, k=4))
+    text = "".join(random.choices(_CHARS, k=4))
     cid = str(uuid.uuid4())
     await get_redis().set(f"captcha:{cid}", text, ex=_CAPTCHA_TTL)
     return cid, generate_captcha_svg(text)

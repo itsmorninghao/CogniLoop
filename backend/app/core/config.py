@@ -8,7 +8,7 @@ the `system_configs` DB table and managed via the Admin GUI.
 
 from pathlib import Path
 
-from pydantic import computed_field, field_validator
+from pydantic import computed_field
 from pydantic_settings import BaseSettings
 
 

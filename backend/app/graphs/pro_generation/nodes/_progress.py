@@ -43,4 +43,6 @@ def compute_batch_progress(
     per_q = 0.80 / max(total_questions, 1)
     # Use the end of the batch for progress to avoid regression
     batch_end = completed_count + batch_size
-    return round(0.12 + (min(batch_end, total_questions) - 1 + step_fraction) * per_q, 3)
+    return round(
+        0.12 + (min(batch_end, total_questions) - 1 + step_fraction) * per_q, 3
+    )

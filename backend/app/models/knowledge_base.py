@@ -20,8 +20,12 @@ class KnowledgeBase(SQLModel, table=True):
     share_code: str | None = Field(default=None, max_length=12, unique=True)
     shared_to_plaza_at: datetime | None = Field(default=None)
     document_count: int = Field(default=0)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class KBFolder(SQLModel, table=True):
@@ -31,7 +35,9 @@ class KBFolder(SQLModel, table=True):
     knowledge_base_id: int = Field(foreign_key="knowledge_bases.id", index=True)
     parent_folder_id: int | None = Field(default=None, foreign_key="kb_folders.id")
     name: str = Field(max_length=200)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class KBDocument(SQLModel, table=True):
@@ -47,8 +53,12 @@ class KBDocument(SQLModel, table=True):
     status: str = Field(default="processing", max_length=20)
     error_message: str | None = Field(default=None)
     chunk_count: int = Field(default=0)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
+    updated_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class KBChunk(SQLModel, table=True):
@@ -60,8 +70,12 @@ class KBChunk(SQLModel, table=True):
     chunk_index: int = Field(default=0)
     content: str
     embedding: Any = Field(default=None, sa_column=Column(Vector()))
-    metadata_extra: Any = Field(default={}, sa_column=Column("metadata", JSON, server_default="{}"))
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    metadata_extra: Any = Field(
+        default={}, sa_column=Column("metadata", JSON, server_default="{}")
+    )
+    created_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
 
 
 class KBAcquisition(SQLModel, table=True):
@@ -71,4 +85,6 @@ class KBAcquisition(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", index=True)
     knowledge_base_id: int = Field(foreign_key="knowledge_bases.id", index=True)
     acquired_via: str = Field(max_length=20)  # share_code / plaza
-    acquired_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    acquired_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )

@@ -12,12 +12,12 @@ class GradingState(TypedDict, total=False):
     user_id: int
 
     # Input
-    questions: list[dict]       # [{id, content, type, options, correct_answer, score}]
-    responses: list[dict]       # [{question_id, user_answer}]
+    questions: list[dict]  # [{id, content, type, options, correct_answer, score}]
+    responses: list[dict]  # [{question_id, user_answer}]
 
     # Pipeline
     parsed_responses: list[dict]  # after answer parsing
-    graded_results: list[dict]    # individual grades
+    graded_results: list[dict]  # individual grades
 
     # Output
     total_score: float

@@ -9,15 +9,24 @@ import logging
 import secrets
 from datetime import datetime, timezone
 
-import sqlalchemy as sa
 from sqlalchemy import delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
-from backend.app.core.sse import emit_complete, emit_error, emit_node_start, emit_progress
+from backend.app.core.sse import (
+    emit_complete,
+    emit_error,
+    emit_node_start,
+    emit_progress,
+)
 from backend.app.models.circle import CircleMember, CircleSessionParticipant
-from backend.app.models.quiz import QuizAcquisition, QuizQuestion, QuizResponse, QuizSession
+from backend.app.models.quiz import (
+    QuizAcquisition,
+    QuizQuestion,
+    QuizResponse,
+    QuizSession,
+)
 from backend.app.models.user import User
 from backend.app.schemas.quiz import (
     AcquireQuizRequest,
@@ -84,8 +93,8 @@ async def _generate_quiz_background(
 ) -> None:
     """Background task: run the quiz generation graph."""
     from backend.app.core.database import async_session_factory
-    from backend.app.graphs.quiz_generation.graph import quiz_generation_graph
     from backend.app.graphs.pro_generation.graph import pro_generation_graph
+    from backend.app.graphs.quiz_generation.graph import quiz_generation_graph
 
     try:
         # Give the frontend 500ms to establish the SSE connection before we start emitting events
@@ -120,7 +129,6 @@ async def _generate_quiz_background(
             result = await quiz_generation_graph.ainvoke(initial_state)
             validated_questions = result.get("validated_questions", [])
 
-
         # Save generated questions to DB
         async with async_session_factory() as db_session:
             for i, q in enumerate(validated_questions):
@@ -147,13 +155,20 @@ async def _generate_quiz_background(
 
             await db_session.commit()
 
-        await emit_progress(session_id, 1.0, f"出题完成！共 {len(validated_questions)} 道题目")
-        await emit_complete(session_id, {
-            "question_count": len(validated_questions),
-            "session_id": session_id,
-        })
+        await emit_progress(
+            session_id, 1.0, f"出题完成！共 {len(validated_questions)} 道题目"
+        )
+        await emit_complete(
+            session_id,
+            {
+                "question_count": len(validated_questions),
+                "session_id": session_id,
+            },
+        )
 
-        logger.info("Quiz %s generated: %d questions", session_id, len(validated_questions))
+        logger.info(
+            "Quiz %s generated: %d questions", session_id, len(validated_questions)
+        )
 
     except Exception as e:
         logger.error("Quiz generation failed for %s: %s", session_id, e, exc_info=True)
@@ -203,8 +218,9 @@ async def get_quiz_session(
     questions = q_result.scalars().all()
 
     r_result = await db_session.execute(
-        select(QuizResponse)
-        .where(QuizResponse.session_id == session_id, QuizResponse.user_id == user.id)
+        select(QuizResponse).where(
+            QuizResponse.session_id == session_id, QuizResponse.user_id == user.id
+        )
     )
     responses = r_result.scalars().all()
 
@@ -342,9 +358,7 @@ async def submit_quiz(
     await db_session.flush()
 
     # Kick off background grading
-    task = asyncio.create_task(
-        _grade_quiz_background(session_id, user.id)
-    )
+    task = asyncio.create_task(_grade_quiz_background(session_id, user.id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
@@ -398,12 +412,14 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
             ]
 
         # Run grading graph
-        result = await grading_graph.ainvoke({
-            "session_id": session_id,
-            "user_id": user_id,
-            "questions": q_list,
-            "responses": r_list,
-        })
+        result = await grading_graph.ainvoke(
+            {
+                "session_id": session_id,
+                "user_id": user_id,
+                "questions": q_list,
+                "responses": r_list,
+            }
+        )
 
         # Save grading results
         async with async_session_factory() as db_session:
@@ -440,7 +456,9 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
                         participant.status = "completed"
                         participant.accuracy = result.get("accuracy", 0)
                         participant.total_score = result.get("total_score", 0)
-                        participant.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                        participant.completed_at = datetime.now(timezone.utc).replace(
+                            tzinfo=None
+                        )
                         db_session.add(participant)
                 else:
                     # Non-circle: update session
@@ -454,35 +472,56 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
         # Update user profile after grading
         try:
             from backend.app.services import profile_service
+
             async with async_session_factory() as profile_db:
-                await profile_service.incremental_update(user_id, session_id, profile_db)
-            logger.info("Profile updated for user %d after quiz %s", user_id, session_id)
+                await profile_service.incremental_update(
+                    user_id, session_id, profile_db
+                )
+            logger.info(
+                "Profile updated for user %d after quiz %s", user_id, session_id
+            )
         except Exception as profile_err:
-            logger.warning("Profile update failed for user %d: %s", user_id, profile_err)
+            logger.warning(
+                "Profile update failed for user %d: %s", user_id, profile_err
+            )
 
         # Trigger AI assistant graph (event-driven)
         try:
             from backend.app.graphs.assistant.graph import assistant_graph
+
             task = asyncio.create_task(
-                assistant_graph.ainvoke({
-                    "user_id": user_id,
-                    "session_id": session_id,
-                    "trigger_type": "event",
-                })
+                assistant_graph.ainvoke(
+                    {
+                        "user_id": user_id,
+                        "session_id": session_id,
+                        "trigger_type": "event",
+                    }
+                )
             )
             _background_tasks.add(task)
             task.add_done_callback(_background_tasks.discard)
-            logger.info("AssistantGraph triggered for user %d after quiz %s", user_id, session_id)
+            logger.info(
+                "AssistantGraph triggered for user %d after quiz %s",
+                user_id,
+                session_id,
+            )
         except Exception as assistant_err:
-            logger.warning("AssistantGraph trigger failed for user %d: %s", user_id, assistant_err)
+            logger.warning(
+                "AssistantGraph trigger failed for user %d: %s", user_id, assistant_err
+            )
 
         await emit_progress(session_id, 1.0, result.get("feedback_summary", "批改完成"))
-        await emit_complete(session_id, {
-            "total_score": result.get("total_score", 0),
-            "accuracy": result.get("accuracy", 0),
-        })
+        await emit_complete(
+            session_id,
+            {
+                "total_score": result.get("total_score", 0),
+                "accuracy": result.get("accuracy", 0),
+            },
+        )
 
-        logger.info("Quiz %s graded: score=%.1f", session_id, result.get("total_score", 0))
+        logger.info(
+            "Quiz %s graded: score=%.1f", session_id, result.get("total_score", 0)
+        )
 
     except Exception as e:
         logger.error("Grading failed for %s: %s", session_id, e, exc_info=True)
@@ -499,10 +538,7 @@ async def list_quiz_sessions(
     """List quiz sessions for a user."""
     result = await db_session.execute(
         select(QuizSession)
-        .where(
-            (QuizSession.creator_id == user.id)
-            | (QuizSession.solver_id == user.id)
-        )
+        .where((QuizSession.creator_id == user.id) | (QuizSession.solver_id == user.id))
         .order_by(QuizSession.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -510,9 +546,7 @@ async def list_quiz_sessions(
     return [QuizSessionListItem.model_validate(s) for s in result.scalars().all()]
 
 
-async def _get_session_or_404(
-    session_id: str, db_session: AsyncSession
-) -> QuizSession:
+async def _get_session_or_404(session_id: str, db_session: AsyncSession) -> QuizSession:
     result = await db_session.execute(
         select(QuizSession).where(QuizSession.id == session_id)
     )
@@ -549,7 +583,6 @@ async def _check_session_access(
     raise ForbiddenError("No access to this quiz session")
 
 
-
 def _question_count_subq():
     return (
         select(
@@ -561,9 +594,7 @@ def _question_count_subq():
     )
 
 
-async def delete_quiz_session(
-    session_id: str, user: User, db: AsyncSession
-) -> None:
+async def delete_quiz_session(session_id: str, user: User, db: AsyncSession) -> None:
     quiz = await _get_session_or_404(session_id, db)
     if quiz.creator_id != user.id and not user.is_admin:
         raise ForbiddenError("Only the creator can delete this quiz")
@@ -572,7 +603,9 @@ async def delete_quiz_session(
     if quiz.status not in ("graded", "error", "ready"):
         raise BadRequestError(f"Cannot delete quiz in '{quiz.status}' status")
 
-    await db.execute(delete(QuizAcquisition).where(QuizAcquisition.session_id == session_id))
+    await db.execute(
+        delete(QuizAcquisition).where(QuizAcquisition.session_id == session_id)
+    )
     await db.execute(delete(QuizResponse).where(QuizResponse.session_id == session_id))
     await db.execute(delete(QuizQuestion).where(QuizQuestion.session_id == session_id))
     await db.delete(quiz)
@@ -634,9 +667,7 @@ async def unpublish_from_plaza(
     return QuizSessionResponse.model_validate(quiz)
 
 
-async def acquire_quiz(
-    req: AcquireQuizRequest, user: User, db: AsyncSession
-) -> dict:
+async def acquire_quiz(req: AcquireQuizRequest, user: User, db: AsyncSession) -> dict:
     result = await db.execute(
         select(QuizSession).where(QuizSession.share_code == req.share_code)
     )

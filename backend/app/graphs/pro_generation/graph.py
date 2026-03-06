@@ -1,12 +1,18 @@
 from langgraph.graph import END, StateGraph
-from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.graphs.pro_generation.nodes.scope_resolver import scope_resolver_node
-from backend.app.graphs.pro_generation.nodes.rag_retriever import rag_retriever_node
-from backend.app.graphs.pro_generation.nodes.hotspot_searcher import hotspot_searcher_node
-from backend.app.graphs.pro_generation.nodes.few_shot_retriever import few_shot_retriever_node, orchestrator_node
-from backend.app.graphs.pro_generation.nodes.distributor import distributor_node
+
 from backend.app.graphs.pro_generation.nodes.batch_pipeline import batch_pipeline_node
+from backend.app.graphs.pro_generation.nodes.distributor import distributor_node
+from backend.app.graphs.pro_generation.nodes.few_shot_retriever import (
+    few_shot_retriever_node,
+    orchestrator_node,
+)
+from backend.app.graphs.pro_generation.nodes.hotspot_searcher import (
+    hotspot_searcher_node,
+)
 from backend.app.graphs.pro_generation.nodes.paper_assembler import paper_assembler_node
+from backend.app.graphs.pro_generation.nodes.rag_retriever import rag_retriever_node
+from backend.app.graphs.pro_generation.nodes.scope_resolver import scope_resolver_node
+from backend.app.graphs.pro_generation.state import ProQuizState
 
 
 def route_after_orchestrator(state: ProQuizState) -> str:
@@ -41,7 +47,7 @@ def build_pro_graph():
         {
             "batch_pipeline": "batch_pipeline",
             "paper_assembler": "paper_assembler",
-        }
+        },
     )
 
     builder.add_edge("batch_pipeline", "orchestrator")

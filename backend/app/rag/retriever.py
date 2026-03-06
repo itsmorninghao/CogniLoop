@@ -12,7 +12,6 @@ Supports scoped retrieval: filter by KB IDs, document IDs.
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -28,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RetrievedChunk:
     """A retrieved chunk with relevance scoring."""
+
     id: int
     content: str
     document_id: int
@@ -79,7 +79,8 @@ async def retrieve_chunks(
 
     # Step 1: Vector search
     vector_results = await _vector_search(
-        query, session,
+        query,
+        session,
         knowledge_base_ids=knowledge_base_ids,
         document_ids=document_ids,
         top_k=rerank_top_k if use_rerank else top_k,
@@ -91,7 +92,8 @@ async def retrieve_chunks(
     else:
         # Step 2: Keyword search
         keyword_results = await _keyword_search(
-            query, session,
+            query,
+            session,
             knowledge_base_ids=knowledge_base_ids,
             document_ids=document_ids,
             top_k=rerank_top_k if use_rerank else top_k,
@@ -103,14 +105,12 @@ async def retrieve_chunks(
             k=60,
         )
 
-    candidates = results[: rerank_top_k]
+    candidates = results[:rerank_top_k]
 
     if use_rerank and len(candidates) > top_k:
         # Step 4: LLM reranking
         try:
-            candidates = await _llm_rerank(
-                query, candidates, session, top_k=top_k
-            )
+            candidates = await _llm_rerank(query, candidates, session, top_k=top_k)
         except Exception as e:
             logger.warning("LLM rerank failed, falling back to score-based: %s", e)
             candidates = candidates[:top_k]
@@ -119,7 +119,10 @@ async def retrieve_chunks(
 
     logger.info(
         "Retrieved %d chunks (query: '%s...', hybrid=%s, rerank=%s)",
-        len(candidates), query[:40], use_hybrid, use_rerank,
+        len(candidates),
+        query[:40],
+        use_hybrid,
+        use_rerank,
     )
     return candidates
 
@@ -327,6 +330,7 @@ Return the JSON array and nothing else."""
         content = response.content.strip()
 
         import json
+
         if content.startswith("```"):
             content = content.split("```")[1]
             if content.startswith("json"):

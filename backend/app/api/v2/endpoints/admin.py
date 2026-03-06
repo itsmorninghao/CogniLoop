@@ -19,8 +19,9 @@ from backend.app.models.quiz import QuizQuestion, QuizSession
 from backend.app.models.user import User
 from backend.app.services import config_service, notification_service
 
-router = APIRouter(prefix="/admin", tags=["Admin"], dependencies=[Depends(get_admin_user)])
-
+router = APIRouter(
+    prefix="/admin", tags=["Admin"], dependencies=[Depends(get_admin_user)]
+)
 
 
 class ConfigSetRequest(BaseModel):
@@ -64,7 +65,6 @@ async def delete_config(
     await config_service.delete_config(key, session)
 
 
-
 class PlatformStatsResponse(BaseModel):
     total_users: int
     active_users: int
@@ -79,20 +79,32 @@ async def get_platform_stats(
     session: AsyncSession = Depends(get_session),
 ):
     """Global platform statistics."""
-    total_users = (await session.execute(select(func.count()).select_from(User))).scalar_one()
-    active_users = (await session.execute(
-        select(func.count()).select_from(User).where(User.is_active.is_(True))
-    )).scalar_one()
-    total_kbs = (await session.execute(select(func.count()).select_from(KnowledgeBase))).scalar_one()
-    total_sessions = (await session.execute(select(func.count()).select_from(QuizSession))).scalar_one()
-    completed = (await session.execute(
-        select(func.count()).select_from(QuizSession).where(QuizSession.status == "graded")
-    )).scalar_one()
+    total_users = (
+        await session.execute(select(func.count()).select_from(User))
+    ).scalar_one()
+    active_users = (
+        await session.execute(
+            select(func.count()).select_from(User).where(User.is_active.is_(True))
+        )
+    ).scalar_one()
+    total_kbs = (
+        await session.execute(select(func.count()).select_from(KnowledgeBase))
+    ).scalar_one()
+    total_sessions = (
+        await session.execute(select(func.count()).select_from(QuizSession))
+    ).scalar_one()
+    completed = (
+        await session.execute(
+            select(func.count())
+            .select_from(QuizSession)
+            .where(QuizSession.status == "graded")
+        )
+    ).scalar_one()
 
     # total questions: count quiz_questions via sessions
-    total_questions = (await session.execute(
-        select(func.count()).select_from(QuizQuestion)
-    )).scalar_one()
+    total_questions = (
+        await session.execute(select(func.count()).select_from(QuizQuestion))
+    ).scalar_one()
 
     return PlatformStatsResponse(
         total_users=total_users,
@@ -102,7 +114,6 @@ async def get_platform_stats(
         total_questions_generated=total_questions,
         completed_sessions=completed,
     )
-
 
 
 class UserListItem(BaseModel):
@@ -135,7 +146,9 @@ async def list_users(
     stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
     if search:
         stmt = stmt.where(
-            User.username.icontains(search) | User.email.icontains(search) | User.full_name.icontains(search)
+            User.username.icontains(search)
+            | User.email.icontains(search)
+            | User.full_name.icontains(search)
         )
     result = await session.execute(stmt)
     return [UserListItem.model_validate(u) for u in result.scalars().all()]
@@ -157,12 +170,18 @@ async def update_user(
     # Admin role changes require super admin
     if req.is_admin is not None or req.is_superadmin is not None:
         if not current_admin.is_superadmin:
-            raise HTTPException(status_code=403, detail="Only super admins can change admin roles")
+            raise HTTPException(
+                status_code=403, detail="Only super admins can change admin roles"
+            )
         # Cannot remove own admin status
         if user_id == current_admin.id and req.is_admin is False:
-            raise HTTPException(status_code=400, detail="Cannot remove your own admin status")
+            raise HTTPException(
+                status_code=400, detail="Cannot remove your own admin status"
+            )
         if user_id == current_admin.id and req.is_superadmin is False:
-            raise HTTPException(status_code=400, detail="Cannot remove your own super admin status")
+            raise HTTPException(
+                status_code=400, detail="Cannot remove your own super admin status"
+            )
 
     if req.is_active is not None:
         user.is_active = req.is_active
@@ -177,7 +196,6 @@ async def update_user(
     await session.commit()
     await session.refresh(user)
     return UserListItem.model_validate(user)
-
 
 
 class BroadcastRequest(BaseModel):
@@ -195,9 +213,7 @@ async def send_broadcast(
     session: AsyncSession = Depends(get_session),
 ):
     """Send a system notification to all active users."""
-    result = await session.execute(
-        select(User.id).where(User.is_active.is_(True))
-    )
+    result = await session.execute(select(User.id).where(User.is_active.is_(True)))
     user_ids = [row[0] for row in result.all()]
 
     count = await notification_service.send_system_broadcast(
@@ -239,8 +255,11 @@ async def list_broadcasts(
     rows = result.all()
     return [
         BroadcastItem(
-            id=r.id, title=r.title, content=r.content,
-            created_at=r.created_at, recipient_count=r.recipient_count,
+            id=r.id,
+            title=r.title,
+            content=r.content,
+            created_at=r.created_at,
+            recipient_count=r.recipient_count,
         )
         for r in rows
     ]
@@ -294,7 +313,9 @@ async def test_llm_config(req: TestLLMRequest):
             timeout=10,
         )
         # Simple hello world test
-        res = await chat.ainvoke([HumanMessage(content="Hello world! Reply with 'OK'.")])
+        res = await chat.ainvoke(
+            [HumanMessage(content="Hello world! Reply with 'OK'.")]
+        )
         return {"ok": True, "message": str(res.content)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -308,7 +329,9 @@ async def test_embedding_config(req: TestEmbeddingRequest):
             api_key=req.api_key or "empty",
             base_url=req.base_url if req.base_url else None,
             model=req.model,
-            dimensions=req.dimensions if req.dimensions and req.dimensions > 0 else None,
+            dimensions=req.dimensions
+            if req.dimensions and req.dimensions > 0
+            else None,
             max_retries=1,
             timeout=10,
             check_embedding_ctx_length=False,
@@ -318,7 +341,6 @@ async def test_embedding_config(req: TestEmbeddingRequest):
         return {"ok": True, "dimensions_returned": len(res)}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 
 class AdminKBItem(BaseModel):
@@ -389,7 +411,6 @@ async def admin_unpublish_kb(
     kb.shared_to_plaza_at = None
     session.add(kb)
     await session.commit()
-
 
 
 class AdminCircleItem(BaseModel):

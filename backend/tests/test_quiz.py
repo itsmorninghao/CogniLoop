@@ -5,12 +5,18 @@ from httpx import AsyncClient
 
 
 @pytest.mark.asyncio
-async def test_create_quiz_session_returns_generating(client: AsyncClient, auth_headers: dict):
+async def test_create_quiz_session_returns_generating(
+    client: AsyncClient, auth_headers: dict
+):
     """Creating a quiz session should immediately return status=generating."""
-    resp = await client.post("/api/v2/quiz-sessions/", json={
-        "knowledge_scope": {},
-        "quiz_config": {"question_count": 5, "question_types": ["single_choice"]},
-    }, headers=auth_headers)
+    resp = await client.post(
+        "/api/v2/quiz-sessions/",
+        json={
+            "knowledge_scope": {},
+            "quiz_config": {"question_count": 5, "question_types": ["single_choice"]},
+        },
+        headers=auth_headers,
+    )
     # 201 Created
     assert resp.status_code == 201
     data = resp.json()

@@ -10,8 +10,8 @@ Key features:
 
 from __future__ import annotations
 
-import re
 import logging
+import re
 from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Chunk:
     """A text chunk enriched with structural metadata."""
+
     index: int
     content: str
-    context_prefix: str = ""     # "Chapter 1 > Section 2.1:\n" prepended for embedding
+    context_prefix: str = ""  # "Chapter 1 > Section 2.1:\n" prepended for embedding
     page_number: int | None = None
     section_path: str = ""
     heading: str | None = None
@@ -34,7 +35,6 @@ class Chunk:
         if self.context_prefix:
             return f"{self.context_prefix}\n{self.content}"
         return self.content
-
 
 
 class ChunkingStrategy:
@@ -76,7 +76,9 @@ class SemanticSectionChunker(ChunkingStrategy):
             body_sections = group["body"]
 
             # Concatenate all body text in this group
-            full_text = "\n\n".join(s["content"] for s in body_sections if s["content"].strip())
+            full_text = "\n\n".join(
+                s["content"] for s in body_sections if s["content"].strip()
+            )
             if not full_text.strip():
                 continue
 
@@ -98,18 +100,20 @@ class SemanticSectionChunker(ChunkingStrategy):
             )
 
             for text in text_chunks:
-                chunks.append(Chunk(
-                    index=len(chunks),
-                    content=text,
-                    context_prefix=context_prefix,
-                    page_number=page,
-                    section_path=section_path,
-                    heading=heading,
-                    metadata={
-                        "char_count": len(text),
-                        **({"page": page} if page else {}),
-                    },
-                ))
+                chunks.append(
+                    Chunk(
+                        index=len(chunks),
+                        content=text,
+                        context_prefix=context_prefix,
+                        page_number=page,
+                        section_path=section_path,
+                        heading=heading,
+                        metadata={
+                            "char_count": len(text),
+                            **({"page": page} if page else {}),
+                        },
+                    )
+                )
 
         logger.info("Chunked %d sections into %d chunks", len(sections), len(chunks))
         return chunks
@@ -158,7 +162,7 @@ class SemanticSectionChunker(ChunkingStrategy):
             return [text]
 
         # Split into sentences (Chinese + English)
-        sentences = re.split(r'(?<=[。！？.!?\n])\s*', text)
+        sentences = re.split(r"(?<=[。！？.!?\n])\s*", text)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         chunks: list[str] = []
@@ -225,16 +229,17 @@ class FixedSizeChunker(ChunkingStrategy):
 
             content = full_text[start:end].strip()
             if content:
-                chunks.append(Chunk(
-                    index=len(chunks),
-                    content=content,
-                    metadata={"char_start": start, "char_end": end},
-                ))
+                chunks.append(
+                    Chunk(
+                        index=len(chunks),
+                        content=content,
+                        metadata={"char_start": start, "char_end": end},
+                    )
+                )
 
             start = end - chunk_overlap
 
         return chunks
-
 
 
 def chunk_sections(
@@ -259,10 +264,16 @@ def chunk_sections(
     section_dicts = [
         {
             "content": s.content if hasattr(s, "content") else s.get("content", ""),
-            "heading_level": s.heading_level if hasattr(s, "heading_level") else s.get("heading_level", 0),
+            "heading_level": s.heading_level
+            if hasattr(s, "heading_level")
+            else s.get("heading_level", 0),
             "heading": s.heading if hasattr(s, "heading") else s.get("heading"),
-            "section_path": s.section_path if hasattr(s, "section_path") else s.get("section_path", ""),
-            "page_number": s.page_number if hasattr(s, "page_number") else s.get("page_number"),
+            "section_path": s.section_path
+            if hasattr(s, "section_path")
+            else s.get("section_path", ""),
+            "page_number": s.page_number
+            if hasattr(s, "page_number")
+            else s.get("page_number"),
         }
         for s in sections
     ]

@@ -27,7 +27,12 @@ _DEFAULTS = {
 }
 
 # Pro graph nodes that support per-node LLM configuration
-PRO_LLM_NODES = ["hotspot_searcher", "question_generator", "quality_checker", "solve_verifier"]
+PRO_LLM_NODES = [
+    "hotspot_searcher",
+    "question_generator",
+    "quality_checker",
+    "solve_verifier",
+]
 
 
 async def _get(key: str, session: AsyncSession) -> str:
@@ -54,7 +59,9 @@ async def get_chat_model(
         api_key=api_key,
         model=model or await _get("OPENAI_MODEL", session),
         base_url=await _get("OPENAI_BASE_URL", session),
-        temperature=temperature if temperature is not None else float(await _get("OPENAI_TEMPERATURE", session)),
+        temperature=temperature
+        if temperature is not None
+        else float(await _get("OPENAI_TEMPERATURE", session)),
         max_retries=2,
     )
 
@@ -102,7 +109,11 @@ async def _resolve_node_llm_params(
 
     base_url = node_base or await _get("OPENAI_BASE_URL", session)
     model = node_model or await _get("OPENAI_MODEL", session)
-    temp = temperature if temperature is not None else float(await _get("OPENAI_TEMPERATURE", session))
+    temp = (
+        temperature
+        if temperature is not None
+        else float(await _get("OPENAI_TEMPERATURE", session))
+    )
 
     if node_key or node_base or node_model:
         logger.info("Node '%s' using custom LLM: model=%s", node_name, model)
@@ -124,7 +135,9 @@ async def get_node_chat_model(
     api_key, model, base_url, temp = await _resolve_node_llm_params(
         node_name, session, temperature=temperature
     )
-    return ChatOpenAI(api_key=api_key, model=model, base_url=base_url, temperature=temp, max_retries=2)
+    return ChatOpenAI(
+        api_key=api_key, model=model, base_url=base_url, temperature=temp, max_retries=2
+    )
 
 
 async def get_solve_verifier_models(session: AsyncSession) -> list[dict]:
@@ -144,7 +157,9 @@ async def get_solve_verifier_models(session: AsyncSession) -> list[dict]:
                 global_key = await get_config("OPENAI_API_KEY", session)
                 global_base = await _get("OPENAI_BASE_URL", session)
                 node_key = await get_config("PRO_NODE_SOLVE_VERIFIER_API_KEY", session)
-                node_base = await get_config("PRO_NODE_SOLVE_VERIFIER_BASE_URL", session)
+                node_base = await get_config(
+                    "PRO_NODE_SOLVE_VERIFIER_BASE_URL", session
+                )
 
                 models = []
                 for spec in specs:
@@ -152,19 +167,27 @@ async def get_solve_verifier_models(session: AsyncSession) -> list[dict]:
                     base_url = spec.get("base_url") or node_base or global_base
                     if not api_key:
                         raise RuntimeError("No API key for solve verifier model spec")
-                    models.append({
-                        "llm": ChatOpenAI(
-                            api_key=api_key,
-                            model=spec.get("model", await _get("OPENAI_MODEL", session)),
-                            base_url=base_url,
-                            temperature=float(spec.get("temperature", 0.7)),
-                            max_retries=2,
-                        ),
-                        "prompt_degradation": bool(spec.get("prompt_degradation", False)),
-                    })
+                    models.append(
+                        {
+                            "llm": ChatOpenAI(
+                                api_key=api_key,
+                                model=spec.get(
+                                    "model", await _get("OPENAI_MODEL", session)
+                                ),
+                                base_url=base_url,
+                                temperature=float(spec.get("temperature", 0.7)),
+                                max_retries=2,
+                            ),
+                            "prompt_degradation": bool(
+                                spec.get("prompt_degradation", False)
+                            ),
+                        }
+                    )
                 return models
         except (json.JSONDecodeError, TypeError):
-            logger.warning("Invalid PRO_NODE_SOLVE_VERIFIER_MODELS JSON, falling back to single model")
+            logger.warning(
+                "Invalid PRO_NODE_SOLVE_VERIFIER_MODELS JSON, falling back to single model"
+            )
 
     # Fallback: use the node-specific (or global) model, 3 copies with varied temperatures
     api_key, model_name, base_url, _ = await _resolve_node_llm_params(
@@ -173,7 +196,16 @@ async def get_solve_verifier_models(session: AsyncSession) -> list[dict]:
     temps = [0.3, 0.5, 0.7]
 
     return [
-        {"llm": ChatOpenAI(api_key=api_key, model=model_name, base_url=base_url, temperature=t, max_retries=2), "prompt_degradation": False}
+        {
+            "llm": ChatOpenAI(
+                api_key=api_key,
+                model=model_name,
+                base_url=base_url,
+                temperature=t,
+                max_retries=2,
+            ),
+            "prompt_degradation": False,
+        }
         for t in temps
     ]
 

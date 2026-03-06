@@ -60,6 +60,7 @@ async def recommendation_engine(state: AssistantState) -> dict:
             llm = await get_chat_model(db, temperature=0.5)
 
         from langchain_core.messages import HumanMessage, SystemMessage
+
         messages = [
             SystemMessage(content=_SYSTEM_PROMPT),
             HumanMessage(content=user_content),
@@ -87,6 +88,7 @@ async def recommendation_engine(state: AssistantState) -> dict:
     if recommendations:
         try:
             from backend.app.services import notification_service
+
             async with async_session_factory() as db:
                 for rec in recommendations:
                     await notification_service.create_notification(

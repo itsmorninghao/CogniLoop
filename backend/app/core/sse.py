@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SSEEvent:
     """A single SSE event."""
-    event_type: str           # node_start, node_complete, progress, error, complete
+
+    event_type: str  # node_start, node_complete, progress, error, complete
     data: dict
     timestamp: float = field(default_factory=time.time)
 
@@ -70,7 +71,12 @@ class SSEManager:
         )
 
         queues = self._queues.get(session_id, [])
-        logger.info("SSE dispatch: %s/%s → %d subscriber(s)", session_id[:8], event_type, len(queues))
+        logger.info(
+            "SSE dispatch: %s/%s → %d subscriber(s)",
+            session_id[:8],
+            event_type,
+            len(queues),
+        )
         for queue in queues:
             try:
                 queue.put_nowait(event)
@@ -80,7 +86,10 @@ class SSEManager:
         # Cross-process broadcast via Redis (best-effort)
         try:
             from backend.app.core.redis_pubsub import publish
-            await publish(f"sse:{session_id}", {"event_type": event_type, **(data or {})})
+
+            await publish(
+                f"sse:{session_id}", {"event_type": event_type, **(data or {})}
+            )
         except Exception:
             pass  # Redis unavailable — local queues still work
 
@@ -93,7 +102,11 @@ class SSEManager:
         """
         queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue(maxsize=100)
         self._queues[session_id].append(queue)
-        logger.info("SSE subscriber registered for session %s (total: %d)", session_id[:8], len(self._queues[session_id]))
+        logger.info(
+            "SSE subscriber registered for session %s (total: %d)",
+            session_id[:8],
+            len(self._queues[session_id]),
+        )
         return queue
 
     def remove_subscriber(self, session_id: str, queue: asyncio.Queue) -> None:
@@ -157,25 +170,34 @@ class SSEManager:
         """Convert an SSEEvent to a dict that EventSourceResponse understands."""
         return {
             "event": event.event_type,
-            "data": json.dumps({
-                "type": event.event_type,
-                "timestamp": event.timestamp,
-                **event.data,
-            }, ensure_ascii=False),
+            "data": json.dumps(
+                {
+                    "type": event.event_type,
+                    "timestamp": event.timestamp,
+                    **event.data,
+                },
+                ensure_ascii=False,
+            ),
         }
 
 
 # Helper functions for graph nodes
 
 
-async def emit_node_start(session_id: str, node_name: str, message: str = "", **extra: Any) -> None:
+async def emit_node_start(
+    session_id: str, node_name: str, message: str = "", **extra: Any
+) -> None:
     """Emit a node_start SSE event."""
     sse = SSEManager.get_instance()
-    await sse.send_event(session_id, "node_start", {
-        "node": node_name,
-        "message": message or f"正在执行: {node_name}",
-        **extra,
-    })
+    await sse.send_event(
+        session_id,
+        "node_start",
+        {
+            "node": node_name,
+            "message": message or f"正在执行: {node_name}",
+            **extra,
+        },
+    )
 
 
 async def emit_node_complete(
@@ -207,10 +229,14 @@ async def emit_node_complete(
 async def emit_progress(session_id: str, progress: float, message: str) -> None:
     """Emit a progress SSE event."""
     sse = SSEManager.get_instance()
-    await sse.send_event(session_id, "progress", {
-        "progress": progress,
-        "message": message,
-    })
+    await sse.send_event(
+        session_id,
+        "progress",
+        {
+            "progress": progress,
+            "message": message,
+        },
+    )
 
 
 async def emit_complete(session_id: str, data: dict | None = None) -> None:

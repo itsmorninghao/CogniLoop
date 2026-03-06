@@ -110,7 +110,9 @@ async def get_circle_quiz_sessions(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    return await circle_service.get_circle_quiz_sessions(circle_id, session, limit, user)
+    return await circle_service.get_circle_quiz_sessions(
+        circle_id, session, limit, user
+    )
 
 
 @router.get(

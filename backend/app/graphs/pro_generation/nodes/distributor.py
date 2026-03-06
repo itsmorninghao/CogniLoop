@@ -16,11 +16,13 @@ Fallback hierarchy:
 import json
 import logging
 import math
-from langchain_core.messages import SystemMessage, HumanMessage
-from backend.app.core.llm import get_node_chat_model
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from backend.app.core.database import async_session_factory
+from backend.app.core.llm import get_node_chat_model
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +36,9 @@ def _fallback_chunk_ids(gen_idx: int, total_gens: int, n_chunks: int) -> list[in
     return [(start + j) % n_chunks for j in range(chunks_per_gen)]
 
 
-def _assign_few_shots(qtype: str, local_index: int, few_shot_pool: dict[str, list[dict]]) -> list[dict]:
+def _assign_few_shots(
+    qtype: str, local_index: int, few_shot_pool: dict[str, list[dict]]
+) -> list[dict]:
     """Rule-based: give each generator of the same type a different pair of examples."""
     examples = few_shot_pool.get(qtype, [])
     if not examples:
@@ -64,8 +68,7 @@ async def _llm_distribute(
 
     # Build compact chunk list for prompt (index + first 150 chars)
     chunk_summaries = [
-        f"[{c['index']}] {c['content'][:150].replace(chr(10), ' ')}"
-        for c in rag_chunks
+        f"[{c['index']}] {c['content'][:150].replace(chr(10), ' ')}" for c in rag_chunks
     ]
     hotspot_summaries = [f"[{i}] {h[:120]}" for i, h in enumerate(hotspot_items)]
 
@@ -81,9 +84,11 @@ async def _llm_distribute(
         "使每个出题手覆盖不同的知识侧面，生成的题目尽量不重复、不雷同。\n\n"
         f"【出题手列表】（共 {len(generators)} 个）\n{gen_list}\n\n"
         f"【知识片段池】（共 {len(rag_chunks)} 条，每条显示前150字）\n"
-        + "\n".join(chunk_summaries) + "\n\n"
+        + "\n".join(chunk_summaries)
+        + "\n\n"
         f"【时事热点池】（共 {len(hotspot_items)} 条）\n"
-        + "\n".join(hotspot_summaries) + "\n\n"
+        + "\n".join(hotspot_summaries)
+        + "\n\n"
         "【分配规则】\n"
         f"1. 每个出题手分配约 {chunks_per_gen} 条知识片段（用片段的数字编号列表表示）\n"
         "2. 不同出题手尽量分配不同的片段，覆盖尽量全面\n"
@@ -98,10 +103,12 @@ async def _llm_distribute(
     try:
         async with async_session_factory() as session:
             llm = await get_node_chat_model("question_generator", session)
-        response = await llm.ainvoke([
-            SystemMessage(content=sys_prompt),
-            HumanMessage(content="请开始分配。"),
-        ])
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content=sys_prompt),
+                HumanMessage(content="请开始分配。"),
+            ]
+        )
         raw = str(response.content).strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
@@ -109,7 +116,9 @@ async def _llm_distribute(
                 raw = raw[4:]
         return json.loads(raw.strip())
     except Exception as e:
-        logger.warning("distributor LLM call failed (%s), will use rule-based fallback", e)
+        logger.warning(
+            "distributor LLM call failed (%s), will use rule-based fallback", e
+        )
         return {}
 
 
@@ -129,10 +138,14 @@ async def distributor_node(state: ProQuizState) -> dict:
             generators.append({"key": f"{qtype}_{i}", "type": qtype, "local_index": i})
 
     if not generators:
-        await emit_node_complete(session_id, "distributor", "无需分配（无题目目标）", progress=0.18)
+        await emit_node_complete(
+            session_id, "distributor", "无需分配（无题目目标）", progress=0.18
+        )
         return {"question_context_map": {}}
 
-    llm_result = await _llm_distribute(generators, rag_chunks, hotspot_items, session_id)
+    llm_result = await _llm_distribute(
+        generators, rag_chunks, hotspot_items, session_id
+    )
 
     fallback_used = 0
     question_context_map: dict[str, dict] = {}
@@ -144,18 +157,28 @@ async def distributor_node(state: ProQuizState) -> dict:
         assignment = llm_result.get(key, {}) if isinstance(llm_result, dict) else {}
 
         raw_ids = assignment.get("chunk_ids", [])
-        valid_ids = [cid for cid in raw_ids if isinstance(cid, int) and 0 <= cid < len(rag_chunks)]
+        valid_ids = [
+            cid
+            for cid in raw_ids
+            if isinstance(cid, int) and 0 <= cid < len(rag_chunks)
+        ]
 
         if not valid_ids:
             if raw_ids:  # had ids but all invalid
-                logger.warning("distributor: all chunk_ids invalid for %s, using fallback", key)
+                logger.warning(
+                    "distributor: all chunk_ids invalid for %s, using fallback", key
+                )
             valid_ids = _fallback_chunk_ids(gen_idx, len(generators), len(rag_chunks))
             fallback_used += 1
 
         rag_context = "\n---\n".join(rag_chunks[cid]["content"] for cid in valid_ids)
 
         hotspot_index = assignment.get("hotspot_index")
-        if hotspot_index is None or not isinstance(hotspot_index, int) or not (0 <= hotspot_index < len(hotspot_items)):
+        if (
+            hotspot_index is None
+            or not isinstance(hotspot_index, int)
+            or not (0 <= hotspot_index < len(hotspot_items))
+        ):
             hotspot_index = gen_idx % len(hotspot_items) if hotspot_items else 0
         hotspot = hotspot_items[hotspot_index] if hotspot_items else ""
 
@@ -167,7 +190,9 @@ async def distributor_node(state: ProQuizState) -> dict:
             "few_shot_examples": few_shot_examples,
         }
 
-    fallback_note = f"（{fallback_used} 个出题手使用了兜底分配）" if fallback_used else ""
+    fallback_note = (
+        f"（{fallback_used} 个出题手使用了兜底分配）" if fallback_used else ""
+    )
     gen_context_summary = {
         key: {
             "rag_chars": len(ctx.get("rag_context", "")),
@@ -177,7 +202,8 @@ async def distributor_node(state: ProQuizState) -> dict:
         for key, ctx in question_context_map.items()
     }
     await emit_node_complete(
-        session_id, "distributor",
+        session_id,
+        "distributor",
         f"已为 {len(generators)} 个出题手完成素材分配{fallback_note}",
         input_summary={
             "rag_chunks_count": len(rag_chunks),

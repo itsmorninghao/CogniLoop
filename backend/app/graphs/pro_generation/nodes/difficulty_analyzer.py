@@ -1,6 +1,6 @@
-from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.nodes._progress import compute_loop_progress
+from backend.app.graphs.pro_generation.state import ProQuizState
 
 
 def analyze_difficulty(
@@ -41,7 +41,11 @@ async def difficulty_analyzer_node(state: ProQuizState) -> dict:
     total_q = sum(state.get("target_count", {}).values())
     q_num = len(completed) + 1
 
-    await emit_node_start(session_id, "difficulty_analyzer", f"难度分析与调校（第 {q_num}/{total_q} 题）...")
+    await emit_node_start(
+        session_id,
+        "difficulty_analyzer",
+        f"难度分析与调校（第 {q_num}/{total_q} 题）...",
+    )
 
     q_dict = state.get("current_question", {})
     if not q_dict:
@@ -65,7 +69,8 @@ async def difficulty_analyzer_node(state: ProQuizState) -> dict:
         q_dict["difficulty_score"] = final_score
         completed.append(q_dict)
         await emit_node_complete(
-            session_id, "difficulty_analyzer",
+            session_id,
+            "difficulty_analyzer",
             f"（第 {q_num}/{total_q} 题）难度合格，已收录（得分 {final_score:.2f}）",
             output_summary={"difficulty_score": final_score, "accepted": True},
             progress=compute_loop_progress(len(completed), total_q, 0.8),
@@ -74,16 +79,18 @@ async def difficulty_analyzer_node(state: ProQuizState) -> dict:
             "completed_questions": completed,
             "current_question": None,
             "quality_feedback": None,
-            "solve_results": []
+            "solve_results": [],
         }
     else:
         await emit_node_complete(
-            session_id, "difficulty_analyzer",
+            session_id,
+            "difficulty_analyzer",
             f"（第 {q_num}/{total_q} 题）难度不合格（{final_score:.2f}），需重新出题",
-            output_summary={"difficulty_score": final_score, "accepted": False, "retry": retry_count + 1},
+            output_summary={
+                "difficulty_score": final_score,
+                "accepted": False,
+                "retry": retry_count + 1,
+            },
             progress=compute_loop_progress(len(completed), total_q, 0.8),
         )
-        return {
-            "quality_feedback": feedback,
-            "retry_count": retry_count + 1
-        }
+        return {"quality_feedback": feedback, "retry_count": retry_count + 1}

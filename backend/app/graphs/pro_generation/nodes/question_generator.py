@@ -1,10 +1,12 @@
 import json
-from langchain_core.messages import SystemMessage, HumanMessage
-from backend.app.core.llm import get_node_chat_model
+
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from backend.app.core.database import async_session_factory
-from backend.app.graphs.pro_generation.state import ProQuizState
-from backend.app.core.sse import emit_node_start, emit_node_complete
+from backend.app.core.llm import get_node_chat_model
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.nodes._progress import compute_loop_progress
+from backend.app.graphs.pro_generation.state import ProQuizState
 
 
 async def generate_question(
@@ -32,7 +34,9 @@ async def generate_question(
     # Format RAG knowledge context
     rag_section = ""
     if rag_context:
-        rag_section = f"【参考知识内容（请基于以下知识点出题）】\n{rag_context[:3000]}\n\n"
+        rag_section = (
+            f"【参考知识内容（请基于以下知识点出题）】\n{rag_context[:3000]}\n\n"
+        )
 
     # Format few shots
     shots_text = ""
@@ -60,7 +64,11 @@ async def generate_question(
         f"{format_instr}\n"
     )
 
-    user_msg = "请开始出题。如果之前出题有错误，请根据此反馈修正再出题:\n" + str(feedback) if feedback else "请开始出题。"
+    user_msg = (
+        "请开始出题。如果之前出题有错误，请根据此反馈修正再出题:\n" + str(feedback)
+        if feedback
+        else "请开始出题。"
+    )
 
     # Build messages directly instead of using ChatPromptTemplate to avoid
     # curly braces in content (e.g. math set notation {1,2,3}) being
@@ -89,14 +97,18 @@ async def generate_question(
             print(f"Question Generation JSON parse error: {e}")
 
     if not question_dict_out:
-        fallback_options = {"A": "概念A", "B": "概念B", "C": "概念C", "D": "概念D"} if qtype == "single_choice" else None
+        fallback_options = (
+            {"A": "概念A", "B": "概念B", "C": "概念C", "D": "概念D"}
+            if qtype == "single_choice"
+            else None
+        )
         question_dict_out = {
             "question_type": qtype,
             "content": f"请解释什么是 {subject} 中的重要概念？",
             "options": fallback_options,
             "correct_answer": "A" if qtype == "single_choice" else "略",
             "analysis": "系统生成出错，此为兜底题目",
-            "difficulty_score": 0.5
+            "difficulty_score": 0.5,
         }
 
     return question_dict_out
@@ -109,7 +121,9 @@ async def question_generator_node(state: ProQuizState) -> dict:
     total_q = sum(state.get("target_count", {}).values())
     q_num = len(completed) + 1
 
-    await emit_node_start(session_id, "question_generator", f"原创命题（第 {q_num}/{total_q} 题）...")
+    await emit_node_start(
+        session_id, "question_generator", f"原创命题（第 {q_num}/{total_q} 题）..."
+    )
 
     qtype = state.get("current_type_generating")
     if not qtype:
@@ -128,7 +142,8 @@ async def question_generator_node(state: ProQuizState) -> dict:
 
     preview = (question_dict_out.get("content") or "")[:80]
     await emit_node_complete(
-        session_id, "question_generator",
+        session_id,
+        "question_generator",
         f"（第 {q_num}/{total_q} 题）命题完成",
         output_summary={"question_type": qtype, "content_preview": preview},
         progress=compute_loop_progress(len(completed), total_q, 0.2),

@@ -3,9 +3,9 @@
 import logging
 
 from backend.app.core.database import async_session_factory
+from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.state import ProQuizState
 from backend.app.rag.retriever import retrieve_chunks
-from backend.app.core.sse import emit_node_start, emit_node_complete
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,9 @@ async def rag_retriever_node(state: ProQuizState) -> dict:
 
     if not document_kb_ids and not doc_ids:
         await emit_node_complete(
-            session_id, "rag_retriever", "未选择文档知识库，跳过检索",
+            session_id,
+            "rag_retriever",
+            "未选择文档知识库，跳过检索",
             output_summary={"chunk_count": 0},
             progress=0.08,
         )
@@ -58,7 +60,9 @@ async def rag_retriever_node(state: ProQuizState) -> dict:
 
     top_previews = [
         {
-            "content": c["content"][:120] + "..." if len(c["content"]) > 120 else c["content"],
+            "content": c["content"][:120] + "..."
+            if len(c["content"]) > 120
+            else c["content"],
             "similarity": round(c.get("similarity", 0), 3),
         }
         for c in chunks[:5]
@@ -66,7 +70,9 @@ async def rag_retriever_node(state: ProQuizState) -> dict:
 
     msg = f"已检索到 {len(chunks)} 个相关知识片段"
     await emit_node_complete(
-        session_id, "rag_retriever", msg,
+        session_id,
+        "rag_retriever",
+        msg,
         input_summary={"query": query[:200], "kb_ids": document_kb_ids, "top_k": top_k},
         output_summary={"chunk_count": len(chunks), "top_chunks": top_previews},
         progress=0.08,

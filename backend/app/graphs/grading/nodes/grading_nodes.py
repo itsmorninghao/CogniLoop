@@ -31,15 +31,17 @@ async def answer_parser(state: GradingState) -> dict:
         if not q:
             continue
 
-        parsed.append({
-            "question_id": resp["question_id"],
-            "question_type": q.get("question_type", ""),
-            "user_answer": (resp.get("user_answer") or "").strip(),
-            "correct_answer": (q.get("correct_answer") or "").strip(),
-            "max_score": q.get("score", 1.0),
-            "content": q.get("content", ""),
-            "analysis": q.get("analysis", ""),
-        })
+        parsed.append(
+            {
+                "question_id": resp["question_id"],
+                "question_type": q.get("question_type", ""),
+                "user_answer": (resp.get("user_answer") or "").strip(),
+                "correct_answer": (q.get("correct_answer") or "").strip(),
+                "max_score": q.get("score", 1.0),
+                "content": q.get("content", ""),
+                "analysis": q.get("analysis", ""),
+            }
+        )
 
     return {
         "parsed_responses": parsed,
@@ -67,7 +69,11 @@ async def rule_grader(state: GradingState) -> dict:
                 correct_set = set(correct_ans.replace(",", "").replace(" ", ""))
                 is_correct = user_set == correct_set
                 # Partial credit: half score for partial match
-                if not is_correct and user_set.issubset(correct_set) and len(user_set) > 0:
+                if (
+                    not is_correct
+                    and user_set.issubset(correct_set)
+                    and len(user_set) > 0
+                ):
                     score = item["max_score"] * 0.5
                     feedback = f"部分正确。你选了 {''.join(sorted(user_set))}，正确答案是 {''.join(sorted(correct_set))}。"
                 elif is_correct:
@@ -79,24 +85,34 @@ async def rule_grader(state: GradingState) -> dict:
             else:
                 is_correct = user_ans == correct_ans
                 score = item["max_score"] if is_correct else 0
-                feedback = "正确！" if is_correct else f"错误。正确答案是 {correct_ans}。{item.get('analysis', '')}"
+                feedback = (
+                    "正确！"
+                    if is_correct
+                    else f"错误。正确答案是 {correct_ans}。{item.get('analysis', '')}"
+                )
 
-            graded.append({
-                **item,
-                "is_correct": is_correct if q_type != "multiple_choice" else score == item["max_score"],
-                "score": score,
-                "ai_feedback": feedback,
-                "grading_method": "rule",
-            })
+            graded.append(
+                {
+                    **item,
+                    "is_correct": is_correct
+                    if q_type != "multiple_choice"
+                    else score == item["max_score"],
+                    "score": score,
+                    "ai_feedback": feedback,
+                    "grading_method": "rule",
+                }
+            )
         else:
             # Pass subjective questions through to llm_grader
-            graded.append({
-                **item,
-                "is_correct": None,
-                "score": None,
-                "ai_feedback": None,
-                "grading_method": "pending_llm",
-            })
+            graded.append(
+                {
+                    **item,
+                    "is_correct": None,
+                    "score": None,
+                    "ai_feedback": None,
+                    "grading_method": "pending_llm",
+                }
+            )
 
     return {
         "graded_results": graded,
@@ -125,10 +141,10 @@ async def llm_grader(state: GradingState) -> dict:
             try:
                 prompt = f"""你是一位评分老师。请根据参考答案为学生的答案评分。
 
-题目：{item['content']}
-学生答案：{item['user_answer']}
-参考答案：{item['correct_answer']}
-满分分值：{item['max_score']}
+题目：{item["content"]}
+学生答案：{item["user_answer"]}
+参考答案：{item["correct_answer"]}
+满分分值：{item["max_score"]}
 
 请返回 JSON 格式（不要其他文字）:
 {{"score": <得分>, "is_correct": <true/false>, "feedback": "<评语>"}}"""
@@ -143,12 +159,16 @@ async def llm_grader(state: GradingState) -> dict:
 
                 result = json.loads(content)
                 item["score"] = min(float(result.get("score", 0)), item["max_score"])
-                item["is_correct"] = result.get("is_correct", item["score"] >= item["max_score"] * 0.6)
+                item["is_correct"] = result.get(
+                    "is_correct", item["score"] >= item["max_score"] * 0.6
+                )
                 item["ai_feedback"] = result.get("feedback", "")
                 item["grading_method"] = "llm"
 
             except Exception as e:
-                logger.error("LLM grading failed for question %s: %s", item["question_id"], e)
+                logger.error(
+                    "LLM grading failed for question %s: %s", item["question_id"], e
+                )
                 item["score"] = 0
                 item["is_correct"] = False
                 item["ai_feedback"] = f"AI批改出错：{str(e)[:100]}"

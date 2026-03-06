@@ -58,7 +58,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Permissions-Policy"] = (
+            "camera=(), microphone=(), geolocation=()"
+        )
         return response
 
 
@@ -85,7 +87,11 @@ async def health():
 
 # Serve frontend static files (Docker deployment)
 if FRONTEND_DIST.exists():
-    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="static-assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(FRONTEND_DIST / "assets")),
+        name="static-assets",
+    )
 
     # SPA fallback: any non-API, non-static route → index.html
     @app.get("/{full_path:path}")
@@ -94,4 +100,3 @@ if FRONTEND_DIST.exists():
         if index.exists():
             return FileResponse(str(index))
         return {"error": "Frontend not built"}
-

@@ -4,7 +4,6 @@ WebSocket connection manager — maintains per-user connections.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections import defaultdict
 
@@ -22,7 +21,9 @@ class WebSocketManager:
     async def connect(self, user_id: int, ws: WebSocket) -> None:
         await ws.accept()
         self._connections[user_id].add(ws)
-        logger.debug("WS connected user=%d (total=%d)", user_id, len(self._connections[user_id]))
+        logger.debug(
+            "WS connected user=%d (total=%d)", user_id, len(self._connections[user_id])
+        )
 
     def disconnect(self, user_id: int, ws: WebSocket) -> None:
         self._connections[user_id].discard(ws)

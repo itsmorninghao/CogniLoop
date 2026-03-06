@@ -4,24 +4,26 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.database import get_session
 from backend.app.core.deps import get_current_user
 from backend.app.models.knowledge_base import KnowledgeBase
 from backend.app.models.user import User
 from backend.app.services.bank_import_service import (
+    import_from_scan,
     import_json_files,
     scan_archive,
-    import_from_scan,
 )
 
 router = APIRouter(prefix="/knowledge-bases/{kb_id}/bank-import", tags=["Bank Import"])
 
 
 async def _get_question_bank(
-    kb_id: int, session: AsyncSession, current_user: User,
+    kb_id: int,
+    session: AsyncSession,
+    current_user: User,
 ) -> KnowledgeBase:
     """Fetch a question_bank KB owned by current_user, or raise."""
     stmt = select(KnowledgeBase).where(
@@ -60,7 +62,7 @@ async def upload_json_question_bank(
         if not f.filename.endswith(".json"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"仅支持 JSON 文件导入，发现不支持的文件: {f.filename}"
+                detail=f"仅支持 JSON 文件导入，发现不支持的文件: {f.filename}",
             )
         json_files.append(f)
 

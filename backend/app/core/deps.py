@@ -3,7 +3,6 @@ FastAPI dependency for extracting the current user from JWT.
 """
 
 from fastapi import Depends, Header
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 

@@ -9,7 +9,6 @@ from backend.app.core.deps import get_current_user
 from backend.app.models.user import User
 from backend.app.services import profile_service
 
-
 router = APIRouter(prefix="/profiles", tags=["Profiles"])
 
 
@@ -49,7 +48,9 @@ def _build_profile_response(profile, user_id: int) -> ProfileResponse:
         domain_profiles=data.get("domain_profiles", {}),
         learning_trajectory=data.get("learning_trajectory", []),
         profile_version=profile.profile_version or 0,
-        last_calculated_at=str(profile.last_calculated_at) if profile.last_calculated_at else None,
+        last_calculated_at=str(profile.last_calculated_at)
+        if profile.last_calculated_at
+        else None,
     )
 
 
