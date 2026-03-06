@@ -1,0 +1,71 @@
+# CogniLoop v2 — Docker Compose
+
+services:
+  # PostgreSQL + pgvector 
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: cogniloop_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-cogniloop}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-cogniloop_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - cogniloop_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cogniloop} -d ${DB_NAME:-cogniloop_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis (SSE cross-process broadcast + task queue)
+  redis:
+    image: redis:7-alpine
+    container_name: cogniloop_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # CogniLoop App (Backend + Frontend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cogniloop_app
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./.env:/app/.env
+      - cogniloop_uploads:/app/uploads
+      - cogniloop_question_sets:/app/question_sets
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Allow access to host network for Ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  cogniloop_pgdata:
+  cogniloop_uploads:
+  cogniloop_question_sets:

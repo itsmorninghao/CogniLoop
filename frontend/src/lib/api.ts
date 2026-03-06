@@ -1,0 +1,663 @@
+/**
+ * HTTP client for CogniLoop v2 API.
+ * All requests go through the Vite proxy → FastAPI.
+ */
+
+const BASE_URL = '/api/v2'
+
+function getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem('token')
+    return token ? { 'Authorization': `Bearer ${token}` } : {}
+}
+
+async function request<T>(
+    path: string,
+    options: RequestInit = {},
+): Promise<T> {
+    const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+        ...((options.headers as Record<string, string>) || {}),
+    }
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+        ...options,
+        headers,
+    })
+
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({ detail: res.statusText }))
+        throw new ApiError(res.status, body.detail || '请求失败')
+    }
+
+    // 204 No Content
+    if (res.status === 204) return undefined as T
+
+    return res.json()
+}
+
+/**
+ * Upload a file (multipart — no Content-Type header, let browser set boundary).
+ */
+async function upload<T>(path: string, file: File, fieldName = 'file'): Promise<T> {
+    const form = new FormData()
+    form.append(fieldName, file)
+
+    const res = await fetch(`${BASE_URL}${path}`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: form,
+    })
+
+    if (!res.ok) {
+        const body = await res.json().catch(() => ({ detail: res.statusText }))
+        throw new ApiError(res.status, body.detail || '上传失败')
+    }
+
+    return res.json()
+}
+
+export class ApiError extends Error {
+    constructor(
+        public status: number,
+        message: string,
+    ) {
+        super(message)
+        this.name = 'ApiError'
+    }
+}
+
+export const api = {
+    get: <T>(path: string) => request<T>(path),
+    post: <T>(path: string, body?: unknown) =>
+        request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+    patch: <T>(path: string, body?: unknown) =>
+        request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
+    delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+    upload: <T>(path: string, file: File, fieldName?: string) =>
+        upload<T>(path, file, fieldName),
+}
+
+// Setup API (first-run)
+
+export const setupApi = {
+    check: () => api.get<{ needs_setup: boolean }>('/auth/setup-check'),
+    createAdmin: (data: { username: string; email: string; password: string; full_name: string }) =>
+        api.post<{ id: number }>('/auth/setup', data),
+}
+
+// SSE helper
+
+export interface SSEEvent {
+    type: string
+    progress?: number
+    message?: string
+    node?: string
+    error?: string
+    question_count?: number
+    total_score?: number
+    accuracy?: number
+    session_id?: string
+    [key: string]: unknown
+}
+
+/**
+ * Subscribe to SSE stream for a quiz session.
+ * Fetches a one-time ticket first, then opens the EventSource.
+ * Returns a cleanup function to close the connection.
+ */
+export async function subscribeSSE(
+    sessionId: string,
+    onEvent: (event: SSEEvent) => void,
+    onError?: (err: Event) => void,
+): Promise<() => void> {
+
+    const { ticket } = await api.post<{ ticket: string }>('/notifications/sse-ticket')
+    const url = `${BASE_URL}/quiz-sessions/${sessionId}/stream?ticket=${encodeURIComponent(ticket)}`
+
+    const es = new EventSource(url)
+
+    const handleEvent = (e: MessageEvent) => {
+        try {
+            const data: SSEEvent = JSON.parse(e.data)
+            onEvent(data)
+        } catch {
+            // ignore parse errors
+        }
+    }
+
+    es.addEventListener('node_start', handleEvent)
+    es.addEventListener('node_complete', handleEvent)
+    es.addEventListener('progress', handleEvent)
+    es.addEventListener('complete', handleEvent)
+    es.addEventListener('error', handleEvent)
+
+    es.onerror = (err) => {
+        if (onError) onError(err)
+        es.close()
+    }
+
+    return () => es.close()
+}
+
+// Typed API helpers
+
+export interface KnowledgeBase {
+    id: number
+    name: string
+    description: string | null
+    tags: string[]
+    kb_type: string
+    owner_id: number
+    document_count: number
+    share_code: string | null
+    shared_to_plaza_at: string | null
+    created_at: string
+    updated_at: string
+}
+
+export interface KBDocument {
+    id: number
+    knowledge_base_id: number
+    original_filename: string
+    file_type: string
+    status: string
+    chunk_count: number
+    error_message: string | null
+    created_at: string
+}
+
+export interface QuizSession {
+    id: string
+    creator_id: number
+    solver_id: number | null
+    circle_id: number | null
+    mode: string
+    generation_mode: string
+    title: string | null
+    knowledge_scope: Record<string, unknown> | null
+    quiz_config: Record<string, unknown> | null
+    status: string
+    total_score: number | null
+    accuracy: number | null
+    started_at: string | null
+    completed_at: string | null
+    created_at: string
+    share_code: string | null
+    shared_to_plaza_at: string | null
+    questions?: QuizQuestion[]
+    responses?: QuizResponse[]
+}
+
+export interface QuizQuestion {
+    id: number
+    question_index: number
+    question_type: string
+    content: string
+    options: Record<string, string> | null
+    score: number
+    correct_answer: string | null
+    analysis: string | null
+    created_at: string
+}
+
+export interface QuizResponse {
+    id: number
+    question_id: number
+    user_answer: string | null
+    is_correct: boolean | null
+    score: number | null
+    ai_feedback: string | null
+    time_spent: number | null
+}
+
+export interface QuizSessionListItem {
+    id: string
+    mode: string
+    title: string | null
+    status: string
+    total_score: number | null
+    accuracy: number | null
+    created_at: string
+    circle_id: number | null
+    share_code: string | null
+    shared_to_plaza_at: string | null
+    question_count: number
+    creator_full_name: string | null
+    creator_username: string | null
+    acquired_at: string | null
+}
+
+export interface QuizPlazaItem {
+    id: string
+    title: string | null
+    mode: string
+    question_count: number
+    accuracy: number | null
+    creator_full_name: string
+    creator_username: string
+    acquire_count: number
+    shared_to_plaza_at: string
+    share_code: string | null
+}
+
+export interface ScanFileEntry {
+    filename: string
+    relative_path: string
+    subject: string
+    question_type: string
+    question_count: number
+    sample: string
+}
+
+export interface ScanResult {
+    scan_id: string
+    files: ScanFileEntry[]
+}
+
+export interface ImportResult {
+    imported: number
+    skipped: number
+    errors: string[]
+}
+
+export interface BankQuestion {
+    id: number
+    content: string
+    answer: string
+    subject: string
+    question_type: string
+    difficulty: string
+    options: Record<string, string> | null
+    analysis: string | null
+    source_file: string | null
+}
+
+export const kbApi = {
+    list: () => api.get<KnowledgeBase[]>('/knowledge-bases/'),
+    listAcquired: () => api.get<KnowledgeBase[]>('/knowledge-bases/acquired'),
+    acquire: (shareCode: string) =>
+        api.post<KnowledgeBase>('/knowledge-bases/acquire', { share_code: shareCode }),
+    create: (data: { name: string; description?: string; tags?: string[]; kb_type?: string }) =>
+        api.post<KnowledgeBase>('/knowledge-bases/', data),
+    get: (id: number) => api.get<KnowledgeBase>(`/knowledge-bases/${id}`),
+    delete: (id: number) => api.delete(`/knowledge-bases/${id}`),
+    uploadDoc: (kbId: number, file: File) =>
+        api.upload<KBDocument>(`/knowledge-bases/${kbId}/documents`, file),
+    listDocs: (kbId: number) => api.get<KBDocument[]>(`/knowledge-bases/${kbId}/documents`),
+    deleteDoc: (kbId: number, docId: number) =>
+        api.delete(`/knowledge-bases/${kbId}/documents/${docId}`),
+    uploadBank: (kbId: number, file: File) =>
+        api.upload<{ message: string; result: { imported: number; skipped: number; errors: string[] } }>(`/knowledge-bases/${kbId}/bank-import`, file, 'files'),
+    listBankQuestions: (kbId: number, limit = 50, offset = 0) =>
+        api.get<{ total: number; items: BankQuestion[] }>(`/knowledge-bases/${kbId}/bank-questions?limit=${limit}&offset=${offset}`),
+    generateShareCode: (id: number) =>
+        api.post<KnowledgeBase>(`/knowledge-bases/${id}/share`),
+    revokeShareCode: (id: number) =>
+        api.delete<KnowledgeBase>(`/knowledge-bases/${id}/share`),
+    publishToPlaza: (id: number) =>
+        api.post<KnowledgeBase>(`/knowledge-bases/${id}/publish`),
+    unpublishFromPlaza: (id: number) =>
+        api.delete<KnowledgeBase>(`/knowledge-bases/${id}/publish`),
+    scanArchive: (kbId: number, data: { url?: string; zipFile?: File }) => {
+        const form = new FormData()
+        if (data.url) form.append('url', data.url)
+        if (data.zipFile) form.append('zip_file', data.zipFile)
+
+        return fetch(`${BASE_URL}/knowledge-bases/${kbId}/bank-import/scan`, {
+            method: 'POST', headers: getAuthHeaders(), body: form,
+        }).then(res => {
+            if (!res.ok) return res.json().catch(() => ({ detail: res.statusText })).then(b => { throw new ApiError(res.status, b.detail || '扫描失败') })
+            return res.json() as Promise<ScanResult>
+        })
+    },
+    confirmArchive: (kbId: number, scanId: string, selectedFiles: string[]) =>
+        api.post<{ message: string; result: ImportResult }>(
+            `/knowledge-bases/${kbId}/bank-import/confirm`,
+            { scan_id: scanId, selected_files: selectedFiles },
+        ),
+}
+
+export const quizApi = {
+    create: (data: {
+        mode?: string
+        generation_mode?: string
+        title?: string
+        knowledge_scope: Record<string, unknown>
+        quiz_config: Record<string, unknown>
+        solver_id?: number
+        circle_id?: number
+    }) => api.post<QuizSession>('/quiz-sessions/', data),
+    list: (limit = 20, offset = 0) =>
+        api.get<QuizSessionListItem[]>(`/quiz-sessions/?limit=${limit}&offset=${offset}`),
+    get: (id: string) => api.get<QuizSession>(`/quiz-sessions/${id}`),
+    submitResponses: (id: string, responses: { question_id: number; user_answer: string; time_spent?: number }[]) =>
+        api.post<QuizResponse[]>(`/quiz-sessions/${id}/responses`, { responses }),
+    submit: (id: string) => api.post<QuizSession>(`/quiz-sessions/${id}/submit`),
+    deleteSession: (id: string) => api.delete(`/quiz-sessions/${id}`),
+    generateShareCode: (id: string) => api.post<QuizSession>(`/quiz-sessions/${id}/share`),
+    revokeShareCode: (id: string) => api.delete<QuizSession>(`/quiz-sessions/${id}/share`),
+    publishToPlaza: (id: string) => api.post<QuizSession>(`/quiz-sessions/${id}/publish`),
+    unpublishFromPlaza: (id: string) => api.delete<QuizSession>(`/quiz-sessions/${id}/publish`),
+    acquire: (shareCode: string) => api.post<{ message: string }>('/quiz-sessions/acquire', { share_code: shareCode }),
+    listMyQuizzes: (limit = 20, offset = 0) =>
+        api.get<QuizSessionListItem[]>(`/quiz-sessions/my-quizzes?limit=${limit}&offset=${offset}`),
+    listAcquired: () => api.get<QuizSessionListItem[]>('/quiz-sessions/acquired'),
+}
+
+export const quizPlazaApi = {
+    list: () => api.get<QuizPlazaItem[]>('/quiz-plaza/'),
+}
+
+// Profile API
+
+export interface DomainProfile {
+    accuracy: number
+    question_count: number
+    correct: number
+    avg_time_per_question: number
+    preferred_difficulty: string
+}
+
+export interface ProfileShare {
+    id: number
+    share_type: string
+    share_token: string | null
+    created_at: string
+}
+
+export interface UserProfile {
+    user_id: number
+    overall_level: string
+    total_questions_answered: number
+    overall_accuracy: number
+    question_type_profiles: Record<string, { accuracy: number; count: number; correct: number }>
+    domain_profiles: Record<string, DomainProfile>
+    learning_trajectory: { date: string; accuracy: number; question_count: number; session_id: string }[]
+    profile_version: number
+    last_calculated_at: string | null
+}
+
+export const profileApi = {
+    getMyProfile: () => api.get<UserProfile>('/profiles/me'),
+    getUserProfile: (userId: number) => api.get<UserProfile>(`/profiles/${userId}`),
+    recalculate: () => api.post<UserProfile>('/profiles/me/recalculate'),
+    share: (shareType = 'link') => api.post<ProfileShare>('/profiles/me/share', { share_type: shareType }),
+    getMyShare: () => api.get<ProfileShare | null>('/profiles/me/share'),
+    revokeShare: () => api.delete('/profiles/me/share'),
+}
+
+// Notification API
+
+export interface Notification {
+    id: number
+    type: string
+    title: string
+    content: string | null
+    category: string
+    is_read: boolean
+    action_url: string | null
+    sender_id: number | null
+    created_at: string
+}
+
+export const notificationApi = {
+    list: (unreadOnly = false, limit = 50) =>
+        api.get<Notification[]>(`/notifications/?unread_only=${unreadOnly}&limit=${limit}`),
+    unreadCount: () => api.get<{ count: number }>('/notifications/unread-count'),
+    markRead: (id: number) => api.patch(`/notifications/${id}/read`),
+    markAllRead: () => api.post('/notifications/read-all'),
+}
+
+// Admin API
+
+export interface PlatformStats {
+    total_users: number
+    active_users: number
+    total_knowledge_bases: number
+    total_quiz_sessions: number
+    total_questions_generated: number
+    completed_sessions: number
+}
+
+export interface AdminUser {
+    id: number
+    username: string
+    email: string
+    full_name: string
+    is_active: boolean
+    is_admin: boolean
+    is_superadmin: boolean
+    created_at: string
+}
+
+export interface SystemConfig {
+    id: number
+    key: string
+    value: string | null
+    description: string | null
+    updated_at: string
+}
+
+export interface BroadcastHistoryItem {
+    id: number
+    title: string
+    content: string | null
+    created_at: string
+    recipient_count: number
+}
+
+export interface AdminKBItem {
+    id: number
+    name: string
+    description: string | null
+    owner_id: number
+    owner_username: string
+    kb_type: string
+    document_count: number
+    share_code: string | null
+    shared_to_plaza_at: string | null
+    created_at: string
+}
+
+export interface AdminCircleItem {
+    id: number
+    name: string
+    description: string | null
+    creator_id: number
+    creator_username: string
+    invite_code: string
+    max_members: number
+    member_count: number
+    is_active: boolean
+    is_public: boolean
+    created_at: string
+}
+
+export const adminApi = {
+    stats: () => api.get<PlatformStats>('/admin/stats'),
+    listUsers: (search?: string, limit = 50, offset = 0) => {
+        let url = `/admin/users?limit=${limit}&offset=${offset}`
+        if (search) url += `&search=${encodeURIComponent(search)}`
+        return api.get<AdminUser[]>(url)
+    },
+    updateUser: (id: number, data: { is_active?: boolean; is_admin?: boolean; is_superadmin?: boolean }) =>
+        api.patch<AdminUser>(`/admin/users/${id}`, data),
+    listConfigs: () => api.get<SystemConfig[]>('/admin/system-configs'),
+    setConfig: (key: string, value: string, description?: string) =>
+        api.post<SystemConfig>('/admin/system-configs', { key, value, description }),
+    deleteConfig: (key: string) => api.delete(`/admin/system-configs/${key}`),
+    broadcast: (title: string, content?: string) =>
+        api.post<{ sent_count: number }>('/admin/system-broadcasts', { title, content }),
+    listBroadcasts: () => api.get<BroadcastHistoryItem[]>('/admin/system-broadcasts'),
+    deleteBroadcast: (id: number) => api.delete(`/admin/system-broadcasts/${id}`),
+    testLlm: (data: { api_key: string; base_url?: string; model: string }) =>
+        api.post<{ ok: boolean; message: string }>('/admin/system-configs/test-llm', data),
+    testEmbedding: (data: { api_key: string; base_url?: string; model: string; dimensions?: number }) =>
+        api.post<{ ok: boolean; dimensions_returned: number }>('/admin/system-configs/test-embedding', data),
+    listKBs: (search?: string, plazaOnly = false, limit = 50, offset = 0) => {
+        let url = `/admin/knowledge-bases?limit=${limit}&offset=${offset}&plaza_only=${plazaOnly}`
+        if (search) url += `&search=${encodeURIComponent(search)}`
+        return api.get<AdminKBItem[]>(url)
+    },
+    unpublishKB: (id: number) => api.delete(`/admin/knowledge-bases/${id}/unpublish`),
+    listCircles: (search?: string, limit = 50, offset = 0) => {
+        let url = `/admin/circles?limit=${limit}&offset=${offset}`
+        if (search) url += `&search=${encodeURIComponent(search)}`
+        return api.get<AdminCircleItem[]>(url)
+    },
+    deleteCircle: (id: number) => api.delete(`/admin/circles/${id}`),
+}
+
+// Circle API
+
+export interface Circle {
+    id: number
+    name: string
+    description: string | null
+    avatar_url: string | null
+    creator_id: number
+    invite_code: string
+    max_members: number
+    is_active: boolean
+    is_public: boolean
+    member_count: number
+    created_at: string
+}
+
+export interface DomainStat {
+    domain: string
+    avg_accuracy: number
+    member_count: number
+}
+
+export interface LeaderboardEntry {
+    user_id: number
+    username: string
+    full_name: string
+    avatar_url: string | null
+    role: string
+    total_questions: number
+    overall_accuracy: number
+}
+
+export interface CircleStats {
+    circle_id: number
+    member_count: number
+    domain_stats: DomainStat[]
+    leaderboard: LeaderboardEntry[]
+}
+
+export interface CircleSessionParticipantItem {
+    user_id: number
+    username: string
+    full_name: string
+    status: string
+    accuracy: number | null
+    total_score: number | null
+    completed_at: string | null
+}
+
+export interface CircleQuizSessionItem {
+    id: string
+    creator_id: number
+    creator_username: string
+    creator_full_name: string
+    title: string | null
+    mode: string
+    status: string
+    total_score: number | null
+    accuracy: number | null
+    created_at: string
+    participant_count: number
+    current_user_status: string | null
+}
+
+export interface CircleMember {
+    id: number
+    user_id: number
+    username: string
+    full_name: string
+    avatar_url: string | null
+    role: string
+    joined_at: string
+}
+
+export const circleApi = {
+    list: () => api.get<Circle[]>('/circles/'),
+    get: (id: number) => api.get<Circle>(`/circles/${id}`),
+    create: (data: { name: string; description?: string; max_members?: number; is_public?: boolean }) =>
+        api.post<Circle>('/circles/', data),
+    update: (id: number, data: { name?: string; description?: string; max_members?: number; is_public?: boolean }) =>
+        api.patch<Circle>(`/circles/${id}`, data),
+    delete: (id: number) => api.delete(`/circles/${id}`),
+    join: (inviteCode: string) => api.post<Circle>('/circles/join', { invite_code: inviteCode }),
+    members: (id: number) => api.get<CircleMember[]>(`/circles/${id}/members`),
+    removeMember: (circleId: number, userId: number) =>
+        api.delete(`/circles/${circleId}/members/${userId}`),
+    stats: (id: number) => api.get<CircleStats>(`/circles/${id}/stats`),
+    quizSessions: (id: number, limit = 20) =>
+        api.get<CircleQuizSessionItem[]>(`/circles/${id}/quiz-sessions?limit=${limit}`),
+    sessionParticipants: (circleId: number, sessionId: string) =>
+        api.get<CircleSessionParticipantItem[]>(`/circles/${circleId}/sessions/${sessionId}/participants`),
+}
+
+// Plaza API
+
+export const plazaApi = {
+    list: () => api.get<KnowledgeBase[]>('/kb-plaza/'),
+}
+
+// Challenge API
+
+export const challengeApi = {
+    listReceived: (status?: string) => {
+        const params = status ? `?status=${encodeURIComponent(status)}` : ''
+        return api.get<QuizSessionListItem[]>(`/challenges/received${params}`)
+    },
+    listSent: () => api.get<QuizSessionListItem[]>('/challenges/sent'),
+}
+
+// Assistant API
+
+export interface AssistantInsights {
+    patterns_found: { domain: string; issue: string; detail: string; severity: string }[]
+    learning_trajectory: { date: string; accuracy: number; question_count: number; session_id: string }[]
+    overall_accuracy: number
+    overall_level: string
+    total_questions_answered: number
+}
+
+export interface AssistantRecommendation {
+    id: number
+    title: string
+    content: string | null
+    action_url: string | null
+    created_at: string
+}
+
+export const assistantApi = {
+    insights: () => api.get<AssistantInsights>('/assistant/insights'),
+    recommendations: () => api.get<AssistantRecommendation[]>('/assistant/recommendations'),
+    trigger: () => api.post<{ status: string; message: string }>('/assistant/trigger'),
+}
+
+// User API
+
+export interface UserPublicInfo {
+    id: number
+    username: string
+    full_name: string
+    avatar_url: string | null
+    bio: string | null
+}
+
+export const userApi = {
+    search: (q: string, limit = 10) =>
+        api.get<UserPublicInfo[]>(`/users/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+    me: () => api.get<UserPublicInfo>('/users/me'),
+    updateMe: (data: { full_name?: string; bio?: string }) =>
+        api.patch<UserPublicInfo>('/users/me', data),
+    uploadAvatar: (file: File) =>
+        api.upload<UserPublicInfo>('/users/me/avatar', file),
+}

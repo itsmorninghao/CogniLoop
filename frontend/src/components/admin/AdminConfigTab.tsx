@@ -1,0 +1,624 @@
+import { useEffect, useState } from 'react'
+import { adminApi, type SystemConfig } from '@/lib/api'
+import { toast } from 'sonner'
+import { Play, Database, Server, Key, Plus, Trash2, Tag, ShieldAlert, ChevronDown, ChevronUp, RefreshCw, Zap, Settings2 } from 'lucide-react'
+
+
+const PRO_NODES = [
+    { key: 'HOTSPOT_SEARCHER', label: '热点检索', desc: '搜索时事热点素材' },
+    { key: 'QUESTION_GENERATOR', label: '题目生成', desc: '核心出题模型，建议用强模型' },
+    { key: 'QUALITY_CHECKER', label: '质量审查', desc: '审查题目质量，可用快速模型' },
+] as const
+
+type ProNodeKey = typeof PRO_NODES[number]['key']
+
+interface NodeConfig {
+    apiKey: string
+    baseUrl: string
+    model: string
+}
+
+export function AdminConfigTab() {
+    const [configs, setConfigs] = useState<SystemConfig[]>([])
+    const [loading, setLoading] = useState(true)
+
+    const [activeTab, setActiveTab] = useState<'llm' | 'embedding' | 'pro_nodes' | 'raw'>('llm')
+
+    const [llmKey, setLlmKey] = useState('')
+    const [llmBase, setLlmBase] = useState('')
+    const [llmModel, setLlmModel] = useState('')
+
+    const [embKey, setEmbKey] = useState('')
+    const [embBase, setEmbBase] = useState('')
+    const [embModel, setEmbModel] = useState('')
+    const [embDims, setEmbDims] = useState('')
+
+    const [testingLlm, setTestingLlm] = useState(false)
+    const [testingEmb, setTestingEmb] = useState(false)
+
+    // Pro node config state
+    const [nodeConfigs, setNodeConfigs] = useState<Record<ProNodeKey, NodeConfig>>({
+        HOTSPOT_SEARCHER: { apiKey: '', baseUrl: '', model: '' },
+        QUESTION_GENERATOR: { apiKey: '', baseUrl: '', model: '' },
+        QUALITY_CHECKER: { apiKey: '', baseUrl: '', model: '' },
+    })
+    const [expandedNodes, setExpandedNodes] = useState<ProNodeKey[]>([])
+    const [proConcurrency, setProConcurrency] = useState('3')
+
+    interface StudentModel { apiKey: string; baseUrl: string; model: string; promptDegradation: boolean }
+    const [studentCount, setStudentCount] = useState(3)
+    const [studentModels, setStudentModels] = useState<StudentModel[]>(
+        Array.from({ length: 5 }, () => ({ apiKey: '', baseUrl: '', model: '', promptDegradation: false }))
+    )
+    const [savingProNodes, setSavingProNodes] = useState(false)
+
+    const loadConfigs = async () => {
+        try {
+            const data = await adminApi.listConfigs()
+            setConfigs(data)
+            const get = (k: string) => data.find((c: SystemConfig) => c.key === k)?.value || ''
+            setLlmKey(get('LLM_API_KEY'))
+            setLlmBase(get('LLM_BASE_URL'))
+            setLlmModel(get('LLM_MODEL'))
+            setEmbKey(get('EMBEDDING_API_KEY'))
+            setEmbBase(get('EMBEDDING_BASE_URL'))
+            setEmbModel(get('EMBEDDING_MODEL'))
+            setEmbDims(get('EMBEDDING_DIMENSIONS'))
+
+            // Load Pro node configs
+            const newNodeConfigs = { ...nodeConfigs }
+            for (const node of PRO_NODES) {
+                newNodeConfigs[node.key] = {
+                    apiKey: get(`PRO_NODE_${node.key}_API_KEY`),
+                    baseUrl: get(`PRO_NODE_${node.key}_BASE_URL`),
+                    model: get(`PRO_NODE_${node.key}_MODEL`),
+                }
+            }
+            setNodeConfigs(newNodeConfigs)
+            const savedModels = get('PRO_NODE_SOLVE_VERIFIER_MODELS')
+            if (savedModels) {
+                try {
+                    const parsed: Array<{ api_key?: string; base_url?: string; model?: string; prompt_degradation?: boolean }> = JSON.parse(savedModels)
+                    const count = Math.max(1, Math.min(5, parsed.length))
+                    setStudentCount(count)
+                    setStudentModels(
+                        Array.from({ length: 5 }, (_, i) => ({
+                            apiKey: parsed[i]?.api_key || '',
+                            baseUrl: parsed[i]?.base_url || '',
+                            model: parsed[i]?.model || '',
+                            promptDegradation: parsed[i]?.prompt_degradation ?? false,
+                        }))
+                    )
+                } catch { /* ignore */ }
+            }
+            setProConcurrency(get('PRO_CONCURRENCY') || '3')
+        } catch {
+            toast.error('加载系统配置失败')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => { loadConfigs() }, [])
+
+    const saveLlmConfig = async () => {
+        try {
+            await adminApi.setConfig('LLM_API_KEY', llmKey, 'LLM API 密钥')
+            if (llmBase) await adminApi.setConfig('LLM_BASE_URL', llmBase, 'LLM 基础 URL')
+            await adminApi.setConfig('LLM_MODEL', llmModel || 'gpt-4o-mini', 'LLM 模型名称')
+            toast.success('LLM 配置已保存')
+            loadConfigs()
+        } catch { toast.error('保存失败') }
+    }
+
+    const saveEmbeddingConfig = async () => {
+        try {
+            await adminApi.setConfig('EMBEDDING_API_KEY', embKey, 'Embedding API 密钥')
+            if (embBase) await adminApi.setConfig('EMBEDDING_BASE_URL', embBase, 'Embedding 基础 URL')
+            await adminApi.setConfig('EMBEDDING_MODEL', embModel || 'text-embedding-3-small', 'Embedding 模型名称')
+            if (embDims) await adminApi.setConfig('EMBEDDING_DIMENSIONS', embDims, '向量维度')
+            toast.success('向量配置已保存')
+            loadConfigs()
+        } catch { toast.error('保存失败') }
+    }
+
+    const handleTestLlm = () => {
+        if (!llmKey || !llmModel) return toast.error('请填写 Key 和 Model')
+        runTest(() => adminApi.testLlm({ api_key: llmKey, base_url: llmBase || undefined, model: llmModel }), setTestingLlm)
+    }
+
+    const handleTestEmb = () => {
+        if (!embKey || !embModel) return toast.error('请填写 Key 和 Model')
+        runTest(() => adminApi.testEmbedding({ api_key: embKey, base_url: embBase || undefined, model: embModel, dimensions: embDims ? parseInt(embDims) : undefined }), setTestingEmb)
+    }
+
+    const runTest = async (apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
+        try {
+            setLoader(true)
+            const res = await apiCall()
+            if (res.ok) {
+                const detail = res.message || (res.dimensions_returned != null ? `向量维度: ${res.dimensions_returned}` : '成功')
+                toast.success(<div className="flex flex-col gap-1">
+                    <span className="font-bold">连接成功</span>
+                    <span className="text-xs text-muted-foreground break-all">{detail}</span>
+                </div>)
+            } else {
+                toast.error(<div className="flex flex-col gap-1">
+                    <span className="font-bold">测试异常</span>
+                    <span className="text-xs break-all">{res.message || '未知错误'}</span>
+                </div>)
+            }
+        } catch (error: any) {
+            toast.error(<div className="flex flex-col gap-1">
+                <span className="font-bold">连接失败</span>
+                <span className="text-xs break-all opacity-80">{error.response?.data?.detail || error.message}</span>
+            </div>)
+        } finally { setLoader(false) }
+    }
+
+    const updateNodeConfig = (nodeKey: ProNodeKey, field: keyof NodeConfig, value: string) => {
+        setNodeConfigs(prev => ({
+            ...prev,
+            [nodeKey]: { ...prev[nodeKey], [field]: value },
+        }))
+    }
+
+    const toggleNodeExpand = (nodeKey: ProNodeKey) => {
+        setExpandedNodes(prev =>
+            prev.includes(nodeKey) ? prev.filter(k => k !== nodeKey) : [...prev, nodeKey]
+        )
+    }
+
+    const syncNodeFromGlobal = (nodeKey: ProNodeKey) => {
+        setNodeConfigs(prev => ({
+            ...prev,
+            [nodeKey]: { apiKey: llmKey, baseUrl: llmBase, model: llmModel },
+        }))
+        toast.success(`已同步全局配置到 ${PRO_NODES.find(n => n.key === nodeKey)?.label}`)
+    }
+
+    const syncAllFromGlobal = () => {
+        if (!window.confirm('确定将全局 LLM 配置同步到所有 3 个节点？')) return
+        const synced = { ...nodeConfigs }
+        for (const node of PRO_NODES) {
+            synced[node.key] = { apiKey: llmKey, baseUrl: llmBase, model: llmModel }
+        }
+        setNodeConfigs(synced)
+        toast.success('已同步全局配置到所有节点')
+    }
+
+    const saveProNodesConfig = async () => {
+        try {
+            setSavingProNodes(true)
+            for (const node of PRO_NODES) {
+                const cfg = nodeConfigs[node.key]
+                const prefix = `PRO_NODE_${node.key}`
+                if (cfg.apiKey) await adminApi.setConfig(`${prefix}_API_KEY`, cfg.apiKey, `${node.label} API Key`)
+                if (cfg.baseUrl) await adminApi.setConfig(`${prefix}_BASE_URL`, cfg.baseUrl, `${node.label} Base URL`)
+                if (cfg.model) await adminApi.setConfig(`${prefix}_MODEL`, cfg.model, `${node.label} 模型名称`)
+            }
+            // Solve verifier special configs
+            const modelsPayload = studentModels.slice(0, studentCount).map((m, i) => ({
+                label: `学生${i + 1}`,
+                api_key: m.apiKey,
+                base_url: m.baseUrl,
+                model: m.model,
+                prompt_degradation: m.promptDegradation,
+            }))
+            await adminApi.setConfig(
+                'PRO_NODE_SOLVE_VERIFIER_MODELS',
+                JSON.stringify(modelsPayload),
+                'Solve Verifier 多模型配置'
+            )
+            await adminApi.setConfig('PRO_CONCURRENCY', String(Math.max(1, Math.min(10, parseInt(proConcurrency) || 3))), '并发出题数')
+            toast.success('Pro 节点配置已保存')
+            loadConfigs()
+        } catch {
+            toast.error('保存失败')
+        } finally {
+            setSavingProNodes(false)
+        }
+    }
+
+    const handleAddRaw = async (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault()
+        const fd = new FormData(e.currentTarget)
+        const key = fd.get('key') as string
+        const val = fd.get('val') as string
+        const desc = fd.get('desc') as string
+        if (!key) return toast.error('Key 不能为空')
+        try {
+            await adminApi.setConfig(key, val, desc)
+            toast.success('已添加')
+            e.currentTarget.reset()
+            loadConfigs()
+        } catch { toast.error('添加失败') }
+    }
+
+    const handleDelete = async (key: string) => {
+        if (!window.confirm(`确定删除 ${key}？`)) return
+        try {
+            await adminApi.deleteConfig(key)
+            toast.success('已删除')
+            loadConfigs()
+        } catch { toast.error('删除失败') }
+    }
+
+    if (loading) return (
+        <div className="p-6 space-y-5 animate-pulse">
+            <div className="flex items-center gap-3">
+                <div className="size-10 rounded-xl bg-muted/50" />
+                <div className="space-y-1.5">
+                    <div className="h-4 w-24 rounded bg-muted/50" />
+                    <div className="h-3 w-40 rounded bg-muted/50" />
+                </div>
+            </div>
+            <div className="h-64 rounded-xl bg-muted/50" />
+        </div>
+    )
+
+    const inputClass = "w-full bg-transparent border-0 border-b border-border px-0 py-2 text-sm focus:outline-none focus:border-foreground font-mono transition-colors placeholder:text-muted-foreground/50"
+
+    const SUB_TABS = [
+        { key: 'llm' as const, label: 'LLM 核心模型' },
+        { key: 'embedding' as const, label: 'Embedding 向量' },
+        { key: 'pro_nodes' as const, label: 'Pro 节点模型' },
+        { key: 'raw' as const, label: '高级变量' },
+    ]
+
+    return (
+        <div className="animate-fade-in">
+            {/* Page header */}
+            <div className="px-6 py-5 border-b border-border flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 shadow-lg shadow-violet-500/25">
+                    <Settings2 className="size-5 text-white" />
+                </div>
+                <div>
+                    <h2 className="text-base font-semibold text-foreground">系统设置</h2>
+                    <p className="text-xs text-muted-foreground">配置 LLM 模型、向量模型及 Pro 组卷参数</p>
+                </div>
+            </div>
+
+            {/* Sub-tabs */}
+            <div className="flex border-b border-border px-6">
+                {SUB_TABS.map(t => (
+                    <button
+                        key={t.key}
+                        onClick={() => setActiveTab(t.key)}
+                        className={`relative px-4 py-3 text-sm font-medium transition-colors ${activeTab === t.key ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    >
+                        {t.label}
+                        {activeTab === t.key && <span className="absolute bottom-0 inset-x-1 h-0.5 rounded-full bg-foreground" />}
+                    </button>
+                ))}
+            </div>
+
+            {activeTab === 'llm' && (
+                <div className="animate-in fade-in p-6">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-sm text-muted-foreground">负责题库智能生成、填空题/简答题批改的核心语言模型。</p>
+                        </div>
+                        <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> API Key <span className="text-rose-500">*</span></label>
+                                <input type="password" value={llmKey} onChange={e => setLlmKey(e.target.value)} placeholder="sk-..." className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> Base URL</label>
+                                <input type="text" value={llmBase} onChange={e => setLlmBase(e.target.value)} placeholder="https://api.openai.com/v1" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> Model Name <span className="text-rose-500">*</span></label>
+                                <input type="text" value={llmModel} onChange={e => setLlmModel(e.target.value)} placeholder="gpt-4o-mini" className={inputClass} />
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
+                            <button onClick={saveLlmConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90">
+                                保存
+                            </button>
+                            <button onClick={handleTestLlm} disabled={testingLlm} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                {testingLlm ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
+                                {testingLlm ? '测试中...' : '测试连接'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'embedding' && (
+                <div className="animate-in fade-in p-6">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-sm text-muted-foreground">负责将文档和题目转化为向量数组，用于知识库检索 (RAG)。</p>
+                        </div>
+                        <div className="grid lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
+                            <div className="px-6 py-5 space-y-5">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> API Key <span className="text-rose-500">*</span></label>
+                                    <input type="password" value={embKey} onChange={e => setEmbKey(e.target.value)} placeholder="sk-..." className={inputClass} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Database className="size-3" /> 向量维度</label>
+                                    <input type="number" value={embDims} onChange={e => setEmbDims(e.target.value)} placeholder="可选，默认由模型决定" className={inputClass} />
+                                </div>
+                            </div>
+                            <div className="px-6 py-5 space-y-5">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> Base URL</label>
+                                    <input type="text" value={embBase} onChange={e => setEmbBase(e.target.value)} placeholder="https://api.openai.com/v1" className={inputClass} />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> Model Name <span className="text-rose-500">*</span></label>
+                                    <input type="text" value={embModel} onChange={e => setEmbModel(e.target.value)} placeholder="text-embedding-3-small" className={inputClass} />
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
+                            <button onClick={saveEmbeddingConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90">
+                                保存
+                            </button>
+                            <button onClick={handleTestEmb} disabled={testingEmb} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                {testingEmb ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
+                                {testingEmb ? '测试中...' : '测试连接'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'pro_nodes' && (
+                <div className="animate-in fade-in p-6 space-y-4">
+                    {/* Node accordion card */}
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">为 Pro 仿真组卷的每个 AI 节点单独配置 LLM 模型。留空则自动使用全局 LLM 配置。</p>
+                            <button
+                                onClick={syncAllFromGlobal}
+                                className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors shrink-0 ml-4"
+                            >
+                                <RefreshCw className="size-3" /> 一键同步全局配置
+                            </button>
+                        </div>
+                        <div className="divide-y divide-border">
+                            {PRO_NODES.map(node => {
+                                const cfg = nodeConfigs[node.key]
+                                const isExpanded = expandedNodes.includes(node.key)
+                                const hasConfig = !!(cfg.apiKey || cfg.baseUrl || cfg.model)
+
+                                return (
+                                    <div key={node.key}>
+                                        <button
+                                            onClick={() => toggleNodeExpand(node.key)}
+                                            className="w-full flex items-center gap-3 px-6 py-4 hover:bg-accent/30 transition-colors"
+                                        >
+                                            <Settings2 className="size-4 text-muted-foreground shrink-0" />
+                                            <div className="flex-1 text-left">
+                                                <span className="text-sm font-medium text-foreground">{node.label}</span>
+                                                <span className="text-xs text-muted-foreground ml-2">{node.desc}</span>
+                                            </div>
+                                            {hasConfig && (
+                                                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                                                    已配置
+                                                </span>
+                                            )}
+                                            {isExpanded ? <ChevronUp className="size-4 text-muted-foreground" /> : <ChevronDown className="size-4 text-muted-foreground" />}
+                                        </button>
+
+                                        {isExpanded && (
+                                            <div className="bg-accent/10 border-t border-border">
+                                                <div className="flex items-center justify-end px-6 pt-3">
+                                                    <button
+                                                        onClick={() => syncNodeFromGlobal(node.key)}
+                                                        className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                                                    >
+                                                        <RefreshCw className="size-2.5" /> 同步全局
+                                                    </button>
+                                                </div>
+                                                <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border/50 px-6 pb-4">
+                                                    <div className="px-3 py-3 space-y-1">
+                                                        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                                            <Key className="size-3" /> API Key
+                                                        </label>
+                                                        <input
+                                                            type="password"
+                                                            value={cfg.apiKey}
+                                                            onChange={e => updateNodeConfig(node.key, 'apiKey', e.target.value)}
+                                                            placeholder="留空使用全局配置"
+                                                            className={inputClass}
+                                                        />
+                                                    </div>
+                                                    <div className="px-3 py-3 space-y-1">
+                                                        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                                            <Server className="size-3" /> Base URL
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={cfg.baseUrl}
+                                                            onChange={e => updateNodeConfig(node.key, 'baseUrl', e.target.value)}
+                                                            placeholder="留空使用全局配置"
+                                                            className={inputClass}
+                                                        />
+                                                    </div>
+                                                    <div className="px-3 py-3 space-y-1">
+                                                        <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                                                            <Tag className="size-3" /> Model Name
+                                                        </label>
+                                                        <input
+                                                            type="text"
+                                                            value={cfg.model}
+                                                            onChange={e => updateNodeConfig(node.key, 'model', e.target.value)}
+                                                            placeholder="留空使用全局配置"
+                                                            className={inputClass}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Solve Verifier config card */}
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border flex items-center gap-2">
+                            <Zap className="size-4 text-muted-foreground" />
+                            <div>
+                                <h4 className="text-sm font-medium text-foreground">模拟学生</h4>
+                                <p className="text-xs text-muted-foreground mt-0.5">为每位模拟学生单独配置模型和提示词降级策略</p>
+                            </div>
+                        </div>
+                        <div className="px-6 py-5 space-y-4">
+                            {/* Student count selector */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <label className="text-xs font-medium text-foreground">模拟学生数量</label>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">选择同时模拟的学生人数（1–5）</p>
+                                </div>
+                                <div className="flex border border-border rounded-lg overflow-hidden">
+                                    {[1, 2, 3, 4, 5].map(n => (
+                                        <button key={n} type="button" onClick={() => setStudentCount(n)}
+                                            className={`w-8 py-1.5 text-sm font-mono transition-colors ${
+                                                studentCount === n ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'
+                                            }`}>
+                                            {n}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Per-student model config rows */}
+                            <div className="space-y-2">
+                                {Array.from({ length: studentCount }, (_, i) => (
+                                    <div key={i} className="rounded-lg border border-border bg-muted/20 px-4 py-3 space-y-2">
+                                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">学生 {i + 1}</p>
+                                        <div className="grid grid-cols-3 gap-2">
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-muted-foreground">API Key</label>
+                                                <input type="password" value={studentModels[i]?.apiKey || ''}
+                                                    onChange={e => setStudentModels(prev => prev.map((m, j) => j === i ? { ...m, apiKey: e.target.value } : m))}
+                                                    placeholder="sk-..."
+                                                    className="w-full bg-transparent border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-foreground transition-colors" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-muted-foreground">Base URL</label>
+                                                <input type="text" value={studentModels[i]?.baseUrl || ''}
+                                                    onChange={e => setStudentModels(prev => prev.map((m, j) => j === i ? { ...m, baseUrl: e.target.value } : m))}
+                                                    placeholder="https://api.openai.com/v1"
+                                                    className="w-full bg-transparent border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-foreground transition-colors" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-muted-foreground">Model</label>
+                                                <input type="text" value={studentModels[i]?.model || ''}
+                                                    onChange={e => setStudentModels(prev => prev.map((m, j) => j === i ? { ...m, model: e.target.value } : m))}
+                                                    placeholder="gpt-4o-mini"
+                                                    className="w-full bg-transparent border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-foreground transition-colors" />
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-1">
+                                            <span className="text-[10px] text-muted-foreground">提示词降级</span>
+                                            <button type="button" onClick={() => setStudentModels(prev => prev.map((m, j) => j === i ? { ...m, promptDegradation: !m.promptDegradation } : m))}
+                                                className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors shrink-0 ${studentModels[i]?.promptDegradation ? 'bg-primary' : 'bg-muted-foreground/30'}`}>
+                                                <span className={`inline-block size-3 rounded-full bg-white transition-transform ${studentModels[i]?.promptDegradation ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* Concurrency */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <label className="text-xs font-medium text-foreground">并发出题数</label>
+                                    <p className="text-[10px] text-muted-foreground mt-0.5">每批并发生成的题目数量 (1-10)</p>
+                                </div>
+                                <input
+                                    type="number"
+                                    min={1}
+                                    max={10}
+                                    value={proConcurrency}
+                                    onChange={e => setProConcurrency(e.target.value)}
+                                    className="w-16 bg-transparent border border-border rounded-lg px-2 py-1 text-sm text-center font-mono focus:outline-none focus:border-foreground transition-colors"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Save button */}
+                    <div>
+                        <button
+                            onClick={saveProNodesConfig}
+                            disabled={savingProNodes}
+                            className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50"
+                        >
+                            {savingProNodes ? '保存中...' : '保存所有节点配置'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'raw' && (
+                <div className="animate-in fade-in p-6">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-3 border-b border-border bg-amber-500/5 flex gap-2 items-center">
+                            <ShieldAlert className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <p className="text-xs text-amber-700 dark:text-amber-400">直接注入运行时环境变量，篡改未知 Key 可能导致系统崩溃。</p>
+                        </div>
+
+                        <form onSubmit={handleAddRaw} className="grid grid-cols-12 items-end gap-0 border-b border-border divide-x divide-border">
+                            <div className="col-span-3 px-4 py-3">
+                                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Key</label>
+                                <input name="key" required className={`${inputClass} uppercase`} placeholder="SYS_..." />
+                            </div>
+                            <div className="col-span-4 px-4 py-3">
+                                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Value</label>
+                                <input name="val" className={inputClass} placeholder="值..." />
+                            </div>
+                            <div className="col-span-3 px-4 py-3">
+                                <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">备注</label>
+                                <input name="desc" className={inputClass} placeholder="可选" />
+                            </div>
+                            <div className="col-span-2 px-4 py-3 flex items-end">
+                                <button type="submit" className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 hover:text-amber-800 transition-colors py-2">
+                                    <Plus className="size-3.5" /> 注入
+                                </button>
+                            </div>
+                        </form>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left text-sm whitespace-nowrap">
+                                <thead className="bg-muted/30 text-muted-foreground border-b border-border">
+                                    <tr>
+                                        <th className="px-6 py-3 font-medium text-xs uppercase tracking-wider">Key</th>
+                                        <th className="px-6 py-3 font-medium text-xs uppercase tracking-wider">Value</th>
+                                        <th className="px-6 py-3 font-medium text-xs uppercase tracking-wider">备注</th>
+                                        <th className="px-6 py-3 font-medium text-xs uppercase tracking-wider text-right">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                    {configs.map(c => (
+                                        <tr key={c.key} className="hover:bg-muted/30 transition-colors">
+                                            <td className="px-6 py-3 font-mono text-xs font-bold text-foreground/90">{c.key}</td>
+                                            <td className="px-6 py-3 font-mono text-xs text-muted-foreground truncate max-w-[200px]">{c.value ? c.value.replace(/./g, '*') : '-'}</td>
+                                            <td className="px-6 py-3 text-xs text-muted-foreground">{c.description || '-'}</td>
+                                            <td className="px-6 py-3 text-right">
+                                                <button onClick={() => handleDelete(c.key)} className="text-rose-500 hover:text-rose-700 transition-colors text-xs font-medium inline-flex items-center gap-1">
+                                                    <Trash2 className="size-3.5" /> 删除
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {configs.length === 0 && (
+                                        <tr><td colSpan={4} className="px-6 py-10 text-center text-muted-foreground text-xs">暂无环境变量</td></tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}

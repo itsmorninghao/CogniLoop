@@ -1,0 +1,367 @@
+"""
+Document parser — extract structured text from uploaded files.
+
+Design principles from RAGFlow:
+- Preserve document hierarchy (headings, sections, pages)
+- Extract metadata (page numbers, section titles)
+- Extensible via strategy pattern
+
+Output format: list of ParsedSection with metadata for downstream chunking.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
+
+
+
+@dataclass
+class ParsedSection:
+    """A section of a parsed document, preserving structural context."""
+    content: str
+    page_number: int | None = None
+    heading: str | None = None          # nearest heading above this content
+    heading_level: int = 0              # 1=H1, 2=H2, etc.  0=body text
+    section_path: str = ""              # e.g. "Chapter 1 > Section 2.1"
+    metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class ParseResult:
+    """Full result of parsing a document."""
+    sections: list[ParsedSection]
+    title: str = ""
+    total_pages: int = 0
+    metadata: dict = field(default_factory=dict)
+
+
+
+class DocumentParser(ABC):
+    """Abstract base class for document parsers — strategy pattern."""
+
+    @abstractmethod
+    def parse(self, file_path: str) -> ParseResult:
+        """Parse a document and return structured sections."""
+        ...
+
+    @staticmethod
+    def for_type(file_type: str) -> DocumentParser:
+        """Factory method — return the correct parser for a file type."""
+        file_type = file_type.upper()
+        _parsers = {
+            "PDF": PDFParser,
+            "WORD": DocxParser,
+            "DOCX": DocxParser,
+            "PPT": PptxParser,
+            "PPTX": PptxParser,
+            "MARKDOWN": MarkdownParser,
+            "MD": MarkdownParser,
+            "TXT": PlainTextParser,
+        }
+        parser_cls = _parsers.get(file_type, PlainTextParser)
+        return parser_cls()
+
+
+
+class PDFParser(DocumentParser):
+    """
+    PDF parser with heading detection and page-level segmentation.
+    Uses pypdf for text extraction. Detects headings heuristically
+    by font-size patterns or all-caps lines.
+    """
+
+    def parse(self, file_path: str) -> ParseResult:
+        from pypdf import PdfReader
+
+        reader = PdfReader(file_path)
+        sections: list[ParsedSection] = []
+        current_heading = ""
+        section_path_parts: list[str] = []
+
+        for page_idx, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            if not text.strip():
+                continue
+
+            # Split page text into paragraphs
+            paragraphs = [p.strip() for p in text.split("\n\n") if p.strip()]
+            if not paragraphs:
+                paragraphs = [text.strip()]
+
+            for para in paragraphs:
+                heading_level = self._detect_heading_level(para)
+                if heading_level > 0:
+                    current_heading = para.strip()
+                    # Update section path
+                    while len(section_path_parts) >= heading_level:
+                        section_path_parts.pop()
+                    section_path_parts.append(current_heading)
+
+                sections.append(ParsedSection(
+                    content=para,
+                    page_number=page_idx + 1,
+                    heading=current_heading if heading_level == 0 else None,
+                    heading_level=heading_level,
+                    section_path=" > ".join(section_path_parts),
+                    metadata={"source_page": page_idx + 1},
+                ))
+
+        # Try to extract title from first heading or first page
+        title = ""
+        for s in sections:
+            if s.heading_level > 0:
+                title = s.content
+                break
+
+        return ParseResult(
+            sections=sections,
+            title=title,
+            total_pages=len(reader.pages),
+            metadata={"parser": "PDFParser", "file_path": file_path},
+        )
+
+    @staticmethod
+    def _detect_heading_level(text: str) -> int:
+        """
+        Heuristic heading detection for PDF paragraphs.
+        Returns heading level (1-3) or 0 for body text.
+        """
+        text = text.strip()
+        if not text or len(text) > 200:
+            return 0
+
+        lines = text.split("\n")
+        first_line = lines[0].strip()
+
+        # Pattern: numbered headings like "1.", "1.1", "第一章", "Chapter 1"
+        if re.match(r'^(第[一二三四五六七八九十百]+[章节篇]|Chapter\s+\d+)\s', first_line, re.I):
+            return 1
+        if re.match(r'^\d+\.\s+\S', first_line) and len(first_line) < 80:
+            return 1
+        if re.match(r'^\d+\.\d+\.?\s+\S', first_line) and len(first_line) < 80:
+            return 2
+        if re.match(r'^\d+\.\d+\.\d+\.?\s+\S', first_line) and len(first_line) < 80:
+            return 3
+
+        # Short all-caps lines are likely headings
+        if len(first_line) < 60 and first_line.isupper() and len(first_line) > 3:
+            return 1
+
+        # Short single lines could be headings
+        if len(lines) == 1 and len(first_line) < 50 and not first_line.endswith((".", "。", ":", "：", ",", "，")):
+            return 2
+
+        return 0
+
+
+
+class DocxParser(DocumentParser):
+    """Word parser — leverages native paragraph styles for heading detection."""
+
+    def parse(self, file_path: str) -> ParseResult:
+        from docx import Document
+
+        doc = Document(file_path)
+        sections: list[ParsedSection] = []
+        current_heading = ""
+        section_path_parts: list[str] = []
+
+        for para in doc.paragraphs:
+            text = para.text.strip()
+            if not text:
+                continue
+
+            heading_level = self._style_to_level(para.style.name)
+
+            if heading_level > 0:
+                current_heading = text
+                while len(section_path_parts) >= heading_level:
+                    section_path_parts.pop()
+                section_path_parts.append(current_heading)
+
+            sections.append(ParsedSection(
+                content=text,
+                heading=current_heading if heading_level == 0 else None,
+                heading_level=heading_level,
+                section_path=" > ".join(section_path_parts),
+                metadata={"style": para.style.name},
+            ))
+
+        title = ""
+        for s in sections:
+            if s.heading_level == 1:
+                title = s.content
+                break
+
+        return ParseResult(
+            sections=sections,
+            title=title,
+            metadata={"parser": "DocxParser"},
+        )
+
+    @staticmethod
+    def _style_to_level(style_name: str) -> int:
+        style_lower = style_name.lower()
+        if "heading 1" in style_lower or "标题 1" in style_lower:
+            return 1
+        if "heading 2" in style_lower or "标题 2" in style_lower:
+            return 2
+        if "heading 3" in style_lower or "标题 3" in style_lower:
+            return 3
+        if "heading" in style_lower or "标题" in style_lower:
+            return 2
+        if style_lower == "title":
+            return 1
+        return 0
+
+
+
+class PptxParser(DocumentParser):
+    """PowerPoint parser — one section per slide with slide title as heading."""
+
+    def parse(self, file_path: str) -> ParseResult:
+        from pptx import Presentation
+
+        prs = Presentation(file_path)
+        sections: list[ParsedSection] = []
+
+        for slide_idx, slide in enumerate(prs.slides):
+            slide_title = ""
+            body_texts = []
+
+            for shape in slide.shapes:
+                if not hasattr(shape, "text") or not shape.text.strip():
+                    continue
+                if shape.shape_type is not None and "TITLE" in str(shape.shape_type):
+                    slide_title = shape.text.strip()
+                else:
+                    body_texts.append(shape.text.strip())
+
+            if not slide_title and body_texts:
+                slide_title = body_texts[0][:50]
+
+            content = "\n".join(body_texts) if body_texts else slide_title
+            if content.strip():
+                sections.append(ParsedSection(
+                    content=content,
+                    page_number=slide_idx + 1,
+                    heading=slide_title,
+                    heading_level=2,
+                    section_path=f"Slide {slide_idx + 1}: {slide_title}",
+                    metadata={"slide_index": slide_idx + 1},
+                ))
+
+        return ParseResult(
+            sections=sections,
+            title=sections[0].heading if sections else "",
+            total_pages=len(prs.slides),
+            metadata={"parser": "PptxParser"},
+        )
+
+
+
+class MarkdownParser(DocumentParser):
+    """Markdown parser — uses # heading syntax for structure."""
+
+    def parse(self, file_path: str) -> ParseResult:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+
+        sections: list[ParsedSection] = []
+        current_heading = ""
+        section_path_parts: list[str] = []
+        buffer = []
+
+        for line in content.split("\n"):
+            heading_match = re.match(r'^(#{1,6})\s+(.+)$', line)
+            if heading_match:
+                # Flush buffer as body section
+                if buffer:
+                    body = "\n".join(buffer).strip()
+                    if body:
+                        sections.append(ParsedSection(
+                            content=body,
+                            heading=current_heading,
+                            section_path=" > ".join(section_path_parts),
+                        ))
+                    buffer = []
+
+                level = len(heading_match.group(1))
+                heading_text = heading_match.group(2).strip()
+                current_heading = heading_text
+
+                while len(section_path_parts) >= level:
+                    section_path_parts.pop()
+                section_path_parts.append(heading_text)
+
+                sections.append(ParsedSection(
+                    content=heading_text,
+                    heading_level=level,
+                    section_path=" > ".join(section_path_parts),
+                ))
+            else:
+                buffer.append(line)
+
+        # Flush remaining
+        if buffer:
+            body = "\n".join(buffer).strip()
+            if body:
+                sections.append(ParsedSection(
+                    content=body,
+                    heading=current_heading,
+                    section_path=" > ".join(section_path_parts),
+                ))
+
+        title = ""
+        for s in sections:
+            if s.heading_level > 0:
+                title = s.content
+                break
+
+        return ParseResult(
+            sections=sections,
+            title=title,
+            metadata={"parser": "MarkdownParser"},
+        )
+
+
+
+class PlainTextParser(DocumentParser):
+    """Fallback parser for plain text files."""
+
+    def parse(self, file_path: str) -> ParseResult:
+        with open(file_path, encoding="utf-8", errors="ignore") as f:
+            content = f.read()
+
+        # Split by double newlines as paragraphs
+        paragraphs = [p.strip() for p in re.split(r'\n\s*\n', content) if p.strip()]
+
+        sections = [
+            ParsedSection(content=p, metadata={"paragraph_index": i})
+            for i, p in enumerate(paragraphs)
+        ]
+
+        return ParseResult(
+            sections=sections,
+            metadata={"parser": "PlainTextParser"},
+        )
+
+
+
+async def parse_document(file_path: str, file_type: str) -> ParseResult:
+    """Parse a document and return structured sections."""
+    parser = DocumentParser.for_type(file_type)
+    # Run synchronous (CPU/IO-bound) parsing in a thread pool to avoid
+    # blocking the async event loop during large file processing.
+    result = await asyncio.to_thread(parser.parse, file_path)
+    logger.info(
+        "Parsed %s (%s): %d sections, title='%s'",
+        file_path, file_type, len(result.sections), result.title[:60],
+    )
+    return result

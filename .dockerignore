@@ -1,0 +1,29 @@
+# Dependencies & caches
+.venv/
+node_modules/
+.ruff_cache/
+__pycache__
+*.pyc
+
+# Build output (will be built inside Docker)
+frontend/dist/
+
+# Dev / old code
+_dev/
+V1/
+.git/
+.vscode/
+
+# IDE
+.idea/
+*.swp
+
+# OS
+.DS_Store
+
+# Data volumes (mapped via Docker volumes)
+uploads/
+question_sets/
+
+# Docker files (not needed inside image)
+docker-compose.yml
