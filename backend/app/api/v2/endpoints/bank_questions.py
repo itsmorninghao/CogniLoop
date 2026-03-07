@@ -67,3 +67,28 @@ async def list_bank_questions(
             for q in questions
         ],
     }
+
+
+@router.get("/subjects", response_model=dict[str, Any])
+async def list_bank_subjects(
+    kb_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Return distinct non-null subjects for a question bank KB."""
+    try:
+        await kb_service.get_kb(kb_id, current_user, session)
+    except Exception:
+        raise HTTPException(status_code=404, detail="知识库不存在或无权限")
+
+    stmt = (
+        select(BankQuestion.subject)
+        .where(
+            BankQuestion.knowledge_base_id == kb_id,
+            BankQuestion.subject.is_not(None),
+        )
+        .distinct()
+        .order_by(BankQuestion.subject)
+    )
+    rows = (await session.execute(stmt)).scalars().all()
+    return {"subjects": list(rows)}

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { quizApi, circleApi, type QuizSession, type CircleSessionParticipantItem } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { MathText } from '@/components/shared/MathText'
 
 export default function QuizResultPage() {
     const { id } = useParams<{ id: string }>()
@@ -250,7 +251,7 @@ export default function QuizResultPage() {
                                     </span>
                                 </div>
                                 <div className="rounded-lg border border-border bg-card p-6 shadow-sm">
-                                    <p className="text-base text-foreground leading-relaxed whitespace-pre-wrap">{activeQ.content}</p>
+                                    <MathText className="text-base text-foreground leading-relaxed">{activeQ.content}</MathText>
                                 </div>
                             </div>
 
@@ -280,7 +281,7 @@ export default function QuizResultPage() {
                                                         {key}
                                                     </div>
                                                     <div className={`flex-1 mt-0.5 leading-snug ${textClass}`}>
-                                                        {value as string}
+                                                        <MathText inline>{value as string}</MathText>
                                                     </div>
                                                     {isCorrectAnswer && <CheckCircle2 className="shrink-0 ml-4 size-5.5 text-emerald-600 dark:text-emerald-500" />}
                                                     {isUserAnswer && !isCorrectAnswer && <XCircle className="shrink-0 ml-4 size-5.5 text-rose-500 dark:text-rose-400" />}
@@ -309,7 +310,7 @@ export default function QuizResultPage() {
                                             <p className="text-xs font-bold text-emerald-700/80 dark:text-emerald-400/80 uppercase tracking-widest">参考答案</p>
                                         </div>
                                         <p className="text-base font-medium text-emerald-700 dark:text-emerald-400">
-                                            {activeQ.correct_answer || '-'}
+                                            <MathText inline>{activeQ.correct_answer || '-'}</MathText>
                                         </p>
                                     </div>
                                 </div>
@@ -322,7 +323,7 @@ export default function QuizResultPage() {
                                         <AlertCircle className="size-3.5" /> 考点解析
                                     </h4>
                                     <div className="rounded-xl border border-border/80 bg-muted/20 p-6">
-                                        <p className="text-foreground/90 leading-relaxed whitespace-pre-wrap">{activeQ.analysis}</p>
+                                        <MathText className="text-foreground/90 leading-relaxed">{activeQ.analysis}</MathText>
                                     </div>
                                 </div>
                             )}
@@ -335,7 +336,7 @@ export default function QuizResultPage() {
                                         智能导师评语
                                     </h4>
                                     <div className="rounded-xl border border-indigo-500/15 bg-indigo-50/50 dark:bg-indigo-950/30 p-6 shadow-sm">
-                                        <p className="text-foreground/95 leading-relaxed font-medium">{activeResp.ai_feedback}</p>
+                                        <MathText className="text-foreground/95 leading-relaxed font-medium">{activeResp.ai_feedback}</MathText>
                                     </div>
                                 </div>
                             )}

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { kbApi, type KnowledgeBase, type KBDocument, type ScanResult, type BankQuestion } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
+import { MathText } from '@/components/shared/MathText'
 
 const PAGE_SIZE = 50
 const LOAD_BATCH = 500
@@ -520,11 +521,11 @@ export default function KnowledgeBaseDetailPage() {
                                     {visibleQuestions.map((q, idx) => (
                                         <div key={q.id} className="grid grid-cols-[40px_1fr_90px_90px_80px_120px] items-start gap-3 px-5 py-3.5 hover:bg-muted/20 transition-colors">
                                             <span className="pt-0.5 text-center text-xs font-mono text-muted-foreground">{idx + 1}</span>
-                                            <p className="text-sm text-foreground line-clamp-3 leading-relaxed">{q.content}</p>
+                                            <MathText className="text-sm text-foreground line-clamp-3 leading-relaxed">{q.content}</MathText>
                                             <span className="pt-0.5 text-xs text-muted-foreground truncate">{q.subject || '—'}</span>
                                             <span className="pt-0.5 text-xs text-muted-foreground truncate">{q.question_type || '—'}</span>
                                             <span className="pt-0.5 text-xs text-muted-foreground">{q.difficulty || '—'}</span>
-                                            <span className="pt-0.5 text-xs font-medium text-foreground line-clamp-2">{q.answer}</span>
+                                            <MathText inline className="pt-0.5 text-xs font-medium text-foreground line-clamp-2">{q.answer}</MathText>
                                         </div>
                                     ))}
                                 </div>

@@ -93,6 +93,8 @@ export default function QuizCreateProPage() {
     const [kbExpanded, setKbExpanded] = useState<number[]>([])
     const [kbDocs, setKbDocs] = useState<Record<number, KBDocument[]>>({})
     const [selectedBankKbIds, setSelectedBankKbIds] = useState<number[]>([])
+    const [bankKbSubjects, setBankKbSubjects] = useState<Record<number, string[]>>({})
+    const [selectedBankKbSubjects, setSelectedBankKbSubjects] = useState<Record<number, string[]>>({})
 
     const documentKBs = knowledgeBases.filter(kb => kb.kb_type !== 'question_bank')
     const bankKBs = knowledgeBases.filter(kb => kb.kb_type === 'question_bank')
@@ -189,7 +191,24 @@ export default function QuizCreateProPage() {
     }, [selectedDocumentKbIds, selectedDocumentDocIds])
 
     const toggleBankKbSelect = useCallback((kbId: number) => {
-        setSelectedBankKbIds(prev => prev.includes(kbId) ? prev.filter(id => id !== kbId) : [...prev, kbId])
+        if (selectedBankKbIds.includes(kbId)) {
+            setSelectedBankKbIds(prev => prev.filter(id => id !== kbId))
+            setSelectedBankKbSubjects(prev => { const { [kbId]: _, ...rest } = prev; return rest })
+            setBankKbSubjects(prev => { const { [kbId]: _, ...rest } = prev; return rest })
+        } else {
+            setSelectedBankKbIds(prev => [...prev, kbId])
+            kbApi.getBankSubjects(kbId)
+                .then(data => setBankKbSubjects(prev => ({ ...prev, [kbId]: data.subjects })))
+                .catch(() => {})
+        }
+    }, [selectedBankKbIds])
+
+    const toggleBankSubject = useCallback((kbId: number, subject: string) => {
+        setSelectedBankKbSubjects(prev => {
+            const current = prev[kbId] ?? []
+            const has = current.includes(subject)
+            return { ...prev, [kbId]: has ? current.filter(s => s !== subject) : [...current, subject] }
+        })
     }, [])
 
     const updateCount = (type: QuestionType, delta: number) => {
@@ -231,6 +250,7 @@ export default function QuizCreateProPage() {
                 knowledge_scope: {
                     document_kb_ids: selectedDocumentKbIds,
                     bank_kb_ids: selectedBankKbIds,
+                    bank_kb_subjects: selectedBankKbSubjects,
                     doc_ids: selectedDocumentDocIds,
                 },
                 quiz_config: {
@@ -436,7 +456,7 @@ export default function QuizCreateProPage() {
             toast.error(err instanceof Error ? err.message : '出题失败')
             setIsGenerating(false)
         }
-    }, [selectedDocumentKbIds, selectedDocumentDocIds, selectedBankKbIds, questionCounts, difficulty, title, customPrompt, subject])
+    }, [selectedDocumentKbIds, selectedDocumentDocIds, selectedBankKbIds, selectedBankKbSubjects, questionCounts, difficulty, title, customPrompt, subject])
 
     const StatusIcon = ({ status }: { status: string }) => {
         if (status === 'done') return <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
@@ -863,7 +883,14 @@ export default function QuizCreateProPage() {
                             <div className="text-left">
                                 <h3 className="font-medium text-foreground">选择真题库</h3>
                                 <p className="text-xs text-muted-foreground mt-0.5">
-                                    {selectedBankKbIds.length > 0 ? `已选择 ${selectedBankKbIds.length} 个真题库` : '提供出题风格与格式的参考范例'}
+                                    {selectedBankKbIds.length > 0
+                                        ? (() => {
+                                            const totalSubjects = Object.values(selectedBankKbSubjects).reduce((acc, s) => acc + s.length, 0)
+                                            return totalSubjects > 0
+                                                ? `已选择 ${selectedBankKbIds.length} 个真题库，共 ${totalSubjects} 个科目`
+                                                : `已选择 ${selectedBankKbIds.length} 个真题库`
+                                        })()
+                                        : '提供出题风格与格式的参考范例'}
                                 </p>
                             </div>
                         </div>
@@ -873,17 +900,50 @@ export default function QuizCreateProPage() {
                             ) : bankKBs.map(kb => {
                                 const isSelected = selectedBankKbIds.includes(kb.id)
                                 return (
-                                    <button key={kb.id} onClick={() => toggleBankKbSelect(kb.id)} className={`w-full rounded-xl border p-3 text-left transition-all ${isSelected ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:border-primary/20'}`}>
-                                        <div className="flex items-center gap-3">
-                                            <div className={`flex-shrink-0 flex size-5 items-center justify-center rounded border transition-colors ${isSelected ? 'border-primary bg-primary' : 'border-border hover:border-primary/50'}`}>
-                                                {isSelected && <CheckCircle2 className="size-3.5 text-white" />}
+                                    <div key={kb.id} className={`rounded-xl border transition-all ${isSelected ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:border-primary/20'}`}>
+                                        <button onClick={() => toggleBankKbSelect(kb.id)} className="w-full p-3 text-left">
+                                            <div className="flex items-center gap-3">
+                                                <div className={`flex-shrink-0 flex size-5 items-center justify-center rounded border transition-colors ${isSelected ? 'border-primary bg-primary' : 'border-border hover:border-primary/50'}`}>
+                                                    {isSelected && <CheckCircle2 className="size-3.5 text-white" />}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="truncate text-sm font-semibold text-foreground">{kb.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{kb.document_count} 套真题</p>
+                                                </div>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="truncate text-sm font-semibold text-foreground">{kb.name}</p>
-                                                <p className="text-xs text-muted-foreground">{kb.document_count} 套真题</p>
+                                        </button>
+                                        {isSelected && bankKbSubjects[kb.id]?.length > 0 && (
+                                            <div className="pb-3 pl-8 pr-3 flex flex-wrap gap-1.5">
+                                                {bankKbSubjects[kb.id].map(subject => {
+                                                    const subjectSelected = (selectedBankKbSubjects[kb.id] ?? []).includes(subject)
+                                                    return (
+                                                        <button
+                                                            key={subject}
+                                                            onClick={e => { e.stopPropagation(); toggleBankSubject(kb.id, subject) }}
+                                                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors border
+                                                                ${subjectSelected
+                                                                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
+                                                                    : 'bg-muted text-muted-foreground border-border hover:border-amber-500/30'
+                                                                }`}
+                                                        >
+                                                            {subject}
+                                                        </button>
+                                                    )
+                                                })}
+                                                {(selectedBankKbSubjects[kb.id]?.length ?? 0) > 0 && (
+                                                    <button
+                                                        onClick={e => {
+                                                            e.stopPropagation()
+                                                            setSelectedBankKbSubjects(prev => ({ ...prev, [kb.id]: [] }))
+                                                        }}
+                                                        className="rounded-full px-2.5 py-0.5 text-xs text-muted-foreground hover:text-foreground border border-border"
+                                                    >
+                                                        全部
+                                                    </button>
+                                                )}
                                             </div>
-                                        </div>
-                                    </button>
+                                        )}
+                                    </div>
                                 )
                             })}
                         </div>

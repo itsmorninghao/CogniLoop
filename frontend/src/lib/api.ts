@@ -310,6 +310,8 @@ export const kbApi = {
         api.upload<{ message: string; result: { imported: number; skipped: number; errors: string[] } }>(`/knowledge-bases/${kbId}/bank-import`, file, 'files'),
     listBankQuestions: (kbId: number, limit = 50, offset = 0) =>
         api.get<{ total: number; items: BankQuestion[] }>(`/knowledge-bases/${kbId}/bank-questions?limit=${limit}&offset=${offset}`),
+    getBankSubjects: (kbId: number) =>
+        api.get<{ subjects: string[] }>(`/knowledge-bases/${kbId}/bank-questions/subjects`),
     generateShareCode: (id: number) =>
         api.post<KnowledgeBase>(`/knowledge-bases/${id}/share`),
     revokeShareCode: (id: number) =>

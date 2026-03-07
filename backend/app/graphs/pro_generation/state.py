@@ -28,6 +28,7 @@ class ProQuizState(TypedDict):
     kb_ids: list[int]  # Legacy: all KB IDs combined
     document_kb_ids: list[int]  # document KB IDs for RAG knowledge retrieval
     bank_kb_ids: list[int]  # question_bank KB IDs for few-shot examples
+    bank_kb_subjects: dict[int, list[str]]  # kb_id -> selected subjects; empty list = all subjects
     doc_ids: list[int]  # individual document IDs within document KBs
     target_count: dict[str, int]  # e.g. {"single_choice": 5}
     target_difficulty: str  # "easy", "medium", "hard"

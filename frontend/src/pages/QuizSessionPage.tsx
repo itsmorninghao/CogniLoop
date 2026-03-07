@@ -11,6 +11,7 @@ import {
     Clock, Send, Loader2, AlertCircle
 } from 'lucide-react'
 import { quizApi, type QuizSession } from '@/lib/api'
+import { MathText } from '@/components/shared/MathText'
 
 export default function QuizSessionPage() {
     const { id } = useParams<{ id: string }>()
@@ -271,11 +272,28 @@ export default function QuizSessionPage() {
                         </div>
 
                         {/* Question content */}
-                        <p className="text-foreground leading-relaxed text-[15px]">{current.content}</p>
+                        <MathText className="text-foreground leading-relaxed text-[15px]">{current.content}</MathText>
 
                         {/* Options / Input */}
                         <div className="mt-6">
-                            {(current.question_type === 'single_choice' || current.question_type === 'true_false') && current.options && (
+                            {current.question_type === 'true_false' && !current.options && (
+                                <div className="flex gap-3">
+                                    {[{ key: '对', label: '✓ 对' }, { key: '错', label: '✗ 错' }].map(({ key, label }) => (
+                                        <button
+                                            key={key}
+                                            onClick={() => setAnswer(current.id, key)}
+                                            className={`flex flex-1 items-center justify-center gap-2 rounded-xl border p-4 text-sm font-medium transition-all ${answers[current.id] === key
+                                                ? 'border-primary bg-primary/5 text-primary shadow-sm'
+                                                : 'border-border text-muted-foreground hover:border-primary/30 hover:bg-accent/50'
+                                                }`}
+                                        >
+                                            {label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {(current.question_type === 'single_choice' || (current.question_type === 'true_false' && current.options)) && current.options && (
                                 <div className="space-y-2">
                                     {Object.entries(current.options).map(([key, value]) => (
                                         <button
@@ -292,7 +310,7 @@ export default function QuizSessionPage() {
                                                 }`}>
                                                 {key}
                                             </span>
-                                            <span className="text-sm text-foreground">{value}</span>
+                                            <MathText inline className="text-sm text-foreground">{value as string}</MathText>
                                         </button>
                                     ))}
                                 </div>
@@ -320,7 +338,7 @@ export default function QuizSessionPage() {
                                                     }`}>
                                                     {key}
                                                 </span>
-                                                <span className="text-sm text-foreground">{value}</span>
+                                                <MathText inline className="text-sm text-foreground">{value as string}</MathText>
                                             </button>
                                         )
                                     })}

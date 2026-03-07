@@ -1,6 +1,6 @@
 import random
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 
 from backend.app.core.database import async_session_factory
 from backend.app.core.sse import emit_node_complete, emit_node_start
@@ -10,7 +10,10 @@ from backend.app.services.config_service import get_config
 
 
 async def retrieve_few_shots(
-    qtype: str, kb_ids: list[int], limit: int = 2
+    qtype: str,
+    kb_ids: list[int],
+    limit: int = 2,
+    bank_kb_subjects: dict[int, list[str]] | None = None,
 ) -> list[dict]:
     """Retrieve few-shot examples for a question type from bank KBs.
 
@@ -18,6 +21,7 @@ async def retrieve_few_shots(
         qtype: question type string (e.g. "single_choice")
         kb_ids: list of question bank KB IDs
         limit: max number of examples to return (default 2)
+        bank_kb_subjects: optional per-KB subject filter; empty list = all subjects for that KB
 
     Returns:
         List of formatted example dicts with content, answer, analysis, difficulty.
@@ -26,10 +30,26 @@ async def retrieve_few_shots(
         return []
 
     async with async_session_factory() as session:
-        stmt = select(BankQuestion).where(
-            BankQuestion.knowledge_base_id.in_(kb_ids),
-            BankQuestion.question_type == qtype,
-        )
+        if bank_kb_subjects:
+            per_kb_conditions = []
+            for kb_id in kb_ids:
+                subjects = bank_kb_subjects.get(kb_id, [])
+                if subjects:
+                    per_kb_conditions.append(and_(
+                        BankQuestion.knowledge_base_id == kb_id,
+                        BankQuestion.subject.in_(subjects),
+                    ))
+                else:
+                    per_kb_conditions.append(BankQuestion.knowledge_base_id == kb_id)
+            stmt = select(BankQuestion).where(
+                or_(*per_kb_conditions),
+                BankQuestion.question_type == qtype,
+            )
+        else:
+            stmt = select(BankQuestion).where(
+                BankQuestion.knowledge_base_id.in_(kb_ids),
+                BankQuestion.question_type == qtype,
+            )
         stmt = stmt.order_by(BankQuestion.id).limit(100)
 
         result = await session.execute(stmt)
@@ -73,6 +93,7 @@ async def few_shot_retriever_node(state: ProQuizState) -> dict:
 
     kb_ids = state.get("bank_kb_ids") or state.get("kb_ids", [])
     few_shot_pool: dict[str, list[dict]] = {}
+    bank_kb_subjects = state.get("bank_kb_subjects") or {}
 
     if not kb_ids or not target_count:
         await emit_node_complete(
@@ -84,7 +105,8 @@ async def few_shot_retriever_node(state: ProQuizState) -> dict:
         # Fetch enough examples so each generator can get a unique pair
         # Each generator uses 2 examples, offset by local_index → need count * 2 at minimum
         fetch_limit = max(count * 2, 4)
-        examples = await retrieve_few_shots(qtype, kb_ids, limit=fetch_limit)
+        examples = await retrieve_few_shots(qtype, kb_ids, limit=fetch_limit,
+                                            bank_kb_subjects=bank_kb_subjects or None)
         few_shot_pool[qtype] = examples
 
     total_fetched = sum(len(v) for v in few_shot_pool.values())
