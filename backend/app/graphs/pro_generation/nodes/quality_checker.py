@@ -9,7 +9,7 @@ from backend.app.graphs.pro_generation.nodes._progress import compute_loop_progr
 from backend.app.graphs.pro_generation.state import ProQuizState
 
 
-async def check_quality(q_dict: dict, qtype: str) -> str | None:
+async def check_quality(q_dict: dict, qtype: str) -> tuple[str | None, str, str, str]:
     """Reusable function: check question quality.
 
     Args:
@@ -17,21 +17,25 @@ async def check_quality(q_dict: dict, qtype: str) -> str | None:
         qtype: question type string
 
     Returns:
-        Feedback string if rejected, None if approved.
+        Tuple of (feedback, sys_content, user_content, reply).
+        feedback is None if approved, a string if rejected.
     """
     if not q_dict or "content" not in q_dict or "correct_answer" not in q_dict:
-        return "核心字段内容(content)或(correct_answer)缺失，请重新生成完整的JSON对象。"
+        msg = "核心字段内容(content)或(correct_answer)缺失，请重新生成完整的JSON对象。"
+        return msg, "", "", ""
 
     # Fast format checks
     if qtype == "single_choice" and (
         not q_dict.get("options") or len(q_dict["options"]) < 2
     ):
-        return "这道单选题的选项(options)不足或格式不正确，必须包含A、B、C、D等有效选项结构。"
+        msg = "这道单选题的选项(options)不足或格式不正确，必须包含A、B、C、D等有效选项结构。"
+        return msg, "", "", ""
 
     if qtype == "single_choice" and q_dict["correct_answer"] not in q_dict.get(
         "options", {}
     ):
-        return "正确答案(correct_answer)不在给定的选项键(options)中，请核对后重新生成。"
+        msg = "正确答案(correct_answer)不在给定的选项键(options)中，请核对后重新生成。"
+        return msg, "", "", ""
 
     # Basic logic LLM check — use messages directly to avoid template issues
     # with curly braces in question content (e.g. math set notation {1,2,3}).
@@ -49,6 +53,7 @@ async def check_quality(q_dict: dict, qtype: str) -> str | None:
         f"答案: {q_dict.get('correct_answer')}"
     )
 
+    reply = ""
     try:
         async with async_session_factory() as session:
             llm = await get_node_chat_model("quality_checker", session, temperature=0)
@@ -61,11 +66,11 @@ async def check_quality(q_dict: dict, qtype: str) -> str | None:
 
         reply = res.content.strip()
         if "[REJECT]" in reply:
-            return reply.replace("[REJECT]", "").strip()
+            return reply.replace("[REJECT]", "").strip(), sys_content, user_content, reply
     except Exception:
         pass
 
-    return None
+    return None, sys_content, user_content, reply
 
 
 async def quality_checker_node(state: ProQuizState) -> dict:
@@ -82,14 +87,15 @@ async def quality_checker_node(state: ProQuizState) -> dict:
     q_dict = state.get("current_question", {})
     qtype = state.get("current_type_generating")
 
-    feedback = await check_quality(q_dict, qtype)
+    feedback, qc_sys, qc_usr, qc_reply = await check_quality(q_dict, qtype)
 
     if feedback:
         await emit_node_complete(
             session_id,
             "quality_checker",
             f"（第 {q_num}/{total_q} 题）质量不合格",
-            output_summary={"result": "REJECT", "reason": feedback[:100]},
+            input_summary={"system_prompt": qc_sys[:3000], "user_prompt": qc_usr[:3000]},
+            output_summary={"result": "REJECT", "reason": feedback[:100], "llm_output": qc_reply[:2000]},
             progress=compute_loop_progress(len(completed), total_q, 0.4),
         )
         return {"quality_feedback": feedback}
@@ -98,7 +104,8 @@ async def quality_checker_node(state: ProQuizState) -> dict:
         session_id,
         "quality_checker",
         f"（第 {q_num}/{total_q} 题）质量审查通过",
-        output_summary={"result": "APPROVE"},
+        input_summary={"system_prompt": qc_sys[:3000], "user_prompt": qc_usr[:3000]},
+        output_summary={"result": "APPROVE", "llm_output": qc_reply[:2000]},
         progress=compute_loop_progress(len(completed), total_q, 0.4),
     )
 

@@ -14,7 +14,7 @@ async def generate_question(
     ctx: dict,
     examples: list[dict],
     feedback: str | None = None,
-) -> dict:
+) -> tuple[dict, str, str, str]:
     """Reusable function: generate a single question using LLM.
 
     Args:
@@ -24,7 +24,7 @@ async def generate_question(
         feedback: quality feedback from previous attempt, if retrying
 
     Returns:
-        Question dict with question_type, content, options, correct_answer, analysis.
+        Tuple of (question_dict, sys_msg, user_msg, raw_content).
     """
     subject = ctx.get("subject", "综合")
     difficulty = ctx.get("difficulty", "medium")
@@ -80,6 +80,7 @@ async def generate_question(
 
     retry = 0
     question_dict_out = None
+    content = ""
     while retry < 3:
         try:
             res = await llm.ainvoke(messages)
@@ -111,7 +112,7 @@ async def generate_question(
             "difficulty_score": 0.5,
         }
 
-    return question_dict_out
+    return question_dict_out, sys_msg, user_msg, content
 
 
 async def question_generator_node(state: ProQuizState) -> dict:
@@ -138,14 +139,15 @@ async def question_generator_node(state: ProQuizState) -> dict:
     examples = state.get("few_shot_examples", [])
     feedback = state.get("quality_feedback")
 
-    question_dict_out = await generate_question(qtype, ctx, examples, feedback)
+    question_dict_out, q_sys, q_usr, q_raw = await generate_question(qtype, ctx, examples, feedback)
 
     preview = (question_dict_out.get("content") or "")[:80]
     await emit_node_complete(
         session_id,
         "question_generator",
         f"（第 {q_num}/{total_q} 题）命题完成",
-        output_summary={"question_type": qtype, "content_preview": preview},
+        input_summary={"question_type": qtype, "system_prompt": q_sys[:3000], "user_prompt": q_usr[:3000]},
+        output_summary={"content_preview": preview, "llm_output": q_raw[:2000]},
         progress=compute_loop_progress(len(completed), total_q, 0.2),
     )
 

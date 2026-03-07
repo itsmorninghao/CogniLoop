@@ -14,34 +14,48 @@ from backend.app.graphs.quiz_generation.state import QuizGenState
 
 logger = logging.getLogger(__name__)
 
-DESIGN_PROMPT = """你是一位教育出题专家。根据以下信息设计出题规格。
+DESIGN_PROMPT = """你是一位教育出题专家。根据以下信息，为已确定好的每道题填写出题规格。
 
 ## 知识内容
 {knowledge_context}
 
-## 出题配置
-- 题目数量：{count}
-- 难度等级：{difficulty}
-- 题型要求：{question_types}
-
 ## 答题人画像
 {profile_info}
 
-## 要求
-请为每道题设计一个规格，包含：
-1. question_type: 题型（single_choice / multiple_choice / fill_blank / short_answer / true_false）
-2. topic: 考察的知识点
-3. difficulty: 该题难度 (easy / medium / hard)
-4. focus: 考察重点描述
-5. source_hint: 参考的知识片段索引
+## 出题配置
+- 难度等级：{difficulty}{custom_instructions}
 
-请直接返回 JSON 数组格式，不要包含其他文字：
-[{{"question_type": "...", "topic": "...", "difficulty": "...", "focus": "...", "source_hint": 0}}, ...]"""
+## 待填写的题目列表
+以下每道题的题型已经固定，请为每道题填写 topic（考察的知识点）、focus（考察重点描述）、source_hint（最相关的知识片段编号，取自上方知识内容的 [编号]）。
+
+{skeleton_list}
+
+## 要求
+- 不同题目尽量覆盖不同的知识点，避免重复
+- topic 和 focus 要具体，不要泛泛而谈
+- source_hint 必须是上方知识内容中存在的编号（0 到 {max_source_idx}）
+- 严格按题目数量返回，不要增减
+
+请直接返回 JSON 数组，不要包含其他文字：
+[{{"topic": "...", "focus": "...", "source_hint": 0}}, ...]"""
+
+
+def _build_skeleton(question_counts: dict[str, int], count: int, question_types: list[str]) -> list[dict]:
+    """Build ordered skeleton specs from question_counts (or fallback)."""
+    skeleton: list[dict] = []
+    if question_counts:
+        for qt, c in question_counts.items():
+            for _ in range(c):
+                skeleton.append({"question_type": qt})
+    else:
+        for i in range(count):
+            skeleton.append({"question_type": question_types[i % len(question_types)] if question_types else "single_choice"})
+    return skeleton
 
 
 async def question_designer(state: QuizGenState) -> dict:
     """
-    Use LLM to design question specifications based on RAG chunks and quiz config.
+    Design question specifications: type/count from config, topic/focus/source_hint from LLM.
     """
     from backend.app.core.sse import emit_node_complete, emit_node_start
 
@@ -52,29 +66,39 @@ async def question_designer(state: QuizGenState) -> dict:
     rag_chunks = state.get("rag_chunks", [])
     user_profile = state.get("user_profile")
 
-    # Handle the two different schema shapes
     if "question_counts" in quiz_config:
-        # New shape: count is total of values in question_counts dict
-        question_counts = quiz_config["question_counts"]
+        question_counts: dict[str, int] = {k: v for k, v in quiz_config["question_counts"].items() if v > 0}
         count = sum(question_counts.values()) if question_counts else 5
-        question_types = [qt for qt, c in question_counts.items() if c > 0]
+        question_types = list(question_counts.keys())
     else:
-        # Old shape
+        question_counts = {}
         count = quiz_config.get("count", 5)
-        question_types = quiz_config.get(
-            "question_types", ["single_choice", "fill_blank", "short_answer"]
-        )
+        question_types = quiz_config.get("question_types", ["single_choice", "fill_blank", "short_answer"])
 
     difficulty = quiz_config.get("difficulty", "medium")
     custom_prompt = quiz_config.get("custom_prompt", "")
+
+    # Build skeleton — types and counts are fixed here, not by LLM
+    skeleton = _build_skeleton(question_counts, count, question_types)
 
     knowledge_parts = []
     for i, chunk in enumerate(rag_chunks[:15]):
         section = chunk.get("section_path", "")
         prefix = f"[{i}] {section}: " if section else f"[{i}] "
         knowledge_parts.append(prefix + chunk["content"][:300])
+    knowledge_context = "\n\n".join(knowledge_parts) if knowledge_parts else "（无知识片段）"
+    max_source_idx = max(len(rag_chunks[:15]) - 1, 0)
 
-    knowledge_context = "\n\n".join(knowledge_parts)
+    # Format skeleton for prompt display
+    type_label = {
+        "single_choice": "单选题", "multiple_choice": "多选题",
+        "true_false": "判断题", "fill_blank": "填空题", "short_answer": "简答题",
+    }
+    skeleton_lines = [
+        f"{i + 1}. 题型：{type_label.get(s['question_type'], s['question_type'])}"
+        for i, s in enumerate(skeleton)
+    ]
+    skeleton_list = "\n".join(skeleton_lines)
 
     if user_profile:
         profile_info = (
@@ -85,60 +109,48 @@ async def question_designer(state: QuizGenState) -> dict:
     else:
         profile_info = "新用户，无历史数据，使用标准难度"
 
-    custom_instructions = (
-        f"\n\n## 附加出题要求（必须严格遵守）\n{custom_prompt}" if custom_prompt else ""
-    )
+    custom_instructions = f"\n- 附加要求：{custom_prompt}" if custom_prompt else ""
 
     prompt = DESIGN_PROMPT.format(
         knowledge_context=knowledge_context,
-        count=count,
-        question_types=", ".join(question_types),
-        difficulty=difficulty,
         profile_info=profile_info,
+        difficulty=difficulty,
         custom_instructions=custom_instructions,
+        skeleton_list=skeleton_list,
+        max_source_idx=max_source_idx,
     )
 
-    async with async_session_factory() as session:
-        llm = await get_chat_model(session, temperature=0.3)
-        response = await llm.ainvoke(prompt)
-
-    content = response.content.strip()
-
+    llm_fills: list[dict] = []
     try:
+        async with async_session_factory() as session:
+            llm = await get_chat_model(session, temperature=0.3)
+        response = await llm.ainvoke(prompt)
+        content = response.content.strip()
         if content.startswith("```"):
             content = content.split("```")[1]
             if content.startswith("json"):
                 content = content[4:]
-        specs = json.loads(content)
-    except json.JSONDecodeError:
-        logger.error("Question designer JSON parse failed: %s", content[:200])
-        # Fallback: generate simple specs matching the requested counts
-        specs = []
-        if "question_counts" in quiz_config:
-            for qt, c in quiz_config["question_counts"].items():
-                for i in range(c):
-                    specs.append(
-                        {
-                            "question_type": qt,
-                            "topic": f"基础概念",
-                            "difficulty": difficulty,
-                            "focus": "综合理解",
-                            "source_hint": i % len(rag_chunks) if rag_chunks else 0,
-                        }
-                    )
-        else:
-            specs = [
-                {
-                    "question_type": question_types[i % len(question_types)]
-                    if question_types
-                    else "single_choice",
-                    "topic": f"知识点{i + 1}",
-                    "difficulty": difficulty,
-                    "focus": "综合理解",
-                    "source_hint": i % len(rag_chunks) if rag_chunks else 0,
-                }
-                for i in range(count)
-            ]
+        llm_fills = json.loads(content)
+        if not isinstance(llm_fills, list):
+            llm_fills = []
+    except Exception as e:
+        logger.warning("Question designer LLM failed: %s", e)
+        llm_fills = []
+
+    # Merge: type from skeleton (authoritative), topic/focus/source_hint from LLM
+    specs: list[dict] = []
+    for i, slot in enumerate(skeleton):
+        fill = llm_fills[i] if i < len(llm_fills) and isinstance(llm_fills[i], dict) else {}
+        source_hint = fill.get("source_hint", i % max(len(rag_chunks[:15]), 1))
+        if not isinstance(source_hint, int) or not (0 <= source_hint <= max_source_idx):
+            source_hint = i % max(len(rag_chunks[:15]), 1)
+        specs.append({
+            "question_type": slot["question_type"],  # always from skeleton
+            "topic": str(fill.get("topic", f"知识点{i + 1}"))[:100],
+            "difficulty": difficulty,
+            "focus": str(fill.get("focus", "综合理解"))[:200],
+            "source_hint": source_hint,
+        })
 
     logger.info("Designed %d question specs", len(specs))
 
@@ -150,7 +162,7 @@ async def question_designer(state: QuizGenState) -> dict:
         input_summary={
             "requested_count": count,
             "difficulty": difficulty,
-            "question_types": question_types,
+            "question_counts": question_counts or {qt: question_types.count(qt) for qt in question_types},
             "rag_chunks_used": len(rag_chunks[:15]),
             "custom_prompt": custom_prompt[:100] if custom_prompt else None,
         },
@@ -158,10 +170,9 @@ async def question_designer(state: QuizGenState) -> dict:
             "specs_generated": len(specs),
             "specs": [
                 {
-                    "type": s.get("question_type"),
-                    "topic": s.get("topic", "")[:40],
-                    "difficulty": s.get("difficulty"),
-                    "focus": s.get("focus", "")[:60],
+                    "type": s["question_type"],
+                    "topic": s["topic"][:40],
+                    "focus": s["focus"][:60],
                 }
                 for s in specs
             ],

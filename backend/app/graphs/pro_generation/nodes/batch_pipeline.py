@@ -62,7 +62,7 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                 f"原创命题（{q_label}）...",
                 question_index=qi,
             )
-            question = await generate_question(qtype, ctx, examples, feedback)
+            question, q_sys, q_usr, q_raw = await generate_question(qtype, ctx, examples, feedback)
             preview = (question.get("content") or "")[:80]
             await emit_node_complete(
                 session_id,
@@ -75,8 +75,10 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                     "hotspot_preview": ctx.get("hotspot", "")[:60],
                     "few_shot_count": len(examples),
                     "has_feedback": feedback is not None,
+                    "system_prompt": q_sys[:3000],
+                    "user_prompt": q_usr[:3000],
                 },
-                output_summary={"question_type": qtype, "content_preview": preview},
+                output_summary={"question_type": qtype, "content_preview": preview, "llm_output": q_raw[:2000]},
                 progress=compute_batch_progress(
                     completed_count, total_q, batch_size, 0.2
                 ),
@@ -90,13 +92,14 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                 f"质量快审（{q_label}）...",
                 question_index=qi,
             )
-            feedback = await check_quality(question, qtype)
+            feedback, qc_sys, qc_usr, qc_reply = await check_quality(question, qtype)
             if feedback and attempt < max_retry:
                 await emit_node_complete(
                     session_id,
                     "quality_checker",
                     f"（{q_label}）质量不合格，重试 {attempt + 1}/{max_retry}",
-                    output_summary={"result": "REJECT", "reason": feedback[:100]},
+                    input_summary={"system_prompt": qc_sys[:3000], "user_prompt": qc_usr[:3000]},
+                    output_summary={"result": "REJECT", "reason": feedback[:100], "llm_output": qc_reply[:2000]},
                     progress=compute_batch_progress(
                         completed_count, total_q, batch_size, 0.4
                     ),
@@ -109,8 +112,10 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                 f"（{q_label}）质量审查通过"
                 if not feedback
                 else f"（{q_label}）质量勉强接受（已达重试上限）",
+                input_summary={"system_prompt": qc_sys[:3000], "user_prompt": qc_usr[:3000]},
                 output_summary={
-                    "result": "APPROVE" if not feedback else "FORCE_ACCEPT"
+                    "result": "APPROVE" if not feedback else "FORCE_ACCEPT",
+                    "llm_output": qc_reply[:2000],
                 },
                 progress=compute_batch_progress(
                     completed_count, total_q, batch_size, 0.4
@@ -133,7 +138,16 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                 f"（{q_label}）3名模拟学生已作答",
                 output_summary={
                     "scores": scores,
-                    "names": [r["student"] for r in solve_results],
+                    "student_traces": [
+                        {
+                            "name": r["student"],
+                            "score": r["score"],
+                            "system_prompt": r["system_prompt"],
+                            "answer": r["answer"],
+                            "grade_output": r["grade_output"],
+                        }
+                        for r in solve_results
+                    ],
                 },
                 progress=compute_batch_progress(
                     completed_count, total_q, batch_size, 0.6

@@ -92,6 +92,8 @@ export const api = {
         request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
     patch: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
+    put: <T>(path: string, body?: unknown) =>
+        request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
     delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
     upload: <T>(path: string, file: File, fieldName?: string) =>
         upload<T>(path, file, fieldName),
@@ -694,4 +696,27 @@ export const userApi = {
         api.patch<UserPublicInfo>('/users/me', data),
     uploadAvatar: (file: File) =>
         api.upload<UserPublicInfo>('/users/me/avatar', file),
+}
+
+// Quiz Preset API
+
+export interface QuizPreset {
+    id: number
+    name: string
+    title: string | null
+    difficulty: string
+    question_counts: Record<string, number>
+    subject: string | null
+    custom_prompt: string | null
+    created_at: string
+    updated_at: string
+}
+
+export const presetApi = {
+    list: () => api.get<QuizPreset[]>('/quiz-presets/'),
+    create: (data: Omit<QuizPreset, 'id' | 'created_at' | 'updated_at'>) =>
+        api.post<QuizPreset>('/quiz-presets/', data),
+    update: (id: number, data: Partial<Omit<QuizPreset, 'id' | 'created_at' | 'updated_at'>>) =>
+        api.put<QuizPreset>(`/quiz-presets/${id}`, data),
+    delete: (id: number) => api.delete(`/quiz-presets/${id}`),
 }

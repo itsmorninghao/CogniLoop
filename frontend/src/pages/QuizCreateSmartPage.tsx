@@ -9,12 +9,13 @@ import { toast } from 'sonner'
 import {
     ArrowLeft, Sparkles, BookOpen, ChevronDown, ChevronUp,
     Loader2, CheckCircle2, Brain, Target, Circle, XCircle,
-    Clock, ArrowRight, Search, User, PenTool, FileText, ShieldCheck, Info, Swords, X
+    Clock, ArrowRight, Search, User, PenTool, FileText, ShieldCheck, Info, Swords, X,
+    ClipboardList, Check
 } from 'lucide-react'
-import { kbApi, quizApi, profileApi, userApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type UserPublicInfo } from '../lib/api'
+import { kbApi, quizApi, profileApi, userApi, presetApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type UserPublicInfo, type QuizPreset } from '../lib/api'
 
 
-type QuestionType = 'single_choice' | 'multiple_choice' | 'fill_blank' | 'short_answer' | 'true_false'
+type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'fill_blank' | 'short_answer'
 type Difficulty = 'easy' | 'medium' | 'hard'
 
 const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
@@ -70,11 +71,11 @@ export default function QuizCreateSmartPage() {
 
     // Config
     const [questionCounts, setQuestionCounts] = useState<Record<QuestionType, number>>({
-        single_choice: 2,
+        single_choice: 0,
         multiple_choice: 0,
-        fill_blank: 1,
-        short_answer: 2,
         true_false: 0,
+        fill_blank: 0,
+        short_answer: 0,
     })
     const [difficulty, setDifficulty] = useState<Difficulty>('medium')
     const [title, setTitle] = useState('')
@@ -96,6 +97,12 @@ export default function QuizCreateSmartPage() {
     )
     const [challengeTarget, setChallengeTarget] = useState<UserPublicInfo | null>(null)
 
+    // Presets
+    const [presets, setPresets] = useState<QuizPreset[]>([])
+    const [showPresetPanel, setShowPresetPanel] = useState(false)
+    const [showSaveInput, setShowSaveInput] = useState(false)
+    const [savingName, setSavingName] = useState('')
+
     // User search (for challenge mode)
     const [userQuery, setUserQuery] = useState('')
     const [userResults, setUserResults] = useState<UserPublicInfo[]>([])
@@ -104,6 +111,7 @@ export default function QuizCreateSmartPage() {
     // Load knowledge bases (filter out question_bank type for Smart mode)
     useEffect(() => {
         kbApi.list().then(kbs => setKnowledgeBases(kbs.filter(kb => kb.kb_type !== 'question_bank'))).catch(() => toast.error('加载知识库失败'))
+        presetApi.list().then(setPresets).catch(() => {})
     }, [])
 
     // Load target user profile for suggested difficulty
@@ -212,6 +220,45 @@ export default function QuizCreateSmartPage() {
             const next = Math.max(0, Math.min(20, current + delta))
             return { ...prev, [type]: next }
         })
+    }
+
+    const loadPreset = (p: QuizPreset) => {
+        if (p.title) setTitle(p.title)
+        setDifficulty(p.difficulty as Difficulty)
+        setQuestionCounts(prev => ({ ...prev, ...p.question_counts }))
+        if (p.subject) setSubject(p.subject)
+        if (p.custom_prompt) setCustomPrompt(p.custom_prompt)
+        setShowPresetPanel(false)
+        toast.success(`已加载方案「${p.name}」`)
+    }
+
+    const savePreset = async () => {
+        if (!savingName.trim()) { toast.error('请输入方案名称'); return }
+        try {
+            const preset = await presetApi.create({
+                name: savingName.trim(),
+                title: title || null,
+                difficulty,
+                question_counts: questionCounts,
+                subject: subject || null,
+                custom_prompt: customPrompt || null,
+            })
+            setPresets(prev => [preset, ...prev])
+            setShowSaveInput(false)
+            setSavingName('')
+            toast.success('方案已保存')
+        } catch {
+            toast.error('保存失败，请重试')
+        }
+    }
+
+    const deletePreset = async (id: number) => {
+        try {
+            await presetApi.delete(id)
+            setPresets(prev => prev.filter(p => p.id !== id))
+        } catch {
+            toast.error('删除失败')
+        }
     }
 
     const handleGenerate = useCallback(async () => {
@@ -861,13 +908,74 @@ export default function QuizCreateSmartPage() {
                 {/* Right Column: Quiz Config */}
                 <div className="space-y-6">
                     <div className="rounded-2xl border border-border bg-card p-6 space-y-6">
-                        <div className="flex items-center gap-3">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-                                <Target className="size-5 text-amber-600" />
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
+                                    <Target className="size-5 text-amber-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-medium text-foreground">题目配置</h3>
+                                    <p className="text-xs text-muted-foreground">自定义题型、数量和难度</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-medium text-foreground">题目配置</h3>
-                                <p className="text-xs text-muted-foreground">自定义题型、数量和难度</p>
+                            {/* Preset button */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => { setShowPresetPanel(v => !v); setShowSaveInput(false) }}
+                                    className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                                >
+                                    <ClipboardList className="size-3.5" />
+                                    方案
+                                    <ChevronDown className={`size-3 transition-transform ${showPresetPanel ? 'rotate-180' : ''}`} />
+                                </button>
+                                {showPresetPanel && (
+                                    <div className="absolute right-0 top-full mt-1 z-20 w-72 rounded-xl border border-border bg-card shadow-lg p-3 space-y-2">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-medium text-muted-foreground">我的方案（{presets.length}/10）</span>
+                                            {!showSaveInput ? (
+                                                <button
+                                                    onClick={() => setShowSaveInput(true)}
+                                                    disabled={presets.length >= 10}
+                                                    title={presets.length >= 10 ? '已达上限（10/10）' : '保存当前配置'}
+                                                    className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    + 保存当前
+                                                </button>
+                                            ) : (
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        autoFocus
+                                                        value={savingName}
+                                                        onChange={e => setSavingName(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') savePreset(); if (e.key === 'Escape') { setShowSaveInput(false); setSavingName('') } }}
+                                                        placeholder="方案名称"
+                                                        className="w-28 rounded-lg border border-border bg-input-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary/30"
+                                                    />
+                                                    <button onClick={savePreset} className="flex size-6 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary/90"><Check className="size-3" /></button>
+                                                    <button onClick={() => { setShowSaveInput(false); setSavingName('') }} className="flex size-6 items-center justify-center rounded-lg border border-border hover:bg-accent"><X className="size-3" /></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {presets.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground text-center py-3">暂无方案，保存当前配置即可快速复用</p>
+                                        ) : (
+                                            <div className="space-y-1 max-h-56 overflow-y-auto custom-scrollbar">
+                                                {presets.map(p => (
+                                                    <div key={p.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
+                                                        <div className="min-w-0 flex-1">
+                                                            <span className="text-xs font-medium text-foreground truncate block">{p.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{p.difficulty === 'easy' ? '简单' : p.difficulty === 'hard' ? '困难' : '中等'}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                                                            <button onClick={() => loadPreset(p)} className="text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors">加载</button>
+                                                            <button onClick={() => deletePreset(p.id)} className="flex size-5 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><X className="size-3" /></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 

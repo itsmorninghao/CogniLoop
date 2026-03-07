@@ -9,20 +9,21 @@ import { toast } from 'sonner'
 import {
     ArrowLeft, Sparkles, BookOpen, ChevronDown, ChevronUp,
     Loader2, CheckCircle2, Brain, Target, Circle, XCircle,
-    Clock, ArrowRight, Search, PenTool, FileText, Shuffle
+    Clock, ArrowRight, Search, PenTool, FileText, Shuffle,
+    ClipboardList, Check, X
 } from 'lucide-react'
-import { kbApi, quizApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent } from '../lib/api'
+import { kbApi, quizApi, presetApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type QuizPreset } from '../lib/api'
 
 
-type QuestionType = 'single_choice' | 'multiple_choice' | 'fill_blank' | 'short_answer' | 'true_false'
+type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'fill_blank' | 'short_answer'
 type Difficulty = 'easy' | 'medium' | 'hard'
 
 const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
     single_choice: '单选题',
     multiple_choice: '多选题',
+    true_false: '判断题',
     fill_blank: '填空题',
     short_answer: '简答题',
-    true_false: '判断题',
 }
 
 const DIFFICULTY_CONFIG: { value: Difficulty; label: string; color: string }[] = [
@@ -101,12 +102,19 @@ export default function QuizCreateProPage() {
 
     // Config
     const [questionCounts, setQuestionCounts] = useState<Record<QuestionType, number>>({
-        single_choice: 2, multiple_choice: 0, fill_blank: 1, short_answer: 2, true_false: 0,
+        single_choice: 0, multiple_choice: 0, true_false: 0, fill_blank: 0, short_answer: 0,
     })
     const [difficulty, setDifficulty] = useState<Difficulty>('medium')
     const [title, setTitle] = useState('')
     const [customPrompt, setCustomPrompt] = useState('')
     const [subject, setSubject] = useState('')
+    const [useHotspot, setUseHotspot] = useState(true)
+
+    // Presets
+    const [presets, setPresets] = useState<QuizPreset[]>([])
+    const [showPresetPanel, setShowPresetPanel] = useState(false)
+    const [showSaveInput, setShowSaveInput] = useState(false)
+    const [savingName, setSavingName] = useState('')
 
     // Generation state
     const [isGenerating, setIsGenerating] = useState(false)
@@ -128,6 +136,7 @@ export default function QuizCreateProPage() {
     // Load knowledge bases
     useEffect(() => {
         kbApi.list().then(setKnowledgeBases).catch(() => toast.error('加载知识库失败'))
+        presetApi.list().then(setPresets).catch(() => {})
     }, [])
 
     const toggleKbExpand = useCallback(async (id: number) => {
@@ -215,6 +224,45 @@ export default function QuizCreateProPage() {
         setQuestionCounts(prev => ({ ...prev, [type]: Math.max(0, Math.min(20, prev[type] + delta)) }))
     }
 
+    const loadPreset = (p: QuizPreset) => {
+        if (p.title) setTitle(p.title)
+        setDifficulty(p.difficulty as Difficulty)
+        setQuestionCounts(prev => ({ ...prev, ...p.question_counts }))
+        if (p.subject) setSubject(p.subject)
+        if (p.custom_prompt) setCustomPrompt(p.custom_prompt)
+        setShowPresetPanel(false)
+        toast.success(`已加载方案「${p.name}」`)
+    }
+
+    const savePreset = async () => {
+        if (!savingName.trim()) { toast.error('请输入方案名称'); return }
+        try {
+            const preset = await presetApi.create({
+                name: savingName.trim(),
+                title: title || null,
+                difficulty,
+                question_counts: questionCounts,
+                subject: subject || null,
+                custom_prompt: customPrompt || null,
+            })
+            setPresets(prev => [preset, ...prev])
+            setShowSaveInput(false)
+            setSavingName('')
+            toast.success('方案已保存')
+        } catch {
+            toast.error('保存失败，请重试')
+        }
+    }
+
+    const deletePreset = async (id: number) => {
+        try {
+            await presetApi.delete(id)
+            setPresets(prev => prev.filter(p => p.id !== id))
+        } catch {
+            toast.error('删除失败')
+        }
+    }
+
     const pipelineSummary = useMemo(() => {
         const total = questionPipelines.length
         const done = questionPipelines.filter(q => q.status === 'done').length
@@ -258,6 +306,7 @@ export default function QuizCreateProPage() {
                     difficulty,
                     custom_prompt: customPrompt,
                     subject: subject.trim() || undefined,
+                    use_hotspot: useHotspot,
                 },
             })
 
@@ -456,7 +505,7 @@ export default function QuizCreateProPage() {
             toast.error(err instanceof Error ? err.message : '出题失败')
             setIsGenerating(false)
         }
-    }, [selectedDocumentKbIds, selectedDocumentDocIds, selectedBankKbIds, selectedBankKbSubjects, questionCounts, difficulty, title, customPrompt, subject])
+    }, [selectedDocumentKbIds, selectedDocumentDocIds, selectedBankKbIds, selectedBankKbSubjects, questionCounts, difficulty, title, customPrompt, subject, useHotspot])
 
     const StatusIcon = ({ status }: { status: string }) => {
         if (status === 'done') return <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
@@ -953,13 +1002,74 @@ export default function QuizCreateProPage() {
                 {/* Right Column: Quiz Config */}
                 <div className="space-y-6">
                     <div className="rounded-2xl border border-border bg-card p-6 space-y-6">
-                        <div className="flex items-center gap-3">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-                                <Target className="size-5 text-amber-600" />
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                                <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
+                                    <Target className="size-5 text-amber-600" />
+                                </div>
+                                <div>
+                                    <h3 className="font-medium text-foreground">题目配置</h3>
+                                    <p className="text-xs text-muted-foreground">自定义题型、数量和难度</p>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-medium text-foreground">题目配置</h3>
-                                <p className="text-xs text-muted-foreground">自定义题型、数量和难度</p>
+                            {/* Preset button */}
+                            <div className="relative">
+                                <button
+                                    onClick={() => { setShowPresetPanel(v => !v); setShowSaveInput(false) }}
+                                    className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                                >
+                                    <ClipboardList className="size-3.5" />
+                                    方案
+                                    <ChevronDown className={`size-3 transition-transform ${showPresetPanel ? 'rotate-180' : ''}`} />
+                                </button>
+                                {showPresetPanel && (
+                                    <div className="absolute right-0 top-full mt-1 z-20 w-72 rounded-xl border border-border bg-card shadow-lg p-3 space-y-2">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-medium text-muted-foreground">我的方案（{presets.length}/10）</span>
+                                            {!showSaveInput ? (
+                                                <button
+                                                    onClick={() => setShowSaveInput(true)}
+                                                    disabled={presets.length >= 10}
+                                                    title={presets.length >= 10 ? '已达上限（10/10）' : '保存当前配置'}
+                                                    className="text-xs px-2 py-1 rounded-lg bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                                                >
+                                                    + 保存当前
+                                                </button>
+                                            ) : (
+                                                <div className="flex items-center gap-1">
+                                                    <input
+                                                        autoFocus
+                                                        value={savingName}
+                                                        onChange={e => setSavingName(e.target.value)}
+                                                        onKeyDown={e => { if (e.key === 'Enter') savePreset(); if (e.key === 'Escape') { setShowSaveInput(false); setSavingName('') } }}
+                                                        placeholder="方案名称"
+                                                        className="w-28 rounded-lg border border-border bg-input-background px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-primary/30"
+                                                    />
+                                                    <button onClick={savePreset} className="flex size-6 items-center justify-center rounded-lg bg-primary text-white hover:bg-primary/90"><Check className="size-3" /></button>
+                                                    <button onClick={() => { setShowSaveInput(false); setSavingName('') }} className="flex size-6 items-center justify-center rounded-lg border border-border hover:bg-accent"><X className="size-3" /></button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {presets.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground text-center py-3">暂无方案，保存当前配置即可快速复用</p>
+                                        ) : (
+                                            <div className="space-y-1 max-h-56 overflow-y-auto custom-scrollbar">
+                                                {presets.map(p => (
+                                                    <div key={p.id} className="flex items-center justify-between rounded-lg px-2 py-1.5 hover:bg-accent/50 transition-colors">
+                                                        <div className="min-w-0 flex-1">
+                                                            <span className="text-xs font-medium text-foreground truncate block">{p.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{p.difficulty === 'easy' ? '简单' : p.difficulty === 'hard' ? '困难' : '中等'}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1 ml-2 shrink-0">
+                                                            <button onClick={() => loadPreset(p)} className="text-xs px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors">加载</button>
+                                                            <button onClick={() => deletePreset(p.id)} className="flex size-5 items-center justify-center rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"><X className="size-3" /></button>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -1026,6 +1136,23 @@ export default function QuizCreateProPage() {
                             <textarea value={customPrompt} onChange={e => setCustomPrompt(e.target.value)} placeholder="例如：重点考察第二部分的知识，选项要具有迷惑性..." className="mt-2 w-full rounded-xl border border-border bg-input-background px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none focus:ring-2 focus:ring-primary/30 transition-all min-h-[100px] resize-y custom-scrollbar" />
                         </div>
 
+                        {/* Hotspot toggle */}
+                        <div className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
+                            <div>
+                                <p className="text-sm font-medium text-foreground">融入时事热点</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">AI 抓取真实新闻并将相关热点作为出题背景素材</p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setUseHotspot(v => !v)}
+                                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary/30 ${useHotspot ? 'bg-primary' : 'bg-muted'}`}
+                                role="switch"
+                                aria-checked={useHotspot}
+                            >
+                                <span className={`pointer-events-none inline-block size-5 rounded-full bg-white shadow-lg ring-0 transition-transform duration-200 ${useHotspot ? 'translate-x-5' : 'translate-x-0'}`} />
+                            </button>
+                        </div>
+
                         <div className="pt-2">
                             <button onClick={handleGenerate} disabled={(selectedDocumentKbIds.length === 0 && selectedDocumentDocIds.length === 0 && selectedBankKbIds.length === 0) || Object.values(questionCounts).reduce((a, b) => a + b, 0) === 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Sparkles className="size-4" />
@@ -1059,6 +1186,25 @@ function IOSection({ label, data, compact }: { label: string; data: Record<strin
     )
 }
 
+function LongTextValue({ text }: { text: string }) {
+    const [expanded, setExpanded] = useState(false)
+    return (
+        <div>
+            <pre className={`text-xs text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed ${expanded ? '' : 'max-h-24 overflow-hidden'}`}>
+                {text}
+            </pre>
+            {text.length > 300 && (
+                <button
+                    onClick={() => setExpanded(v => !v)}
+                    className="mt-1 text-[10px] text-primary hover:underline"
+                >
+                    {expanded ? '收起' : `展开全文（${text.length} 字符）`}
+                </button>
+            )}
+        </div>
+    )
+}
+
 function TimingLine({ start, end }: { start: number; end?: number }) {
     return (
         <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -1077,7 +1223,10 @@ function renderValue(value: unknown): React.ReactNode {
     if (value === null || value === undefined) return <span className="text-muted-foreground/50 italic">null</span>
     if (typeof value === 'boolean') return <span className={value ? 'text-emerald-600' : 'text-red-500'}>{String(value)}</span>
     if (typeof value === 'number') return <span className="font-mono">{value}</span>
-    if (typeof value === 'string') return value.length > 200 ? value.slice(0, 200) + '...' : value
+    if (typeof value === 'string') {
+        if (value.length > 300) return <LongTextValue text={value} />
+        return value
+    }
     if (Array.isArray(value)) {
         if (value.length === 0) return <span className="text-muted-foreground/50 italic">[]</span>
         if (typeof value[0] === 'object' && value[0] !== null) {

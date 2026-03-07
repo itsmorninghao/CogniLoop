@@ -56,15 +56,16 @@ async def _llm_distribute(
     rag_chunks: list[dict],
     hotspot_items: list[str],
     session_id: str,
-) -> dict:
+) -> tuple[dict, str, str]:
     """Ask the LLM to assign chunk_ids and hotspot_index to each generator.
 
-    Returns a dict keyed by context_key (e.g. "single_choice_0") with:
+    Returns a tuple of (result_dict, sys_prompt_used, raw_output).
+    result_dict is keyed by context_key (e.g. "single_choice_0") with:
         {"chunk_ids": [int, ...], "hotspot_index": int}
-    Returns empty dict on any failure so callers can apply fallback.
+    Returns ({}, "", "") on any failure so callers can apply fallback.
     """
     if not rag_chunks and not hotspot_items:
-        return {}
+        return {}, "", ""
 
     # Build compact chunk list for prompt (index + first 150 chars)
     chunk_summaries = [
@@ -114,12 +115,12 @@ async def _llm_distribute(
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
-        return json.loads(raw.strip())
+        return json.loads(raw.strip()), sys_prompt, raw
     except Exception as e:
         logger.warning(
             "distributor LLM call failed (%s), will use rule-based fallback", e
         )
-        return {}
+        return {}, "", ""
 
 
 async def distributor_node(state: ProQuizState) -> dict:
@@ -143,7 +144,7 @@ async def distributor_node(state: ProQuizState) -> dict:
         )
         return {"question_context_map": {}}
 
-    llm_result = await _llm_distribute(
+    llm_result, dist_sys, dist_raw = await _llm_distribute(
         generators, rag_chunks, hotspot_items, session_id
     )
 
@@ -201,21 +202,27 @@ async def distributor_node(state: ProQuizState) -> dict:
         }
         for key, ctx in question_context_map.items()
     }
+    input_sum: dict = {
+        "rag_chunks_count": len(rag_chunks),
+        "hotspot_items_count": len(hotspot_items),
+        "generators_count": len(generators),
+    }
+    if dist_sys:
+        input_sum["system_prompt"] = dist_sys[:3000]
+    output_sum: dict = {
+        "total_generators": len(generators),
+        "llm_distributed": len(generators) - fallback_used,
+        "fallback_count": fallback_used,
+        "context_map": gen_context_summary,
+    }
+    if dist_raw:
+        output_sum["llm_output"] = dist_raw[:2000]
     await emit_node_complete(
         session_id,
         "distributor",
         f"已为 {len(generators)} 个出题手完成素材分配{fallback_note}",
-        input_summary={
-            "rag_chunks_count": len(rag_chunks),
-            "hotspot_items_count": len(hotspot_items),
-            "generators_count": len(generators),
-        },
-        output_summary={
-            "total_generators": len(generators),
-            "llm_distributed": len(generators) - fallback_used,
-            "fallback_count": fallback_used,
-            "context_map": gen_context_summary,
-        },
+        input_summary=input_sum,
+        output_summary=output_sum,
         progress=0.18,
     )
 

@@ -107,6 +107,10 @@ async def _simulate_student(
         "student_answer": student_answer,
         "score": score,
         "grade_reason": grade_text,
+        "system_prompt": system_msg[:1000],
+        "user_prompt": solve_messages[1].content[:500],
+        "answer": student_answer[:500],
+        "grade_output": grade_text[:500],
     }
 
 
@@ -168,7 +172,19 @@ async def solve_verifier_node(state: ProQuizState) -> dict:
         session_id,
         "solve_verifier",
         f"（第 {q_num}/{total_q} 题）{len(results)}名模拟学生已作答",
-        output_summary={"scores": scores, "names": [r["student"] for r in results]},
+        output_summary={
+            "scores": scores,
+            "student_traces": [
+                {
+                    "name": r["student"],
+                    "score": r["score"],
+                    "system_prompt": r["system_prompt"],
+                    "answer": r["answer"],
+                    "grade_output": r["grade_output"],
+                }
+                for r in results
+            ],
+        },
         progress=compute_loop_progress(len(completed), total_q, 0.6),
     )
 
