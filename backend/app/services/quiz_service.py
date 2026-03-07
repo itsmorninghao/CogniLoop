@@ -746,7 +746,7 @@ async def list_acquired(
     return items
 
 
-async def list_quiz_plaza(db: AsyncSession) -> list[QuizPlazaItem]:
+async def list_quiz_plaza(db: AsyncSession, *, q: str | None = None) -> list[QuizPlazaItem]:
     count_subq = _question_count_subq()
     acq_count_subq = (
         select(
@@ -756,7 +756,7 @@ async def list_quiz_plaza(db: AsyncSession) -> list[QuizPlazaItem]:
         .group_by(QuizAcquisition.session_id)
         .subquery()
     )
-    result = await db.execute(
+    stmt = (
         select(
             QuizSession,
             User.full_name,
@@ -768,8 +768,11 @@ async def list_quiz_plaza(db: AsyncSession) -> list[QuizPlazaItem]:
         .outerjoin(count_subq, QuizSession.id == count_subq.c.session_id)
         .outerjoin(acq_count_subq, QuizSession.id == acq_count_subq.c.session_id)
         .where(QuizSession.shared_to_plaza_at.isnot(None))
-        .order_by(QuizSession.shared_to_plaza_at.desc())
     )
+    if q:
+        stmt = stmt.where(QuizSession.title.icontains(q))
+    stmt = stmt.order_by(QuizSession.shared_to_plaza_at.desc())
+    result = await db.execute(stmt)
     return [
         QuizPlazaItem(
             id=qs.id,

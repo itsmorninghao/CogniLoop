@@ -1,6 +1,6 @@
 """KB Plaza endpoints — browse public knowledge bases."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.database import get_session
@@ -12,6 +12,7 @@ router = APIRouter(prefix="/kb-plaza", tags=["KB Plaza"])
 
 @router.get("/", response_model=list[KBResponse])
 async def list_plaza_kbs(
+    q: str | None = Query(default=None, max_length=100),
     session: AsyncSession = Depends(get_session),
 ):
-    return await kb_service.list_plaza_kbs(session)
+    return await kb_service.list_plaza_kbs(session, q=q)

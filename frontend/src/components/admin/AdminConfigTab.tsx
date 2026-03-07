@@ -57,13 +57,13 @@ export function AdminConfigTab() {
             const data = await adminApi.listConfigs()
             setConfigs(data)
             const get = (k: string) => data.find((c: SystemConfig) => c.key === k)?.value || ''
-            setLlmKey(get('LLM_API_KEY'))
-            setLlmBase(get('LLM_BASE_URL'))
-            setLlmModel(get('LLM_MODEL'))
+            setLlmKey(get('OPENAI_API_KEY'))
+            setLlmBase(get('OPENAI_BASE_URL'))
+            setLlmModel(get('OPENAI_MODEL'))
             setEmbKey(get('EMBEDDING_API_KEY'))
             setEmbBase(get('EMBEDDING_BASE_URL'))
             setEmbModel(get('EMBEDDING_MODEL'))
-            setEmbDims(get('EMBEDDING_DIMENSIONS'))
+            setEmbDims(get('EMBEDDING_DIMS'))
 
             // Load Pro node configs
             const newNodeConfigs = { ...nodeConfigs }
@@ -103,9 +103,9 @@ export function AdminConfigTab() {
 
     const saveLlmConfig = async () => {
         try {
-            await adminApi.setConfig('LLM_API_KEY', llmKey, 'LLM API 密钥')
-            if (llmBase) await adminApi.setConfig('LLM_BASE_URL', llmBase, 'LLM 基础 URL')
-            await adminApi.setConfig('LLM_MODEL', llmModel || 'gpt-4o-mini', 'LLM 模型名称')
+            await adminApi.setConfig('OPENAI_API_KEY', llmKey, 'LLM API 密钥')
+            if (llmBase) await adminApi.setConfig('OPENAI_BASE_URL', llmBase, 'LLM 基础 URL')
+            await adminApi.setConfig('OPENAI_MODEL', llmModel || 'gpt-4o-mini', 'LLM 模型名称')
             toast.success('LLM 配置已保存')
             loadConfigs()
         } catch { toast.error('保存失败') }
@@ -116,7 +116,7 @@ export function AdminConfigTab() {
             await adminApi.setConfig('EMBEDDING_API_KEY', embKey, 'Embedding API 密钥')
             if (embBase) await adminApi.setConfig('EMBEDDING_BASE_URL', embBase, 'Embedding 基础 URL')
             await adminApi.setConfig('EMBEDDING_MODEL', embModel || 'text-embedding-3-small', 'Embedding 模型名称')
-            if (embDims) await adminApi.setConfig('EMBEDDING_DIMENSIONS', embDims, '向量维度')
+            if (embDims) await adminApi.setConfig('EMBEDDING_DIMS', embDims, '向量维度')
             toast.success('向量配置已保存')
             loadConfigs()
         } catch { toast.error('保存失败') }

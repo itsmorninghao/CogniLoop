@@ -1,3 +1,4 @@
+from backend.app.core.database import async_session_factory
 from backend.app.core.sse import emit_node_complete, emit_node_start
 from backend.app.graphs.pro_generation.state import ProQuizState
 
@@ -31,6 +32,15 @@ async def scope_resolver_node(state: ProQuizState) -> dict:
     """Resolve user inputs into graph state properties."""
     session_id = state.get("session_id", "")
     await emit_node_start(session_id, "scope_resolver", "正在解析出题范围...")
+
+    # Pre-flight: verify LLM is configured before kicking off any LLM calls
+    async with async_session_factory() as _session:
+        from backend.app.services.config_service import get_config
+        api_key = await get_config("OPENAI_API_KEY", _session)
+    if not api_key:
+        msg = "LLM 未配置：请在管理后台 → 系统配置中设置 OPENAI_API_KEY"
+        await emit_node_complete(session_id, "scope_resolver", msg, progress=0.0)
+        raise RuntimeError(msg)
 
     scope = state.get("knowledge_scope", {})
     config = state.get("quiz_config", {})

@@ -7,8 +7,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
@@ -50,6 +51,51 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+_FIELD_CN: dict[str, str] = {
+    "email": "邮箱",
+    "username": "用户名",
+    "password": "密码",
+    "full_name": "姓名",
+    "captcha_answer": "验证码",
+    "captcha_id": "验证码",
+    "name": "名称",
+    "title": "标题",
+    "content": "内容",
+}
+
+_TYPE_CN: dict[str, str] = {
+    "missing": "不能为空",
+    "string_too_short": "内容太短",
+    "string_too_long": "内容太长",
+    "value_error": "格式不正确",
+    "string_type": "请填写文字",
+    "int_type": "请填写整数",
+    "float_type": "请填写数字",
+    "bool_type": "请填写布尔值",
+    "literal_error": "取值不合法",
+    "enum": "取值不合法",
+}
+
+
+@app.exception_handler(RequestValidationError)
+async def _validation_handler(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    errors = exc.errors()
+    first = errors[0] if errors else {}
+    loc = first.get("loc") or []
+    field = str(loc[-1]) if loc else ""
+    err_type: str = first.get("type", "")
+    raw_msg: str = str(first.get("msg", ""))
+
+    # EmailStr validation errors contain "not a valid email address" in the message
+    if "email" in raw_msg.lower() or field == "email":
+        detail = "邮箱地址格式不正确"
+    else:
+        field_cn = _FIELD_CN.get(field, "")
+        type_cn = _TYPE_CN.get(err_type, "格式有误")
+        detail = f"{field_cn}{type_cn}" if field_cn else "输入内容格式有误"
+
+    return JSONResponse(status_code=422, content={"detail": detail})
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

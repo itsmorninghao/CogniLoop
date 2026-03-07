@@ -62,7 +62,7 @@ async def get_chat_model(
         temperature=temperature
         if temperature is not None
         else float(await _get("OPENAI_TEMPERATURE", session)),
-        max_retries=2,
+        max_retries=0,
     )
 
 
@@ -136,7 +136,7 @@ async def get_node_chat_model(
         node_name, session, temperature=temperature
     )
     return ChatOpenAI(
-        api_key=api_key, model=model, base_url=base_url, temperature=temp, max_retries=2
+        api_key=api_key, model=model, base_url=base_url, temperature=temp, max_retries=0
     )
 
 
@@ -176,7 +176,7 @@ async def get_solve_verifier_models(session: AsyncSession) -> list[dict]:
                                 ),
                                 base_url=base_url,
                                 temperature=float(spec.get("temperature", 0.7)),
-                                max_retries=2,
+                                max_retries=0,
                             ),
                             "prompt_degradation": bool(
                                 spec.get("prompt_degradation", False)
@@ -202,7 +202,7 @@ async def get_solve_verifier_models(session: AsyncSession) -> list[dict]:
                 model=model_name,
                 base_url=base_url,
                 temperature=t,
-                max_retries=2,
+                max_retries=0,
             ),
             "prompt_degradation": False,
         }

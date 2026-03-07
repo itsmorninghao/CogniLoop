@@ -13,7 +13,6 @@ import {
     Target,
     Settings,
     Bell,
-    Search,
     LogOut,
     ChevronLeft,
     ChevronRight,
@@ -26,6 +25,7 @@ import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import { notificationApi } from '@/lib/api'
 import Logo from '@/components/Logo'
+import { GlobalSearchBar } from '@/components/shared/GlobalSearchBar'
 
 const NAV_ITEMS = [
     { path: '/', icon: LayoutDashboard, label: '仪表盘' },
@@ -230,14 +230,7 @@ export default function AppLayout() {
 
             <div className="flex flex-1 flex-col overflow-hidden">
                 <header className="sticky top-0 z-40 flex h-16 items-center gap-4 border-b border-border bg-card/80 backdrop-blur-sm px-6">
-                    <div className="relative flex-1 max-w-md">
-                        <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <input
-                            type="search"
-                            placeholder="搜索知识库、题目、用户..."
-                            className="w-full rounded-lg border border-border bg-input-background py-2 pl-10 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
-                        />
-                    </div>
+                    <GlobalSearchBar />
 
                     <div className="flex-1" />
 

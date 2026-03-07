@@ -365,7 +365,8 @@ export const quizApi = {
 }
 
 export const quizPlazaApi = {
-    list: () => api.get<QuizPlazaItem[]>('/quiz-plaza/'),
+    list: (q?: string) =>
+        api.get<QuizPlazaItem[]>(q ? `/quiz-plaza/?q=${encodeURIComponent(q)}` : '/quiz-plaza/'),
 }
 
 // Profile API
@@ -635,7 +636,8 @@ export const circleApi = {
 // Plaza API
 
 export const plazaApi = {
-    list: () => api.get<KnowledgeBase[]>('/kb-plaza/'),
+    list: (q?: string) =>
+        api.get<KnowledgeBase[]>(q ? `/kb-plaza/?q=${encodeURIComponent(q)}` : '/kb-plaza/'),
 }
 
 // Challenge API

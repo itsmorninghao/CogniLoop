@@ -92,9 +92,9 @@ async def generate_question(
             question_dict_out = json.loads(content.strip())
             question_dict_out["question_type"] = qtype
             break
-        except Exception as e:
+        except (json.JSONDecodeError, ValueError) as e:
             retry += 1
-            print(f"Question Generation JSON parse error: {e}")
+            print(f"Question Generation JSON parse error (attempt {retry}/3): {e}")
 
     if not question_dict_out:
         fallback_options = (

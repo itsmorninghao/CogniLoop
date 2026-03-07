@@ -460,12 +460,15 @@ async def acquire_by_share_code(
     return KBResponse.model_validate(kb)
 
 
-async def list_plaza_kbs(session: AsyncSession) -> list[KBResponse]:
-    result = await session.execute(
+async def list_plaza_kbs(session: AsyncSession, *, q: str | None = None) -> list[KBResponse]:
+    stmt = (
         select(KnowledgeBase)
         .where(KnowledgeBase.shared_to_plaza_at.isnot(None))
-        .order_by(KnowledgeBase.shared_to_plaza_at.desc())
     )
+    if q:
+        stmt = stmt.where(KnowledgeBase.name.icontains(q))
+    stmt = stmt.order_by(KnowledgeBase.shared_to_plaza_at.desc())
+    result = await session.execute(stmt)
     return [KBResponse.model_validate(kb) for kb in result.scalars().all()]
 
 
