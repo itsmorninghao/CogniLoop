@@ -25,6 +25,7 @@ class UserPublicInfo(BaseModel):
     full_name: str
     avatar_url: str | None = None
     bio: str | None = None
+    linux_do_id: str | None = None
 
     model_config = {"from_attributes": True}
 

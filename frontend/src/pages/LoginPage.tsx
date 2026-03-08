@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuthStore } from '@/stores/auth'
-import { api, setupApi, ApiError } from '@/lib/api'
+import { api, setupApi, linuxDoApi, authApi, ApiError } from '@/lib/api'
 import { Loader2, Sparkles, Shield, CheckCircle, Eye, EyeOff } from 'lucide-react'
 
 type PageMode = 'loading' | 'setup' | 'login' | 'register'
@@ -36,6 +36,9 @@ export default function LoginPage() {
     const [captchaSvg, setCaptchaSvg] = useState('')
     const [captchaAnswer, setCaptchaAnswer] = useState('')
     const [captchaLoading, setCaptchaLoading] = useState(false)
+    const [linuxDoEnabled, setLinuxDoEnabled] = useState(false)
+    const [linuxDoLoading, setLinuxDoLoading] = useState(false)
+    const [registrationEnabled, setRegistrationEnabled] = useState(true)
     const { login, register } = useAuthStore()
     const navigate = useNavigate()
 
@@ -48,6 +51,11 @@ export default function LoginPage() {
                 setError('无法连接到服务器，请刷新页面后重试')
             }
         })
+        linuxDoApi.isEnabled().then(({ enabled }) => setLinuxDoEnabled(enabled)).catch(() => {})
+        authApi.isRegistrationEnabled().then(({ enabled }) => {
+            if (!enabled) setMode(m => m === 'register' ? 'login' : m)
+            setRegistrationEnabled(enabled)
+        }).catch(() => {})
     }, [])
 
     const loadCaptcha = async () => {
@@ -257,7 +265,8 @@ export default function LoginPage() {
                         </>
                     ) : (
                         <>
-                            {/* Login / Register Tabs */}
+                            {/* Login / Register Tabs — only shown when registration is open */}
+                            {registrationEnabled && (
                             <div className="mb-6 flex rounded-lg bg-muted p-1">
                                 <button
                                     onClick={() => { setMode('login'); setError(''); setSuccessMsg('') }}
@@ -278,6 +287,7 @@ export default function LoginPage() {
                                     注册
                                 </button>
                             </div>
+                            )}
 
                             {error && (
                                 <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
@@ -368,6 +378,38 @@ export default function LoginPage() {
                                     {mode === 'login' ? '登录' : '注册'}
                                 </button>
                             </form>
+
+                            {linuxDoEnabled && mode === 'login' && (
+                                <>
+                                    <div className="my-5 flex items-center gap-3">
+                                        <div className="h-px flex-1 bg-border" />
+                                        <span className="text-xs text-muted-foreground">或</span>
+                                        <div className="h-px flex-1 bg-border" />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={linuxDoLoading}
+                                        onClick={async () => {
+                                            try {
+                                                setLinuxDoLoading(true)
+                                                sessionStorage.setItem('linux_do_flow', 'login')
+                                                const { url } = await linuxDoApi.getAuthorizeUrl()
+                                                window.location.href = url
+                                            } catch (err) {
+                                                setError(err instanceof Error ? err.message : '跳转失败，请重试')
+                                                setLinuxDoLoading(false)
+                                            }
+                                        }}
+                                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-card py-2.5 text-sm font-medium text-foreground transition-all hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {linuxDoLoading
+                                            ? <Loader2 className="size-4 animate-spin" />
+                                            : <svg xmlns="http://www.w3.org/2000/svg" version="1.2" baseProfile="tiny-ps" width="16" height="16" viewBox="0 0 120 120" className="rounded-sm shrink-0"><clipPath id="a"><circle cx="60" cy="60" r="47"/></clipPath><circle fill="#f0f0f0" cx="60" cy="60" r="50"/><rect fill="#1c1c1e" clipPath="url(#a)" x="10" y="10" width="100" height="30"/><rect fill="#f0f0f0" clipPath="url(#a)" x="10" y="40" width="100" height="40"/><rect fill="#ffb003" clipPath="url(#a)" x="10" y="80" width="100" height="30"/></svg>
+                                        }
+                                        使用 Linux DO 登录
+                                    </button>
+                                </>
+                            )}
                         </>
                     )}
                 </div>

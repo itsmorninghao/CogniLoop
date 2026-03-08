@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from backend.app.core.captcha import verify_captcha
-from backend.app.core.exceptions import AlreadyExistsError, BadRequestError
+from backend.app.core.exceptions import AlreadyExistsError, BadRequestError, ForbiddenError
 from backend.app.core.ip_block import (
     is_ip_blocked,
     record_login_failure,
@@ -22,6 +22,7 @@ from backend.app.schemas.auth import (
     TokenResponse,
     UserResponse,
 )
+from backend.app.services import config_service
 
 
 async def check_needs_setup(session: AsyncSession) -> bool:
@@ -65,6 +66,11 @@ async def register_user(
     # Step 1: IP blocked?
     if await is_ip_blocked(client_ip):
         raise BadRequestError("您的 IP 已被临时封锁，请稍后再试或联系管理员")
+
+    # Registration open?
+    allow = await config_service.get_config("ALLOW_REGISTRATION", session)
+    if allow == "false":
+        raise ForbiddenError("当前平台不开放公开注册")
 
     # Step 2: Captcha valid?
     if not await verify_captcha(req.captcha_id, req.captcha_answer):

@@ -15,6 +15,7 @@ interface User {
     is_active: boolean
     is_admin: boolean
     is_superadmin: boolean
+    linux_do_id?: string | null
 }
 
 interface AuthState {
@@ -68,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     fetchUser: async () => {
         try {
             const user = await api.get<User>('/auth/me')
-            set({ user })
+            set({ user, token: localStorage.getItem('token') })
         } catch {
             localStorage.removeItem('token')
             set({ token: null, user: null })

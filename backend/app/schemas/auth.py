@@ -36,6 +36,7 @@ class UserResponse(BaseModel):
     is_active: bool
     is_admin: bool
     is_superadmin: bool = False
+    linux_do_id: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/auth'
 
 import AppLayout from '@/layouts/AppLayout'
 import LoginPage from '@/pages/LoginPage'
+import OAuthCallbackPage from '@/pages/OAuthCallbackPage'
 import DashboardPage from '@/pages/DashboardPage'
 import KnowledgeBasePage from '@/pages/KnowledgeBasePage'
 import KnowledgeBaseDetailPage from '@/pages/KnowledgeBaseDetailPage'
@@ -59,6 +60,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/oauth/callback" element={<OAuthCallbackPage />} />
         <Route
           element={
             <ProtectedRoute>

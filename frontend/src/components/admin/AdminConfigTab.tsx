@@ -22,7 +22,7 @@ export function AdminConfigTab() {
     const [configs, setConfigs] = useState<SystemConfig[]>([])
     const [loading, setLoading] = useState(true)
 
-    const [activeTab, setActiveTab] = useState<'llm' | 'embedding' | 'pro_nodes' | 'raw'>('llm')
+    const [activeTab, setActiveTab] = useState<'llm' | 'embedding' | 'pro_nodes' | 'linux_do' | 'raw'>('llm')
 
     const [llmKey, setLlmKey] = useState('')
     const [llmBase, setLlmBase] = useState('')
@@ -51,6 +51,18 @@ export function AdminConfigTab() {
         Array.from({ length: 5 }, () => ({ apiKey: '', baseUrl: '', model: '', promptDegradation: false }))
     )
     const [savingProNodes, setSavingProNodes] = useState(false)
+
+    const [ldEnabled, setLdEnabled] = useState(false)
+    const [ldClientId, setLdClientId] = useState('')
+    const [ldClientSecret, setLdClientSecret] = useState('')
+    const [ldRedirectUri, setLdRedirectUri] = useState('')
+    const [ldMinTrust, setLdMinTrust] = useState('1')
+    const [savingLd, setSavingLd] = useState(false)
+
+    const [allowRegistration, setAllowRegistration] = useState(true)
+
+    const [rawConfirmInput, setRawConfirmInput] = useState('')
+    const rawUnlocked = rawConfirmInput === '我明白我在做什么并且我确认我需要这么做'
 
     const loadConfigs = async () => {
         try {
@@ -92,6 +104,17 @@ export function AdminConfigTab() {
                 } catch { /* ignore */ }
             }
             setProConcurrency(get('PRO_CONCURRENCY') || '3')
+
+            // Linux DO
+            setLdEnabled(get('LINUX_DO_ENABLED') === 'true')
+            setLdClientId(get('LINUX_DO_CLIENT_ID'))
+            setLdClientSecret(get('LINUX_DO_CLIENT_SECRET'))
+            setLdRedirectUri(get('LINUX_DO_REDIRECT_URI'))
+            setLdMinTrust(get('LINUX_DO_MIN_TRUST_LEVEL') || '1')
+
+            // Access control
+            const allowReg = data.find((c: SystemConfig) => c.key === 'ALLOW_REGISTRATION')?.value
+            setAllowRegistration(allowReg !== 'false')
         } catch {
             toast.error('加载系统配置失败')
         } finally {
@@ -211,13 +234,27 @@ export function AdminConfigTab() {
                 'Solve Verifier 多模型配置'
             )
             await adminApi.setConfig('PRO_CONCURRENCY', String(Math.max(1, Math.min(10, parseInt(proConcurrency) || 3))), '并发出题数')
-            toast.success('Pro 节点配置已保存')
+            toast.success('仿真组卷配置已保存')
             loadConfigs()
         } catch {
             toast.error('保存失败')
         } finally {
             setSavingProNodes(false)
         }
+    }
+
+    const saveLoginAccessConfig = async () => {
+        try {
+            setSavingLd(true)
+            await adminApi.setConfig('LINUX_DO_ENABLED', String(ldEnabled), 'Linux DO 登录开关')
+            if (ldClientId) await adminApi.setConfig('LINUX_DO_CLIENT_ID', ldClientId, 'Linux DO Client ID')
+            if (ldClientSecret) await adminApi.setConfig('LINUX_DO_CLIENT_SECRET', ldClientSecret, 'Linux DO Client Secret（加密存储）')
+            if (ldRedirectUri) await adminApi.setConfig('LINUX_DO_REDIRECT_URI', ldRedirectUri, 'Linux DO 回调地址')
+            await adminApi.setConfig('LINUX_DO_MIN_TRUST_LEVEL', ldMinTrust || '1', 'Linux DO 最低信任等级')
+            await adminApi.setConfig('ALLOW_REGISTRATION', String(allowRegistration), '公开注册开关')
+            toast.success('配置已保存')
+            loadConfigs()
+        } catch { toast.error('保存失败') } finally { setSavingLd(false) }
     }
 
     const handleAddRaw = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -262,7 +299,8 @@ export function AdminConfigTab() {
     const SUB_TABS = [
         { key: 'llm' as const, label: 'LLM 核心模型' },
         { key: 'embedding' as const, label: 'Embedding 向量' },
-        { key: 'pro_nodes' as const, label: 'Pro 节点模型' },
+        { key: 'pro_nodes' as const, label: '仿真组卷设置' },
+        { key: 'linux_do' as const, label: '登录与访问控制' },
         { key: 'raw' as const, label: '高级变量' },
     ]
 
@@ -275,7 +313,7 @@ export function AdminConfigTab() {
                 </div>
                 <div>
                     <h2 className="text-base font-semibold text-foreground">系统设置</h2>
-                    <p className="text-xs text-muted-foreground">配置 LLM 模型、向量模型及 Pro 组卷参数</p>
+                    <p className="text-xs text-muted-foreground">配置 LLM 模型、向量模型及仿真组卷参数</p>
                 </div>
             </div>
 
@@ -372,7 +410,7 @@ export function AdminConfigTab() {
                     {/* Node accordion card */}
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">为 Pro 仿真组卷的每个 AI 节点单独配置 LLM 模型。留空则自动使用全局 LLM 配置。</p>
+                            <p className="text-sm text-muted-foreground">为仿真组卷的每个 AI 节点单独配置 LLM 模型。留空则自动使用全局 LLM 配置。</p>
                             <button
                                 onClick={syncAllFromGlobal}
                                 className="flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors shrink-0 ml-4"
@@ -559,8 +597,115 @@ export function AdminConfigTab() {
                 </div>
             )}
 
+            {activeTab === 'linux_do' && (
+                <div className="animate-in fade-in p-6 space-y-4">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-sm text-muted-foreground">配置 Linux DO OAuth 2.0 第三方登录。填写 Client ID 后登录页将自动显示登录按钮。</p>
+                        </div>
+                        <div className="divide-y divide-border">
+                            <div className="flex items-center justify-between px-6 py-4">
+                                <div>
+                                    <label className="text-sm font-medium text-foreground">启用 Linux DO 登录</label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">开启后登录页将显示 Linux DO 登录按钮</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setLdEnabled(v => !v)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${ldEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                                >
+                                    <span className={`inline-block size-4 rounded-full bg-white transition-transform ${ldEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                </button>
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> Client ID <span className="text-rose-500">*</span></label>
+                                <input type="text" value={ldClientId} onChange={e => setLdClientId(e.target.value)} placeholder="从 Linux DO 开发者中心获取" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> Client Secret <span className="text-rose-500">*</span></label>
+                                <input type="password" value={ldClientSecret} onChange={e => setLdClientSecret(e.target.value)} placeholder="加密存储" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> 回调地址 <span className="text-rose-500">*</span></label>
+                                <input type="text" value={ldRedirectUri} onChange={e => setLdRedirectUri(e.target.value)} placeholder="https://your-domain.com/oauth/callback" className={inputClass} />
+                                <p className="text-[10px] text-muted-foreground mt-1">如果你的前端地址是 https://your-domain.com 你就填写 https://your-domain.com/oauth/callback 需与 Linux DO 开发者中心中填写的回调地址完全一致</p>
+                            </div>
+                            <div className="flex items-center justify-between px-6 py-4">
+                                <div>
+                                    <label className="text-sm font-medium text-foreground">最低信任等级</label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">低于此等级的 Linux DO 账号将被拒绝登录（0–4）</p>
+                                </div>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    max={4}
+                                    value={ldMinTrust}
+                                    onChange={e => setLdMinTrust(e.target.value)}
+                                    className="w-16 bg-transparent border border-border rounded-lg px-2 py-1 text-sm text-center font-mono focus:outline-none focus:border-foreground transition-colors"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-sm text-muted-foreground">控制用户的注册方式和平台访问权限。</p>
+                        </div>
+                        <div className="divide-y divide-border">
+                            <div className="flex items-center justify-between px-6 py-4">
+                                <div>
+                                    <label className="text-sm font-medium text-foreground">开放公开注册</label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">关闭后用户无法通过注册表单创建账号，但 Linux DO 等第三方登录不受影响</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllowRegistration(v => !v)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${allowRegistration ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                                >
+                                    <span className={`inline-block size-4 rounded-full bg-white transition-transform ${allowRegistration ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button onClick={saveLoginAccessConfig} disabled={savingLd} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50">
+                            {savingLd ? '保存中...' : '保存'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {activeTab === 'raw' && (
                 <div className="animate-in fade-in p-6">
+                    {!rawUnlocked ? (
+                        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+                            <div className="px-6 py-5 flex gap-3">
+                                <ShieldAlert className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">高风险操作区域</p>
+                                    <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
+                                        此功能允许直接向运行时注入任意环境变量。写入未知的 Key 可能导致服务崩溃、数据丢失或安全漏洞。<br />
+                                        请不要在不了解后果的情况下修改任何变量。如需继续，请在下方输入确认语句。
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="px-6 pb-6 space-y-2">
+                                <label className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                    输入：<span className="font-mono">我明白我在做什么并且我确认我需要这么做</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={rawConfirmInput}
+                                    onChange={e => setRawConfirmInput(e.target.value)}
+                                    placeholder="在此输入确认语句..."
+                                    className="w-full rounded-lg border border-amber-500/40 bg-transparent px-3.5 py-2.5 text-sm font-mono text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-amber-500 transition-colors"
+                                    autoComplete="off"
+                                    spellCheck={false}
+                                />
+                            </div>
+                        </div>
+                    ) : (
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="px-6 py-3 border-b border-border bg-amber-500/5 flex gap-2 items-center">
                             <ShieldAlert className="size-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -617,6 +762,7 @@ export function AdminConfigTab() {
                             </table>
                         </div>
                     </div>
+                    )}
                 </div>
             )}
         </div>

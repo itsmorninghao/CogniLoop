@@ -691,6 +691,7 @@ export interface UserPublicInfo {
     full_name: string
     avatar_url: string | null
     bio: string | null
+    linux_do_id?: string | null
 }
 
 export const userApi = {
@@ -724,4 +725,24 @@ export const presetApi = {
     update: (id: number, data: Partial<Omit<QuizPreset, 'id' | 'created_at' | 'updated_at'>>) =>
         api.put<QuizPreset>(`/quiz-presets/${id}`, data),
     delete: (id: number) => api.delete(`/quiz-presets/${id}`),
+}
+
+// Auth API
+
+export const authApi = {
+    isRegistrationEnabled: () =>
+        api.get<{ enabled: boolean }>('/auth/registration-enabled'),
+}
+
+// Linux DO OAuth API
+
+export const linuxDoApi = {
+    isEnabled: () => api.get<{ enabled: boolean }>('/auth/linux-do/enabled'),
+    getAuthorizeUrl: () => api.get<{ url: string }>('/auth/linux-do/authorize'),
+    exchange: (code: string, state: string) =>
+        api.post<{ access_token: string; token_type: string }>('/auth/linux-do/exchange', { code, state }),
+    getBindUrl: () => api.get<{ url: string }>('/auth/linux-do/bind-url'),
+    bind: (code: string, state: string) =>
+        api.post<{ message: string }>('/auth/linux-do/bind', { code, state }),
+    unbind: () => api.delete<{ message: string }>('/auth/linux-do/bind'),
 }

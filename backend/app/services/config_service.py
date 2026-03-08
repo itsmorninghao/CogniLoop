@@ -9,7 +9,7 @@ from backend.app.core.exceptions import NotFoundError
 from backend.app.models.system_config import SystemConfig
 
 # Keys whose values are encrypted at rest
-SENSITIVE_KEYS = {"OPENAI_API_KEY", "EMBEDDING_API_KEY"}
+SENSITIVE_KEYS = {"OPENAI_API_KEY", "EMBEDDING_API_KEY", "LINUX_DO_CLIENT_SECRET"}
 
 
 async def get_config(key: str, session: AsyncSession) -> str | None:

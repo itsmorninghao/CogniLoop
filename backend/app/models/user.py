@@ -18,6 +18,7 @@ class User(SQLModel, table=True):
     is_active: bool = Field(default=True)
     is_admin: bool = Field(default=False)
     is_superadmin: bool = Field(default=False)
+    linux_do_id: str | None = Field(default=None, max_length=64, unique=True, index=True)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
