@@ -9,7 +9,7 @@ import { toast } from 'sonner'
 import {
     ArrowLeft, Sparkles, BookOpen, ChevronDown, ChevronUp,
     Loader2, CheckCircle2, Brain, Target, Circle, XCircle,
-    Clock, ArrowRight, Search, User, PenTool, FileText, ShieldCheck, Info, Swords, X,
+    Clock, ArrowRight, Search, User, FileText, ShieldCheck, Info, Swords, X,
     ClipboardList, Check
 } from 'lucide-react'
 import { kbApi, quizApi, profileApi, userApi, presetApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type UserPublicInfo, type QuizPreset } from '../lib/api'
@@ -48,10 +48,9 @@ interface NodeTrace {
 const STANDARD_NODE_CONFIG: { id: string; label: string; icon: typeof Brain }[] = [
     { id: 'scope_resolver', label: '解析知识范围', icon: Target },
     { id: 'rag_retriever', label: '检索相关知识', icon: Search },
-    { id: 'profile_analyzer', label: '分析学习画像', icon: User },
-    { id: 'question_designer', label: '设计题目规格', icon: PenTool },
-    { id: 'question_generator', label: '生成题目内容', icon: FileText },
-    { id: 'quality_checker', label: '质量校验', icon: ShieldCheck },
+    { id: 'profile_analyzer', label: '分析画像·规划出题', icon: User },
+    { id: 'question_generator', label: '并发生成题目', icon: FileText },
+    { id: 'quality_checker', label: '逐题质量校验', icon: ShieldCheck },
 ]
 
 
@@ -543,15 +542,15 @@ export default function QuizCreateSmartPage() {
                                 {/* Input Summary */}
                                 {selectedNode.inputSummary && Object.keys(selectedNode.inputSummary).length > 0 && (
                                     <div>
-                                        <h4 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                        <h4 className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                                             <ArrowRight className="size-3" /> 输入参数
                                         </h4>
-                                        <div className="rounded-lg border border-border bg-card overflow-hidden">
+                                        <div className="rounded border border-border/50 bg-card overflow-hidden">
                                             <div className="divide-y divide-border">
                                                 {Object.entries(selectedNode.inputSummary).map(([key, value]) => (
-                                                    <div key={key} className="flex gap-4 px-4 py-2.5">
-                                                        <span className="text-xs font-mono text-muted-foreground w-36 flex-shrink-0 pt-0.5">{key}</span>
-                                                        <span className="text-sm text-foreground break-all">
+                                                    <div key={key} className="flex gap-4 px-3 py-1.5">
+                                                        <span className="text-[10px] font-mono text-muted-foreground w-28 flex-shrink-0 pt-0.5">{key}</span>
+                                                        <span className="text-xs text-foreground break-all">
                                                             {renderValue(value)}
                                                         </span>
                                                     </div>
@@ -564,15 +563,15 @@ export default function QuizCreateSmartPage() {
                                 {/* Output Summary */}
                                 {selectedNode.outputSummary && Object.keys(selectedNode.outputSummary).length > 0 && (
                                     <div>
-                                        <h4 className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                                        <h4 className="mb-2 flex items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
                                             <ArrowLeft className="size-3" /> 输出结果
                                         </h4>
-                                        <div className="rounded-lg border border-border bg-card overflow-hidden">
+                                        <div className="rounded border border-border/50 bg-card overflow-hidden">
                                             <div className="divide-y divide-border">
                                                 {Object.entries(selectedNode.outputSummary).map(([key, value]) => (
-                                                    <div key={key} className="flex gap-4 px-4 py-2.5">
-                                                        <span className="text-xs font-mono text-muted-foreground w-36 flex-shrink-0 pt-0.5">{key}</span>
-                                                        <div className="text-sm text-foreground break-all flex-1">
+                                                    <div key={key} className="flex gap-4 px-3 py-1.5">
+                                                        <span className="text-[10px] font-mono text-muted-foreground w-28 flex-shrink-0 pt-0.5">{key}</span>
+                                                        <div className="text-xs text-foreground break-all flex-1">
                                                             {renderValue(value)}
                                                         </div>
                                                     </div>
@@ -1092,6 +1091,25 @@ export default function QuizCreateSmartPage() {
 }
 
 
+function LongTextValue({ text }: { text: string }) {
+    const [expanded, setExpanded] = useState(false)
+    return (
+        <div>
+            <pre className={`text-xs text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed ${expanded ? '' : 'max-h-24 overflow-hidden'}`}>
+                {text}
+            </pre>
+            {text.length > 300 && (
+                <button
+                    onClick={() => setExpanded(v => !v)}
+                    className="mt-1 text-[10px] text-primary hover:underline"
+                >
+                    {expanded ? '收起' : `展开全文（${text.length} 字符）`}
+                </button>
+            )}
+        </div>
+    )
+}
+
 function renderValue(value: unknown): React.ReactNode {
     if (value === null || value === undefined) {
         return <span className="text-muted-foreground/50 italic">null</span>
@@ -1103,7 +1121,8 @@ function renderValue(value: unknown): React.ReactNode {
         return <span className="font-mono">{value}</span>
     }
     if (typeof value === 'string') {
-        return value.length > 200 ? value.slice(0, 200) + '...' : value
+        if (value.length > 300) return <LongTextValue text={value} />
+        return value
     }
     if (Array.isArray(value)) {
         if (value.length === 0) return <span className="text-muted-foreground/50 italic">[]</span>

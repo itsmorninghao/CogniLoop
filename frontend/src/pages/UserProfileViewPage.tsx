@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
-import { Award, Target, BarChart3, Flame, Activity, BookOpen, ArrowLeft, Sparkles } from 'lucide-react'
+import { Award, Target, BarChart3, Brain, Activity, BookOpen, ArrowLeft, Sparkles } from 'lucide-react'
 import { ApiError, profileApi, type UserProfile } from '@/lib/api'
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -70,13 +70,21 @@ export default function UserProfileViewPage() {
         )
     }
 
-    const qt = profile.question_type_profiles ?? {}
     const domainProfiles = profile.domain_profiles ?? {}
     const trajectory = profile.learning_trajectory ?? []
     const totalAnswered = profile.total_questions_answered ?? 0
     const accuracy = profile.overall_accuracy ?? 0
     const level = profile.overall_level ?? 'beginner'
+    const kpProfiles = profile.knowledge_point_profiles ?? {}
+    const insightSummary = profile.insight_summary ?? ''
     const domainEntries = Object.entries(domainProfiles).sort((a, b) => b[1].question_count - a[1].question_count)
+    const kpCoverageCount = Object.keys(kpProfiles).length
+
+    // Knowledge points sorted by accuracy ascending (weakest first), show only accuracy numbers (no weakness details)
+    const kpEntries = Object.entries(kpProfiles)
+        .filter(([, stats]) => stats.attempts >= 1)
+        .sort((a, b) => a[1].accuracy - b[1].accuracy)
+        .slice(0, 8)
 
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
@@ -131,15 +139,55 @@ export default function UserProfileViewPage() {
                 <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-center gap-3">
                         <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500">
-                            <Flame className="size-5 text-white" />
+                            <Brain className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{Object.keys(qt).length}</p>
-                            <p className="text-sm text-muted-foreground">已练题型</p>
+                            <p className="text-2xl font-bold text-foreground">{kpCoverageCount}</p>
+                            <p className="text-sm text-muted-foreground">知识点覆盖</p>
                         </div>
                     </div>
                 </div>
             </div>
+
+            {/* AI insight summary */}
+            {insightSummary && (
+                <div className="rounded-xl border border-border bg-card p-6">
+                    <div className="flex items-center gap-2 mb-3">
+                        <Sparkles className="size-4 text-primary" />
+                        <span className="text-sm font-semibold text-foreground">AI 学习洞察</span>
+                    </div>
+                    <p className="text-sm text-foreground leading-relaxed">{insightSummary}</p>
+                </div>
+            )}
+
+            {/* Knowledge point accuracy (no weakness details in public view) */}
+            {kpEntries.length > 0 && (
+                <div className="rounded-xl border border-border bg-card">
+                    <div className="border-b border-border p-6">
+                        <h3 className="text-foreground font-semibold">知识点掌握情况</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">正确率排名（从低到高）</p>
+                    </div>
+                    <div className="p-6 space-y-3">
+                        {kpEntries.map(([name, stats]) => {
+                            const acc = stats.accuracy * 100
+                            return (
+                                <div key={name} className="space-y-1.5">
+                                    <div className="flex items-center justify-between text-sm">
+                                        <span className="font-medium text-foreground">{name}</span>
+                                        <span className="text-muted-foreground text-xs">{stats.attempts} 题 · {acc.toFixed(0)}%</span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full transition-all duration-500 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
+                                            style={{ width: `${Math.max(acc, 3)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            )
+                        })}
+                    </div>
+                </div>
+            )}
 
             {/* Domain profiles */}
             {domainEntries.length > 0 && (

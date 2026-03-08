@@ -43,15 +43,12 @@ async def scope_resolver(state: QuizGenState) -> dict:
     folder_ids = scope.get("folder_ids", [])
     doc_ids = scope.get("doc_ids", [])
 
-    # Start with explicit doc_ids
+    # Ensure target_user_id is set: default to the quiz creator
+    target_user_id = state.get("target_user_id") or state.get("user_id")
+
     resolved_docs = list(doc_ids)
     resolved_kbs = list(kb_ids)
 
-    # If folders are specified, we need to look up documents in those folders
-    # For now, we pass folder_ids as part of the scope for the retriever
-    # The retriever will handle folder-level filtering
-
-    # If only kb_ids are given, use them directly for retrieval
     if not resolved_docs and not folder_ids and not resolved_kbs:
         logger.warning("Empty knowledge scope for session %s", state.get("session_id"))
 
@@ -78,6 +75,7 @@ async def scope_resolver(state: QuizGenState) -> dict:
     return {
         "resolved_doc_ids": resolved_docs,
         "resolved_kb_ids": resolved_kbs,
+        "target_user_id": target_user_id,
         "current_node": "scope_resolver",
         "progress": 0.1,
         "status_message": msg,

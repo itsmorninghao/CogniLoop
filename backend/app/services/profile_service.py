@@ -41,7 +41,6 @@ async def incremental_update(
         dict(profile.profile_data) if profile.profile_data else _empty_profile(user_id)
     )
 
-    # Fetch session + questions + responses
     sess_result = await db.execute(
         select(QuizSession).where(QuizSession.id == session_id)
     )
@@ -60,12 +59,10 @@ async def incremental_update(
     responses = r_result.scalars().all()
     resp_map = {r.question_id: r for r in responses}
 
-    # Extract session-level metadata
     quiz_config = quiz_session.quiz_config or {}
     subject = str(quiz_config.get("subject", "") or "").strip() or "综合"
     difficulty = str(quiz_config.get("difficulty", "medium") or "medium")
 
-    # Update totals
     total_answered = data.get("total_questions_answered", 0)
     total_correct = int(total_answered * data.get("overall_accuracy", 0))
 
@@ -74,8 +71,8 @@ async def incremental_update(
     session_time_total = 0
     session_time_count = 0
 
-    # Per question-type stats
     qt_profiles: dict = data.get("question_type_profiles", {})
+    kp_profiles: dict = data.get("knowledge_point_profiles", {})
 
     for q in questions:
         resp = resp_map.get(q.id)
@@ -91,7 +88,6 @@ async def incremental_update(
             session_time_total += resp.time_spent
             session_time_count += 1
 
-        # Update question type profile
         qt = q.question_type
         if qt not in qt_profiles:
             qt_profiles[qt] = {"accuracy": 0.0, "count": 0, "correct": 0}
@@ -103,14 +99,22 @@ async def incremental_update(
             qt_entry["correct"] / qt_entry["count"] if qt_entry["count"] > 0 else 0
         )
 
-    # Update overall stats
+        for point in (q.knowledge_points or []):
+            if point not in kp_profiles:
+                kp_profiles[point] = {"attempts": 0, "correct": 0, "accuracy": 0.0}
+            kp_profiles[point]["attempts"] += 1
+            kp_profiles[point]["correct"] += 1 if is_correct else 0
+            kp_profiles[point]["accuracy"] = (
+                kp_profiles[point]["correct"] / kp_profiles[point]["attempts"]
+            )
+
     new_total = total_answered + session_total
     new_correct = total_correct + session_correct
     data["total_questions_answered"] = new_total
     data["overall_accuracy"] = new_correct / new_total if new_total > 0 else 0
     data["question_type_profiles"] = qt_profiles
+    data["knowledge_point_profiles"] = kp_profiles
 
-    # Update domain profiles
     domain_profiles: dict = data.get("domain_profiles", {})
     if subject not in domain_profiles:
         domain_profiles[subject] = {
@@ -164,7 +168,6 @@ async def incremental_update(
     )
     data["learning_trajectory"] = trajectory[-30:]
 
-    # Determine overall level
     acc = data["overall_accuracy"]
     if new_total < 10:
         data["overall_level"] = "beginner"
@@ -175,7 +178,6 @@ async def incremental_update(
     else:
         data["overall_level"] = "beginner"
 
-    # Persist
     profile.profile_data = data
     profile.profile_version = (profile.profile_version or 0) + 1
     profile.last_calculated_at = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -194,7 +196,6 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
     """
     profile = await get_or_create_profile(user_id, db)
 
-    # Fetch all graded sessions for this user
     sess_result = await db.execute(
         select(QuizSession)
         .where(
@@ -211,7 +212,6 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
     session_ids = [s.id for s in sessions]
     session_map = {s.id: s for s in sessions}
 
-    # Fetch all questions and responses
     q_result = await db.execute(
         select(QuizQuestion).where(QuizQuestion.session_id.in_(session_ids))
     )
@@ -223,10 +223,10 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
     all_responses = r_result.scalars().all()
     resp_map = {r.question_id: r for r in all_responses}
 
-    # Calculate everything from scratch
     total_answered = 0
     total_correct = 0
     qt_profiles: dict[str, dict] = {}
+    kp_profiles_raw: dict[str, dict] = {}
     trajectory: list[dict] = []
 
     # domain tracking: subject -> {correct, total, time_total, time_count, difficulty_stats}
@@ -250,7 +250,12 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
         qt_profiles[qt]["count"] += 1
         qt_profiles[qt]["correct"] += 1 if is_correct else 0
 
-        # Domain tracking
+        for point in (q.knowledge_points or []):
+            if point not in kp_profiles_raw:
+                kp_profiles_raw[point] = {"attempts": 0, "correct": 0}
+            kp_profiles_raw[point]["attempts"] += 1
+            kp_profiles_raw[point]["correct"] += 1 if is_correct else 0
+
         sess = session_map.get(
             str(q.session_id) if not isinstance(q.session_id, str) else q.session_id
         )
@@ -291,13 +296,11 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
         if is_correct:
             session_stats[sid]["correct"] += 1
 
-    # Finalize question type accuracies
     for qt_data in qt_profiles.values():
         qt_data["accuracy"] = (
             qt_data["correct"] / qt_data["count"] if qt_data["count"] > 0 else 0
         )
 
-    # Finalize domain profiles
     domain_profiles: dict = {}
     for subject, da in domain_acc.items():
         avg_time = da["time_total"] / da["time_count"] if da["time_count"] > 0 else 0.0
@@ -312,7 +315,6 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
             ),
         }
 
-    # Build trajectory
     for s in sessions:
         stats = session_stats.get(str(s.id))
         if stats and stats["total"] > 0:
@@ -325,7 +327,6 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
                 }
             )
 
-    # Overall
     acc = total_correct / total_answered if total_answered > 0 else 0
 
     if total_answered < 10:
@@ -337,6 +338,16 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
     else:
         level = "beginner"
 
+    kp_profiles: dict = {}
+    for point, stats in kp_profiles_raw.items():
+        kp_profiles[point] = {
+            "attempts": stats["attempts"],
+            "correct": stats["correct"],
+            "accuracy": stats["correct"] / stats["attempts"] if stats["attempts"] > 0 else 0.0,
+        }
+
+    # Preserve LLM-generated fields from existing profile
+    old_data = dict(profile.profile_data) if profile.profile_data else {}
     data = {
         "user_id": user_id,
         "updated_at": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
@@ -346,6 +357,11 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
         "question_type_profiles": qt_profiles,
         "domain_profiles": domain_profiles,
         "learning_trajectory": trajectory[-30:],
+        "knowledge_point_profiles": kp_profiles,
+        # Preserve LLM-generated fields; profile_rewriter will update them
+        "weakness_analysis": old_data.get("weakness_analysis", {}),
+        "insight_summary": old_data.get("insight_summary", ""),
+        "last_analysis_session_id": old_data.get("last_analysis_session_id"),
     }
 
     profile.profile_data = data
@@ -432,4 +448,8 @@ def _empty_profile(user_id: int) -> dict:
         "question_type_profiles": {},
         "domain_profiles": {},
         "learning_trajectory": [],
+        "knowledge_point_profiles": {},
+        "weakness_analysis": {},
+        "insight_summary": "",
+        "last_analysis_session_id": None,
     }

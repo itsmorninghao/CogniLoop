@@ -1,10 +1,12 @@
 """
-Node 6: Quality Checker — validates generated questions for correctness and completeness.
-Conditionally retries the question_generator if quality is too low.
+Node 5: Quality Checker — per-question hallucination detection.
+PASS: add to validated_questions.
+FAIL: add to questions_needing_retry for question_generator to redo.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
@@ -14,33 +16,75 @@ from backend.app.graphs.quiz_generation.state import QuizGenState
 
 logger = logging.getLogger(__name__)
 
-CHECK_PROMPT = """你是一位题目质量审查专家。请检查以下 {count} 道题目的质量。
+_CHECK_SYSTEM = """你是一位题目质量审查专家。请检查下面这道题的质量。
 
-## 题目列表
-{questions_json}
+只看两件事：
+1. 答案与题干是否逻辑自洽（选项覆盖、填空答案是否合理）
+2. 解析内容是否存在明显的知识性错误或无法从题干/常识推导的内容（幻觉）
 
-## 检查标准
-1. 题目描述是否清晰、无歧义
-2. 选择题选项是否合理（无明显错误选项）
-3. 答案是否正确
-4. 解析是否准确
+如果题目质量合格，只输出：PASS
+如果存在问题，输出：FAIL: <简要说明具体问题>
 
-请为每道题评分（1-10分），并标注需要修正的问题。
-返回 JSON 格式：
-[{{"index": 0, "score": 8, "issue": null}}, {{"index": 1, "score": 4, "issue": "选项B和D重复"}}]
+不要输出其他任何内容。"""
 
-只返回 JSON 数组，不要其他文字。"""
+
+async def _check_single_question(
+    question: dict,
+    semaphore: asyncio.Semaphore,
+) -> tuple[int, bool, str]:
+    """Check a single question. Returns (slot_index, is_pass, issue)."""
+    async with semaphore:
+        slot_index = question.get("slot_index", 0)
+        qtype = question.get("question_type", "")
+        content = question.get("content", "")[:500]
+        options = question.get("options")
+        correct_answer = question.get("correct_answer", "")[:200]
+        analysis = question.get("analysis", "")[:500]
+
+        user_content = json.dumps(
+            {
+                "question_type": qtype,
+                "content": content,
+                "options": options,
+                "correct_answer": correct_answer,
+                "analysis": analysis,
+            },
+            ensure_ascii=False,
+            indent=None,
+        )
+
+        try:
+            async with async_session_factory() as session:
+                llm = await get_chat_model(session, temperature=0)
+            from langchain_core.messages import HumanMessage, SystemMessage
+            messages = [
+                SystemMessage(content=_CHECK_SYSTEM),
+                HumanMessage(content=user_content),
+            ]
+            response = await llm.ainvoke(messages)
+            reply = response.content.strip()
+        except Exception as e:
+            logger.warning("Quality check LLM failed for slot %d: %s", slot_index, e)
+            return slot_index, True, ""  # fail open: pass on error
+
+        if reply.upper().startswith("PASS"):
+            return slot_index, True, ""
+        else:
+            issue = reply[5:].strip() if reply.upper().startswith("FAIL") else reply
+            return slot_index, False, issue
 
 
 async def quality_checker(state: QuizGenState) -> dict:
     """
-    Validate generated questions for quality.
-    If quality is below threshold and retry_count < 2, signals for retry.
+    Per-question hallucination detection.
+    - All PASS → is_complete=True, write validated_questions
+    - Any FAIL and retry_count < 2 → write questions_needing_retry, is_complete=False
+    - Any FAIL and retry_count >= 2 → pass all remaining as-is
     """
     from backend.app.core.sse import emit_node_complete, emit_node_start
 
     session_id = state.get("session_id", "")
-    await emit_node_start(session_id, "quality_checker", "正在进行质量校验...")
+    await emit_node_start(session_id, "quality_checker", "正在逐题质量校验...")
 
     questions = state.get("questions", [])
     retry_count = state.get("retry_count", 0)
@@ -52,128 +96,86 @@ async def quality_checker(state: QuizGenState) -> dict:
             "current_node": "quality_checker",
             "progress": 1.0,
             "status_message": "未生成任何题目",
-            "errors": ["No questions generated"],
         }
 
-    q_summary = []
-    for i, q in enumerate(questions):
-        q_summary.append(
-            {
-                "index": i,
-                "type": q.get("question_type"),
-                "content": q.get("content", "")[:200],
-                "options": q.get("options"),
-                "answer": q.get("correct_answer", "")[:100],
-            }
-        )
+    from backend.app.graphs.quiz_generation.nodes.question_generator import CONCURRENCY_LIMIT
+    semaphore = asyncio.Semaphore(CONCURRENCY_LIMIT)
+    tasks = [_check_single_question(q, semaphore) for q in questions]
+    results = await asyncio.gather(*tasks)
 
-    async with async_session_factory() as session:
-        try:
-            llm = await get_chat_model(session, temperature=0)
-            prompt = CHECK_PROMPT.format(
-                count=len(questions),
-                questions_json=json.dumps(q_summary, ensure_ascii=False, indent=2),
-            )
-            response = await llm.ainvoke(prompt)
-            content = response.content.strip()
+    pass_map: dict[int, bool] = {}
+    issue_map: dict[int, str] = {}
+    for slot_index, is_pass, issue in results:
+        pass_map[slot_index] = is_pass
+        if not is_pass:
+            issue_map[slot_index] = issue
 
-            if content.startswith("```"):
-                content = content.split("```")[1]
-                if content.startswith("json"):
-                    content = content[4:]
+    validated = [q for q in questions if pass_map.get(q.get("slot_index", 0), True)]
+    failed = [q for q in questions if not pass_map.get(q.get("slot_index", 0), True)]
 
-            scores = json.loads(content)
-            score_map = {item["index"]: item for item in scores}
-
-        except Exception as e:
-            logger.warning("Quality check LLM failed: %s — passing all", e)
-            score_map = {}
-
-    validated = []
-    low_quality_count = 0
-    for i, q in enumerate(questions):
-        check = score_map.get(i, {"score": 7, "issue": None})
-        q_score = check.get("score", 7)
-        issue = check.get("issue")
-
-        if q_score >= 5:
-            q["quality_score"] = q_score
-            if issue:
-                q["quality_note"] = issue
-            validated.append(q)
-        else:
-            low_quality_count += 1
-            logger.warning(
-                "Question %d scored %d (issue: %s) — dropped", i, q_score, issue
-            )
-
-    avg_score = (
-        sum(q.get("quality_score", 7) for q in validated) / len(validated)
-        if validated
-        else 0
-    )
-
-    # If too many were dropped and we haven't retried yet, signal retry
-    needs_retry = (
-        low_quality_count > len(questions) * 0.3  # More than 30% dropped
-        and retry_count < 2
-        and len(validated) < state.get("quiz_config", {}).get("count", 5) * 0.7
-    )
-
-    if needs_retry:
-        logger.info(
-            "Quality too low (avg=%.1f, dropped=%d), triggering retry",
-            avg_score,
-            low_quality_count,
-        )
-        retry_msg = f"质量校验未通过，正在重新生成... (第{retry_count + 1}次)"
+    if not failed:
+        msg = f"质量校验通过，{len(validated)} 道题目全部合格"
         await emit_node_complete(
             session_id,
             "quality_checker",
-            retry_msg,
+            msg,
             input_summary={"question_count": len(questions)},
-            output_summary={
-                "passed": len(validated),
-                "dropped": low_quality_count,
-                "avg_score": round(avg_score, 1),
-                "needs_retry": True,
-            },
-            progress=0.85,
+            output_summary={"passed": len(validated), "failed": 0},
+            progress=1.0,
         )
         return {
-            "retry_count": retry_count + 1,
-            "is_complete": False,
+            "validated_questions": validated,
+            "is_complete": True,
             "current_node": "quality_checker",
-            "progress": 0.85,
-            "status_message": retry_msg,
+            "progress": 1.0,
+            "status_message": msg,
         }
 
-    logger.info(
-        "Quality check passed: %d/%d questions (avg score: %.1f)",
-        len(validated),
-        len(questions),
-        avg_score,
-    )
+    if retry_count >= 2:
+        # Max retries reached: include all questions
+        msg = f"质量校验完成（已达最大重试次数），共 {len(questions)} 道题目"
+        for q in failed:
+            q["quality_note"] = issue_map.get(q.get("slot_index", 0), "质检未通过")
+        await emit_node_complete(
+            session_id,
+            "quality_checker",
+            msg,
+            input_summary={"question_count": len(questions)},
+            output_summary={"passed": len(validated), "forced_pass": len(failed)},
+            progress=1.0,
+        )
+        return {
+            "validated_questions": questions,  # include all
+            "is_complete": True,
+            "current_node": "quality_checker",
+            "progress": 1.0,
+            "status_message": msg,
+        }
 
-    msg = f"质量校验完成，{len(validated)} 道题目通过"
+    # Trigger per-question retry
+    questions_needing_retry = [
+        {"slot_index": q.get("slot_index", 0), "issue": issue_map.get(q.get("slot_index", 0), "质检未通过")}
+        for q in failed
+    ]
+
+    retry_msg = f"发现 {len(failed)} 道题需重出（第{retry_count + 1}轮重试）"
     await emit_node_complete(
         session_id,
         "quality_checker",
-        msg,
+        retry_msg,
         input_summary={"question_count": len(questions)},
         output_summary={
             "passed": len(validated),
-            "dropped": low_quality_count,
-            "avg_score": round(avg_score, 1),
-            "needs_retry": False,
+            "needs_retry": len(failed),
+            "retry_count": retry_count + 1,
         },
-        progress=1.0,
+        progress=0.85,
     )
-
     return {
-        "validated_questions": validated,
-        "is_complete": True,
+        "questions_needing_retry": questions_needing_retry,
+        "retry_count": retry_count + 1,
+        "is_complete": False,
         "current_node": "quality_checker",
-        "progress": 1.0,
-        "status_message": msg,
+        "progress": 0.85,
+        "status_message": retry_msg,
     }

@@ -73,6 +73,7 @@ async def create_quiz_session(
         _generate_quiz_background(
             session_id=session_id,
             user_id=user.id,
+            target_user_id=quiz.solver_id or user.id,
             knowledge_scope=req.knowledge_scope,
             quiz_config=req.quiz_config,
             generation_mode=req.generation_mode,
@@ -87,6 +88,7 @@ async def create_quiz_session(
 async def _generate_quiz_background(
     session_id: str,
     user_id: int,
+    target_user_id: int,
     knowledge_scope: dict,
     quiz_config: dict,
     generation_mode: str,
@@ -103,7 +105,6 @@ async def _generate_quiz_background(
         await emit_node_start(session_id, "quiz_generation", "开始生成题目...")
 
         if generation_mode == "pro":
-            # Pro Graph State Requirements
             initial_state = {
                 "session_id": session_id,
                 "knowledge_scope": knowledge_scope,
@@ -115,10 +116,10 @@ async def _generate_quiz_background(
             validated_questions = result.get("final_questions", [])
 
         else:
-            # Standard Graph
             initial_state = {
                 "session_id": session_id,
                 "user_id": user_id,
+                "target_user_id": target_user_id,
                 "knowledge_scope": knowledge_scope,
                 "quiz_config": quiz_config,
                 "generation_mode": generation_mode,
@@ -129,7 +130,6 @@ async def _generate_quiz_background(
             result = await quiz_generation_graph.ainvoke(initial_state)
             validated_questions = result.get("validated_questions", [])
 
-        # Save generated questions to DB
         async with async_session_factory() as db_session:
             for i, q in enumerate(validated_questions):
                 db_question = QuizQuestion(
@@ -142,10 +142,10 @@ async def _generate_quiz_background(
                     analysis=q.get("analysis"),
                     score=q.get("score", 1.0),
                     source_chunks=q.get("source_chunks"),
+                    knowledge_points=q.get("knowledge_points"),
                 )
                 db_session.add(db_question)
 
-            # Update session status
             stmt = select(QuizSession).where(QuizSession.id == session_id)
             quiz_result = await db_session.execute(stmt)
             quiz = quiz_result.scalar_one_or_none()
@@ -174,7 +174,6 @@ async def _generate_quiz_background(
         logger.error("Quiz generation failed for %s: %s", session_id, e, exc_info=True)
         await emit_error(session_id, str(e)[:200])
 
-        # Update status to error
         try:
             async with async_session_factory() as db_session:
                 stmt = select(QuizSession).where(QuizSession.id == session_id)
@@ -292,7 +291,6 @@ async def submit_response(
 
     results = []
     for sub in submissions:
-        # Check if response already exists
         existing = await db_session.execute(
             select(QuizResponse).where(
                 QuizResponse.session_id == session_id,
@@ -357,7 +355,6 @@ async def submit_quiz(
 
     await db_session.flush()
 
-    # Kick off background grading
     task = asyncio.create_task(_grade_quiz_background(session_id, user.id))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
@@ -378,13 +375,11 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
         await emit_node_start(session_id, "grading", "开始批改...")
 
         async with async_session_factory() as db_session:
-            # Load questions
             q_result = await db_session.execute(
                 select(QuizQuestion).where(QuizQuestion.session_id == session_id)
             )
             questions = q_result.scalars().all()
 
-            # Load responses
             r_result = await db_session.execute(
                 select(QuizResponse).where(
                     QuizResponse.session_id == session_id,
@@ -393,7 +388,6 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
             )
             responses = r_result.scalars().all()
 
-            # Build grading state
             q_list = [
                 {
                     "id": q.id,
@@ -411,7 +405,6 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
                 for r in responses
             ]
 
-        # Run grading graph
         result = await grading_graph.ainvoke(
             {
                 "session_id": session_id,
@@ -421,7 +414,6 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
             }
         )
 
-        # Save grading results
         async with async_session_factory() as db_session:
             graded_results = result.get("graded_results", [])
 

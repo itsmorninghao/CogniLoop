@@ -1,14 +1,13 @@
 /**
- * Profile page — ability radar, question type stats, domain profiles, learning trajectory, share UI.
+ * Profile page — AI insights, knowledge points, domain profiles, learning trajectory, share UI.
  */
 
 import { useEffect, useState } from 'react'
-import { TrendingUp, Flame, Award, Target, RefreshCcw, BarChart3, Activity, Link2, Copy, Trash2, BookOpen, Pencil } from 'lucide-react'
+import { TrendingUp, Award, Target, RefreshCcw, BarChart3, Activity, Link2, Copy, Trash2, BookOpen, Pencil, Brain, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { profileApi, userApi, type UserProfile, type ProfileShare, type UserPublicInfo } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { TrajectoryBar } from '@/components/shared/TrajectoryBar'
-import { RadarChart } from '@/components/profile/RadarChart'
 import { EditProfileModal } from '@/components/profile/EditProfileModal'
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -23,18 +22,53 @@ const LEVEL_COLORS: Record<string, string> = {
     advanced: 'from-amber-500 to-orange-500',
 }
 
-const QT_LABELS: Record<string, string> = {
-    single_choice: '单选题',
-    multiple_choice: '多选题',
-    fill_blank: '填空题',
-    short_answer: '简答题',
-    true_false: '判断题',
-}
-
 const DIFFICULTY_LABELS: Record<string, string> = {
     easy: '简单',
     medium: '中等',
     hard: '困难',
+}
+
+function KnowledgePointCard({ name, stats, weaknessReason }: {
+    name: string
+    stats: { attempts: number; correct: number; accuracy: number }
+    weaknessReason?: string
+}) {
+    const [expanded, setExpanded] = useState(false)
+    const acc = stats.accuracy * 100
+    const hasReason = !!weaknessReason
+
+    return (
+        <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-foreground">{name}</span>
+                    {hasReason && (
+                        <button
+                            onClick={() => setExpanded(v => !v)}
+                            className="flex items-center gap-0.5 rounded text-xs text-muted-foreground hover:text-primary transition"
+                        >
+                            {expanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+                            AI 分析
+                        </button>
+                    )}
+                </div>
+                <span className={`text-xs font-medium ${acc >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
+                    {stats.attempts} 题 · {acc.toFixed(0)}%
+                </span>
+            </div>
+            <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                <div
+                    className={`h-full rounded-full transition-all duration-500 ${acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
+                    style={{ width: `${Math.max(acc, 3)}%` }}
+                />
+            </div>
+            {expanded && weaknessReason && (
+                <p className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 leading-relaxed">
+                    {weaknessReason}
+                </p>
+            )}
+        </div>
+    )
 }
 
 export default function ProfilePage() {
@@ -116,19 +150,25 @@ export default function ProfilePage() {
         )
     }
 
-    const qt = profile?.question_type_profiles ?? {}
     const domainProfiles = profile?.domain_profiles ?? {}
     const trajectory = profile?.learning_trajectory ?? []
     const totalAnswered = profile?.total_questions_answered ?? 0
     const accuracy = profile?.overall_accuracy ?? 0
     const level = profile?.overall_level ?? 'beginner'
-
-    // SVG radar data
-    const qtKeys = Object.keys(qt)
-    const radarHasData = qtKeys.length >= 3
+    const kpProfiles = profile?.knowledge_point_profiles ?? {}
+    const weaknessAnalysis = profile?.weakness_analysis ?? {}
+    const insightSummary = profile?.insight_summary ?? ''
 
     // Domain profiles sorted by question count descending
     const domainEntries = Object.entries(domainProfiles).sort((a, b) => b[1].question_count - a[1].question_count)
+
+    // Knowledge points sorted by accuracy ascending (weakest first)
+    const kpEntries = Object.entries(kpProfiles)
+        .filter(([, stats]) => stats.attempts >= 1)
+        .sort((a, b) => a[1].accuracy - b[1].accuracy)
+
+    const weakKpEntries = kpEntries.filter(([, s]) => s.accuracy < 0.75)
+    const kpCoverageCount = kpEntries.length
 
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
@@ -173,7 +213,7 @@ export default function ProfilePage() {
                 />
             )}
 
-            {/* Stats row */}
+            {/* ① 顶部统计行（4格） */}
             <div className="grid gap-4 md:grid-cols-4 stagger-children">
                 <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-center gap-3">
@@ -213,57 +253,99 @@ export default function ProfilePage() {
                 <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-center gap-3">
                         <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500">
-                            <Flame className="size-5 text-white" />
+                            <Brain className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{Object.keys(qt).length}</p>
-                            <p className="text-sm text-muted-foreground">已练题型</p>
+                            <p className="text-2xl font-bold text-foreground">{kpCoverageCount}</p>
+                            <p className="text-sm text-muted-foreground">知识点覆盖</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Two-column layout */}
+            {/* ② AI 学习洞察（全宽，最显眼） */}
+            <div className="rounded-xl border border-border bg-card">
+                <div className="border-b border-border p-6">
+                    <div className="flex items-center gap-2">
+                        <Sparkles className="size-5 text-primary" />
+                        <h3 className="text-foreground font-semibold">AI 学习洞察</h3>
+                    </div>
+                    <p className="mt-1 text-sm text-muted-foreground">基于你的答题记录生成的深度分析</p>
+                </div>
+                <div className="p-6">
+                    {insightSummary ? (
+                        <p className="text-sm text-foreground leading-relaxed">{insightSummary}</p>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-center">
+                            <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30">
+                                <TrendingUp className="size-7 text-primary" />
+                            </div>
+                            <p className="text-sm font-medium text-foreground">暂无 AI 洞察</p>
+                            <p className="mt-1 max-w-sm text-sm text-muted-foreground">完成更多练习后，AI 将为你生成个性化学习洞察</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ③ 两列布局：薄弱知识点 + 科目能力分布 */}
             <div className="grid gap-6 lg:grid-cols-2">
-                {/* Radar chart */}
+                {/* 薄弱知识点 */}
                 <div className="rounded-xl border border-border bg-card">
                     <div className="border-b border-border p-6">
-                        <h3 className="text-foreground font-semibold">题型能力雷达</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">各题型正确率分布</p>
+                        <h3 className="text-foreground font-semibold">薄弱知识点</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            正确率低于 75% 的知识点，点击「AI 分析」查看原因
+                        </p>
                     </div>
-                    <div className="flex items-center justify-center p-6">
-                        {radarHasData ? (
-                            <RadarChart data={qt} />
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-12 text-center">
-                                <div className="mb-4 flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30">
-                                    <TrendingUp className="size-8 text-primary" />
-                                </div>
-                                <p className="text-sm font-medium text-foreground">暂无数据</p>
-                                <p className="mt-1 max-w-sm text-sm text-muted-foreground">完成至少 3 种题型的测验后，雷达图将展示在这里</p>
+                    <div className="p-6 space-y-4">
+                        {weakKpEntries.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center py-8 text-center">
+                                <p className="text-sm font-medium text-foreground">暂无薄弱知识点</p>
+                                <p className="mt-1 text-sm text-muted-foreground">继续做题后将显示薄弱知识点</p>
                             </div>
+                        ) : (
+                            weakKpEntries.slice(0, 10).map(([name, stats]) => (
+                                <KnowledgePointCard
+                                    key={name}
+                                    name={name}
+                                    stats={stats}
+                                    weaknessReason={weaknessAnalysis[name]}
+                                />
+                            ))
                         )}
                     </div>
                 </div>
 
-                {/* Question type breakdown */}
+                {/* 科目能力分布 */}
                 <div className="rounded-xl border border-border bg-card">
                     <div className="border-b border-border p-6">
-                        <h3 className="text-foreground font-semibold">题型详情</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">各题型作答统计</p>
+                        <div className="flex items-center gap-2">
+                            <BookOpen className="size-5 text-primary" />
+                            <h3 className="text-foreground font-semibold">科目能力分布</h3>
+                        </div>
+                        <p className="mt-1 text-sm text-muted-foreground">按科目 / 主题分组的学习统计</p>
                     </div>
                     <div className="p-6 space-y-4">
-                        {qtKeys.length === 0 ? (
+                        {domainEntries.length === 0 ? (
                             <p className="text-center text-sm text-muted-foreground py-8">暂无数据</p>
                         ) : (
-                            qtKeys.map((key) => {
-                                const item = qt[key]
-                                const acc = item.accuracy * 100
+                            domainEntries.map(([subject, dp]) => {
+                                const acc = dp.accuracy * 100
                                 return (
-                                    <div key={key} className="space-y-2">
+                                    <div key={subject} className="space-y-2">
                                         <div className="flex items-center justify-between text-sm">
-                                            <span className="font-medium text-foreground">{QT_LABELS[key] || key}</span>
-                                            <span className="text-muted-foreground">{item.count} 题 · {acc.toFixed(0)}%</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="font-medium text-foreground">{subject}</span>
+                                                <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-muted-foreground">
+                                                    偏好：{DIFFICULTY_LABELS[dp.preferred_difficulty] ?? dp.preferred_difficulty}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3 text-muted-foreground">
+                                                {dp.avg_time_per_question > 0 && (
+                                                    <span>{Math.round(dp.avg_time_per_question)}秒/题</span>
+                                                )}
+                                                <span>{dp.question_count} 题 · {acc.toFixed(0)}%</span>
+                                            </div>
                                         </div>
                                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                                             <div
@@ -279,49 +361,7 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            {/* Domain profiles */}
-            {domainEntries.length > 0 && (
-                <div className="rounded-xl border border-border bg-card">
-                    <div className="border-b border-border p-6">
-                        <div className="flex items-center gap-2">
-                            <BookOpen className="size-5 text-primary" />
-                            <h3 className="text-foreground font-semibold">科目能力分布</h3>
-                        </div>
-                        <p className="mt-1 text-sm text-muted-foreground">按科目 / 主题分组的学习统计</p>
-                    </div>
-                    <div className="p-6 space-y-4">
-                        {domainEntries.map(([subject, dp]) => {
-                            const acc = dp.accuracy * 100
-                            return (
-                                <div key={subject} className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-medium text-foreground">{subject}</span>
-                                            <span className="rounded-full bg-accent px-2 py-0.5 text-xs text-muted-foreground">
-                                                偏好：{DIFFICULTY_LABELS[dp.preferred_difficulty] ?? dp.preferred_difficulty}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-3 text-muted-foreground">
-                                            {dp.avg_time_per_question > 0 && (
-                                                <span>{Math.round(dp.avg_time_per_question)}秒/题</span>
-                                            )}
-                                            <span>{dp.question_count} 题 · {acc.toFixed(0)}%</span>
-                                        </div>
-                                    </div>
-                                    <div className="h-2 rounded-full bg-muted overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full transition-all duration-500 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
-                                            style={{ width: `${Math.max(acc, 3)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-            )}
-
-            {/* Learning trajectory */}
+            {/* ④ 学习轨迹（全宽） */}
             <div className="rounded-xl border border-border bg-card">
                 <div className="border-b border-border p-6">
                     <div className="flex items-center gap-2">

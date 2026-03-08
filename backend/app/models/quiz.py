@@ -61,6 +61,8 @@ class QuizQuestion(SQLModel, table=True):
     analysis: str | None = Field(default=None, sa_column=Column(Text))
     score: float = Field(default=1.0)
     source_chunks: Any = Field(default=None, sa_column=Column(JSON))
+    knowledge_points: Any = Field(default=None, sa_column=Column(JSON))
+    # list[str], e.g. ["动量守恒定律"]
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )

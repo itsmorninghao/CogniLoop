@@ -15,9 +15,12 @@ class AssistantState(TypedDict, total=False):
     # Collected data
     recent_sessions: list[dict]  # Recent graded quiz sessions with responses
     current_profile: dict  # Current profile_data from DB
+    active_knowledge_points: set  # Knowledge points from last 30 sessions (for pruning)
 
     # Analysis results
     patterns_found: list[dict]  # [{domain, issue, detail, severity}]
+    updated_weakness_analysis: dict  # {知识点: 原因描述} from LLM
+    insight_summary: str  # LLM-generated overall summary
 
     # Output
     new_profile: dict  # Updated profile (after full_recalculate)

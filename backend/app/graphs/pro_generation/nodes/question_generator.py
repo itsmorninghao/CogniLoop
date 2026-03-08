@@ -31,27 +31,24 @@ async def generate_question(
     hotspot = ctx.get("hotspot", "")
     rag_context = ctx.get("rag_context", "")
 
-    # Format RAG knowledge context
     rag_section = ""
     if rag_context:
         rag_section = (
             f"【参考知识内容（请基于以下知识点出题）】\n{rag_context[:3000]}\n\n"
         )
 
-    # Format few shots
     shots_text = ""
     if examples:
         shots_text = "【参考真题范例（用于模仿出题风格与难度）】\n"
         for i, s in enumerate(examples, 1):
             shots_text += f"--范例 {i}--\n题干: {s['content']}\n答案: {s['answer']}\n\n"
 
-    # Format instructions based on type
     if qtype == "single_choice":
-        format_instr = '{"content": "题目描述", "options": {"A": "选项1", "B": "选项2", "C": "选项3", "D": "选项4"}, "correct_answer": "A", "analysis": "解析"}'
+        format_instr = '{"content": "题目描述", "options": {"A": "选项1", "B": "选项2", "C": "选项3", "D": "选项4"}, "correct_answer": "A", "analysis": "解析", "knowledge_points": ["知识点1", "知识点2"]}'
     elif qtype == "fill_blank":
-        format_instr = '{"content": "题目描述，包含下划线 ___", "options": null, "correct_answer": "填空答案", "analysis": "解析"}'
+        format_instr = '{"content": "题目描述，包含下划线 ___", "options": null, "correct_answer": "填空答案", "analysis": "解析", "knowledge_points": ["知识点1"]}'
     else:
-        format_instr = '{"content": "题目描述", "options": null, "correct_answer": "参考答案文本", "analysis": "解析"}'
+        format_instr = '{"content": "题目描述", "options": null, "correct_answer": "参考答案文本", "analysis": "解析", "knowledge_points": ["知识点1", "知识点2"]}'
 
     sys_msg = (
         "你是一个极其专业的顶级学科命题专家。你需要编写1道全新、高质量的原创试题。\n"

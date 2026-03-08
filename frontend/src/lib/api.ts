@@ -400,6 +400,11 @@ export interface UserProfile {
     learning_trajectory: { date: string; accuracy: number; question_count: number; session_id: string }[]
     profile_version: number
     last_calculated_at: string | null
+    // AI 分析字段
+    knowledge_point_profiles: Record<string, { attempts: number; correct: number; accuracy: number }>
+    weakness_analysis: Record<string, string>
+    insight_summary: string
+    last_analysis_session_id?: string
 }
 
 export const profileApi = {

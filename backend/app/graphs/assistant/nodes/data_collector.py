@@ -15,8 +15,8 @@ from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 
 logger = logging.getLogger(__name__)
 
-# Number of recent graded sessions to analyze
-RECENT_SESSIONS_LIMIT = 10
+# Number of recent graded sessions to analyze (window for knowledge point pruning)
+RECENT_SESSIONS_LIMIT = 30
 
 
 async def data_collector(state: AssistantState) -> dict:
@@ -36,6 +36,8 @@ async def data_collector(state: AssistantState) -> dict:
         sessions = result.scalars().all()
 
         recent_sessions = []
+        active_knowledge_points: set[str] = set()
+
         for s in sessions:
             q_result = await db.execute(
                 select(QuizQuestion).where(QuizQuestion.session_id == s.id)
@@ -54,15 +56,20 @@ async def data_collector(state: AssistantState) -> dict:
             question_details = []
             for q in questions:
                 resp = r_map.get(q.id)
+                kps = q.knowledge_points or []
+                active_knowledge_points.update(kps)
                 question_details.append(
                     {
                         "question_type": q.question_type,
-                        "content": q.content[:200],  # truncate for context window
+                        "content": q.content[:300],
+                        "correct_answer": q.correct_answer[:200],
+                        "user_answer": (resp.user_answer or "")[:200] if resp else None,
                         "is_correct": resp.is_correct if resp else None,
                         "score": resp.score if resp else 0,
                         "max_score": q.score,
                         "time_spent": resp.time_spent if resp else None,
                         "ai_feedback": resp.ai_feedback if resp else None,
+                        "knowledge_points": kps,
                     }
                 )
 
@@ -86,14 +93,16 @@ async def data_collector(state: AssistantState) -> dict:
         current_profile = profile.profile_data if profile else {}
 
     logger.info(
-        "AssistantGraph: collected %d sessions for user %d",
+        "AssistantGraph: collected %d sessions for user %d, %d active KPs",
         len(recent_sessions),
         user_id,
+        len(active_knowledge_points),
     )
 
     return {
         "recent_sessions": recent_sessions,
         "current_profile": current_profile,
+        "active_knowledge_points": active_knowledge_points,
         "current_node": "data_collector",
         "progress": 0.15,
         "status_message": f"已加载 {len(recent_sessions)} 次做题记录",
