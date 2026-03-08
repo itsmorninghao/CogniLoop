@@ -19,6 +19,7 @@ from backend.app.models.user import User
 from backend.app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
+    SetupRequest,
     TokenResponse,
     UserResponse,
 )
@@ -55,7 +56,7 @@ async def registration_enabled(session: AsyncSession = Depends(get_session)):
 
 @router.post("/setup", response_model=UserResponse, status_code=201)
 async def setup_admin(
-    req: RegisterRequest,
+    req: SetupRequest,
     session: AsyncSession = Depends(get_session),
 ):
     """Create the first admin user. Only works when no admin exists."""

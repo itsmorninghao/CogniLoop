@@ -19,6 +19,7 @@ from backend.app.models.user import User
 from backend.app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
+    SetupRequest,
     TokenResponse,
     UserResponse,
 )
@@ -34,7 +35,7 @@ async def check_needs_setup(session: AsyncSession) -> bool:
     return admin_count == 0
 
 
-async def setup_admin(req: RegisterRequest, session: AsyncSession) -> UserResponse:
+async def setup_admin(req: SetupRequest, session: AsyncSession) -> UserResponse:
     """Create the first admin user. Only works when no admin exists."""
     if not await check_needs_setup(session):
         raise BadRequestError("System is already set up — admin exists")

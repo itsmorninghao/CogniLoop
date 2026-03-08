@@ -14,6 +14,8 @@ services:
       - "5432:5432"
     volumes:
       - cogniloop_pgdata:/var/lib/postgresql/data
+    networks:
+      - net
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cogniloop} -d ${DB_NAME:-cogniloop_db}"]
       interval: 5s
@@ -27,6 +29,8 @@ services:
     restart: unless-stopped
     ports:
       - "6379:6379"
+    networks:
+      - net
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -50,6 +54,8 @@ services:
       - ./.env:/app/.env
       - cogniloop_uploads:/app/uploads
       - cogniloop_question_sets:/app/question_sets
+    networks:
+      - net
     depends_on:
       db:
         condition: service_healthy
@@ -64,6 +70,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+networks:
+  net:
+    driver: bridge
 
 volumes:
   cogniloop_pgdata:
