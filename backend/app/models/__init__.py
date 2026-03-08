@@ -2,6 +2,7 @@
 
 from backend.app.models.bank_question import BankQuestion  # noqa: F401
 from backend.app.models.circle import CircleMember, StudyCircle  # noqa: F401
+from backend.app.models.circle_profile import CircleProfile  # noqa: F401
 from backend.app.models.knowledge_base import (  # noqa: F401
     KBAcquisition,
     KBChunk,

@@ -9,6 +9,7 @@ from backend.app.models.user import User
 from backend.app.schemas.circle import (
     CircleCreateRequest,
     CircleMemberResponse,
+    CircleProfileResponse,
     CircleQuizSessionItem,
     CircleResponse,
     CircleSessionParticipantItem,
@@ -101,6 +102,27 @@ async def get_circle_stats(
     session: AsyncSession = Depends(get_session),
 ):
     return await circle_service.get_circle_stats(circle_id, session)
+
+
+@router.get("/{circle_id}/profile", response_model=CircleProfileResponse)
+async def get_circle_profile(
+    circle_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    cp = await circle_service.get_circle_profile(circle_id, session)
+    if not cp:
+        return CircleProfileResponse(circle_id=circle_id)
+    data = cp.profile_data or {}
+    return CircleProfileResponse(
+        circle_id=circle_id,
+        overall_accuracy=data.get("overall_accuracy", 0.0),
+        total_questions=data.get("total_questions", 0),
+        member_count=cp.member_count,
+        knowledge_point_profiles=data.get("knowledge_point_profiles", {}),
+        domain_profiles=data.get("domain_profiles", {}),
+        last_calculated_at=cp.last_calculated_at,
+    )
 
 
 @router.get("/{circle_id}/quiz-sessions", response_model=list[CircleQuizSessionItem])

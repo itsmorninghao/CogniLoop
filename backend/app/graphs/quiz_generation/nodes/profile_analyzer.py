@@ -62,11 +62,56 @@ async def profile_analyzer(state: QuizGenState) -> dict:
     await emit_node_start(session_id, "profile_analyzer", "正在分析画像并规划出题方向...")
 
     target_user_id = state.get("target_user_id") or state.get("user_id")
+    circle_id = state.get("circle_id")
     quiz_config = state.get("quiz_config", {})
     rag_chunks = state.get("rag_chunks", [])
 
     target_profile: dict | None = None
-    if target_user_id:
+
+    # Circle mode: load circle profile instead of individual profile
+    if circle_id:
+        try:
+            from sqlmodel import select
+
+            from backend.app.models.circle_profile import CircleProfile
+
+            async with async_session_factory() as session:
+                result = await session.execute(
+                    select(CircleProfile).where(CircleProfile.circle_id == circle_id)
+                )
+                cp = result.scalar_one_or_none()
+                if cp and cp.profile_data:
+                    data: dict = cp.profile_data if isinstance(cp.profile_data, dict) else {}
+                    kp_profiles = data.get("knowledge_point_profiles", {})
+                    weak_points = [
+                        kp for kp, stats in kp_profiles.items()
+                        if stats.get("avg_accuracy", 1.0) < 0.6
+                        and stats.get("member_coverage", 0) >= 2
+                    ]
+                    strong_points = [
+                        kp for kp, stats in kp_profiles.items()
+                        if stats.get("avg_accuracy", 0.0) >= 0.8
+                    ]
+                    target_profile = {
+                        "user_id": None,
+                        "circle_id": circle_id,
+                        "overall_level": "intermediate",
+                        "avg_accuracy": data.get("overall_accuracy"),
+                        "weak_points": weak_points[:10],
+                        "strong_points": strong_points[:5],
+                        "weakness_analysis": {},
+                        "insight_summary": f"圈子集体画像（{data.get('member_count', 0)} 位成员）",
+                    }
+                    logger.info(
+                        "Loaded circle profile for circle %d: weak=%d, strong=%d",
+                        circle_id,
+                        len(weak_points),
+                        len(strong_points),
+                    )
+        except Exception as e:
+            logger.warning("Could not load circle profile: %s (continuing without)", e)
+
+    if not target_profile and target_user_id:
         try:
             from sqlmodel import select
 

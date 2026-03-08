@@ -6,10 +6,11 @@ from __future__ import annotations
 
 import logging
 
-from sqlmodel import select
+from sqlmodel import select, union
 
 from backend.app.core.database import async_session_factory
 from backend.app.graphs.assistant.state import AssistantState
+from backend.app.models.circle import CircleSessionParticipant
 from backend.app.models.profile import UserProfile
 from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 
@@ -24,12 +25,30 @@ async def data_collector(state: AssistantState) -> dict:
     user_id = state["user_id"]
 
     async with async_session_factory() as db:
+        # Personal sessions (solver_id == user_id)
+        personal_ids = (
+            select(QuizSession.id)
+            .where(QuizSession.solver_id == user_id, QuizSession.status == "graded")
+        )
+        # Circle sessions the user participated in
+        circle_ids = (
+            select(QuizSession.id)
+            .join(
+                CircleSessionParticipant,
+                CircleSessionParticipant.session_id == QuizSession.id,
+            )
+            .where(
+                CircleSessionParticipant.user_id == user_id,
+                CircleSessionParticipant.status == "completed",
+                QuizSession.circle_id.isnot(None),
+            )
+        )
+        combined_ids = union(personal_ids, circle_ids).subquery()
+
         result = await db.execute(
             select(QuizSession)
-            .where(
-                QuizSession.solver_id == user_id,
-                QuizSession.status == "graded",
-            )
+            .join(combined_ids, QuizSession.id == combined_ids.c.id)
+            .where(QuizSession.status == "graded")
             .order_by(QuizSession.completed_at.desc())
             .limit(RECENT_SESSIONS_LIMIT)
         )

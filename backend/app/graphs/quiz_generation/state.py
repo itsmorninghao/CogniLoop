@@ -17,6 +17,7 @@ class QuizGenState(TypedDict, total=False):
     knowledge_scope: dict    # {kb_ids: [], folder_ids: [], doc_ids: []}
     quiz_config: dict        # {question_counts, difficulty, title, subject, custom_prompt}
     generation_mode: str     # "standard" | "pro"
+    circle_id: int | None    # 圈子模式下的圈子 ID
 
     # scope_resolver 输出
     resolved_doc_ids: list[int]

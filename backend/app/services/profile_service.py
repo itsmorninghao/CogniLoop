@@ -2,9 +2,10 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.models.circle import CircleSessionParticipant
 from backend.app.models.profile import ProfileShare, UserProfile
 from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 
@@ -54,7 +55,10 @@ async def incremental_update(
     questions = q_result.scalars().all()
 
     r_result = await db.execute(
-        select(QuizResponse).where(QuizResponse.session_id == session_id)
+        select(QuizResponse).where(
+            QuizResponse.session_id == session_id,
+            QuizResponse.user_id == user_id,
+        )
     )
     responses = r_result.scalars().all()
     resp_map = {r.question_id: r for r in responses}
@@ -80,9 +84,11 @@ async def incremental_update(
             continue
 
         session_total += 1
-        is_correct = resp.is_correct or False
-        if is_correct:
-            session_correct += 1
+        # Weighted correctness: use score/max_score for partial credit (e.g. multi-choice)
+        max_s = q.score if q.score and q.score > 0 else 1.0
+        resp_score = resp.score if resp.score is not None else (max_s if resp.is_correct else 0)
+        weight = resp_score / max_s
+        session_correct += weight
 
         if resp.time_spent is not None and resp.time_spent > 0:
             session_time_total += resp.time_spent
@@ -94,7 +100,7 @@ async def incremental_update(
 
         qt_entry = qt_profiles[qt]
         qt_entry["count"] = qt_entry.get("count", 0) + 1
-        qt_entry["correct"] = qt_entry.get("correct", 0) + (1 if is_correct else 0)
+        qt_entry["correct"] = qt_entry.get("correct", 0) + weight
         qt_entry["accuracy"] = (
             qt_entry["correct"] / qt_entry["count"] if qt_entry["count"] > 0 else 0
         )
@@ -103,7 +109,7 @@ async def incremental_update(
             if point not in kp_profiles:
                 kp_profiles[point] = {"attempts": 0, "correct": 0, "accuracy": 0.0}
             kp_profiles[point]["attempts"] += 1
-            kp_profiles[point]["correct"] += 1 if is_correct else 0
+            kp_profiles[point]["correct"] += weight
             kp_profiles[point]["accuracy"] = (
                 kp_profiles[point]["correct"] / kp_profiles[point]["attempts"]
             )
@@ -196,12 +202,29 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
     """
     profile = await get_or_create_profile(user_id, db)
 
+    # Personal sessions (solver_id == user_id)
+    personal_ids = (
+        select(QuizSession.id)
+        .where(QuizSession.solver_id == user_id, QuizSession.status == "graded")
+    )
+    # Circle sessions the user participated in
+    circle_ids = (
+        select(QuizSession.id)
+        .join(
+            CircleSessionParticipant,
+            CircleSessionParticipant.session_id == QuizSession.id,
+        )
+        .where(
+            CircleSessionParticipant.user_id == user_id,
+            CircleSessionParticipant.status == "completed",
+            QuizSession.circle_id.isnot(None),
+        )
+    )
+    combined_ids = union(personal_ids, circle_ids).subquery()
+
     sess_result = await db.execute(
         select(QuizSession)
-        .where(
-            QuizSession.solver_id == user_id,
-            QuizSession.status == "graded",
-        )
+        .join(combined_ids, QuizSession.id == combined_ids.c.id)
         .order_by(QuizSession.created_at)
     )
     sessions = sess_result.scalars().all()
@@ -218,7 +241,10 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
     all_questions = q_result.scalars().all()
 
     r_result = await db.execute(
-        select(QuizResponse).where(QuizResponse.session_id.in_(session_ids))
+        select(QuizResponse).where(
+            QuizResponse.session_id.in_(session_ids),
+            QuizResponse.user_id == user_id,
+        )
     )
     all_responses = r_result.scalars().all()
     resp_map = {r.question_id: r for r in all_responses}
@@ -240,21 +266,23 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
             continue
 
         total_answered += 1
-        is_correct = resp.is_correct or False
-        if is_correct:
-            total_correct += 1
+        # Weighted correctness: score/max_score for partial credit
+        max_s = q.score if q.score and q.score > 0 else 1.0
+        resp_score = resp.score if resp.score is not None else (max_s if resp.is_correct else 0)
+        weight = resp_score / max_s
+        total_correct += weight
 
         qt = q.question_type
         if qt not in qt_profiles:
             qt_profiles[qt] = {"accuracy": 0.0, "count": 0, "correct": 0}
         qt_profiles[qt]["count"] += 1
-        qt_profiles[qt]["correct"] += 1 if is_correct else 0
+        qt_profiles[qt]["correct"] += weight
 
         for point in (q.knowledge_points or []):
             if point not in kp_profiles_raw:
                 kp_profiles_raw[point] = {"attempts": 0, "correct": 0}
             kp_profiles_raw[point]["attempts"] += 1
-            kp_profiles_raw[point]["correct"] += 1 if is_correct else 0
+            kp_profiles_raw[point]["correct"] += weight
 
         sess = session_map.get(
             str(q.session_id) if not isinstance(q.session_id, str) else q.session_id
@@ -276,8 +304,7 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
                 "difficulty_stats": {},
             }
         domain_acc[subject]["total"] += 1
-        if is_correct:
-            domain_acc[subject]["correct"] += 1
+        domain_acc[subject]["correct"] += weight
         if resp.time_spent is not None and resp.time_spent > 0:
             domain_acc[subject]["time_total"] += resp.time_spent
             domain_acc[subject]["time_count"] += 1
@@ -286,15 +313,13 @@ async def full_recalculate(user_id: int, db: AsyncSession) -> UserProfile:
         if difficulty not in diff_stats:
             diff_stats[difficulty] = {"correct": 0, "total": 0}
         diff_stats[difficulty]["total"] += 1
-        if is_correct:
-            diff_stats[difficulty]["correct"] += 1
+        diff_stats[difficulty]["correct"] += weight
 
         sid = str(q.session_id)
         if sid not in session_stats:
             session_stats[sid] = {"correct": 0, "total": 0}
         session_stats[sid]["total"] += 1
-        if is_correct:
-            session_stats[sid]["correct"] += 1
+        session_stats[sid]["correct"] += weight
 
     for qt_data in qt_profiles.values():
         qt_data["accuracy"] = (

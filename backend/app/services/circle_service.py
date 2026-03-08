@@ -17,8 +17,9 @@ from backend.app.models.circle import (
     CircleSessionParticipant,
     StudyCircle,
 )
+from backend.app.models.circle_profile import CircleProfile
 from backend.app.models.profile import UserProfile
-from backend.app.models.quiz import QuizSession
+from backend.app.models.quiz import QuizQuestion, QuizResponse, QuizSession
 from backend.app.models.user import User
 from backend.app.schemas.circle import (
     CircleCreateRequest,
@@ -226,31 +227,74 @@ async def get_circle_stats(
     )
     member_rows = member_result.all()
     member_count = len(member_rows)
+    user_map = {usr.id: (cm, usr) for cm, usr in member_rows}
 
-    # Fetch UserProfile for each member
-    user_ids = [usr.id for _, usr in member_rows]
-    profile_result = await session.execute(
-        select(UserProfile).where(UserProfile.user_id.in_(user_ids))
+    # Query circle-scoped quiz responses
+    circle_session_ids_subq = (
+        select(QuizSession.id).where(QuizSession.circle_id == circle_id)
+    ).subquery()
+
+    resp_result = await session.execute(
+        select(
+            QuizResponse.user_id,
+            func.count(QuizResponse.id),
+            func.sum(QuizResponse.score),
+            func.sum(QuizQuestion.score),
+        )
+        .join(QuizQuestion, QuizQuestion.id == QuizResponse.question_id)
+        .where(
+            QuizResponse.session_id.in_(select(circle_session_ids_subq.c.id)),
+            QuizResponse.score.isnot(None),
+        )
+        .group_by(QuizResponse.user_id)
     )
-    profiles_by_user: dict[int, UserProfile] = {
-        p.user_id: p for p in profile_result.scalars().all()
-    }
+    user_stats: dict[int, dict] = {}
+    for uid, count, score_sum, max_sum in resp_result.all():
+        user_stats[uid] = {
+            "total_questions": count,
+            "score_sum": float(score_sum or 0),
+            "max_sum": float(max_sum or 0),
+        }
 
     # Aggregate domain stats
-    domain_accuracy: dict[str, list[float]] = {}
-    leaderboard: list[LeaderboardEntry] = []
+    domain_result = await session.execute(
+        select(
+            QuizSession.id,
+            QuizSession.quiz_config,
+        ).where(QuizSession.circle_id == circle_id)
+    )
+    # Map session -> subject
+    session_subjects: dict[str, str] = {}
+    for sid, qconfig in domain_result.all():
+        cfg = qconfig or {}
+        session_subjects[sid] = str(cfg.get("subject", "") or "").strip() or "综合"
 
-    for cm, usr in member_rows:
-        profile = profiles_by_user.get(usr.id)
-        profile_data: dict = (
-            profile.profile_data if profile and profile.profile_data else {}
+    # Aggregate per-domain accuracy from responses
+    domain_resp_result = await session.execute(
+        select(
+            QuizResponse.session_id,
+            func.sum(QuizResponse.score),
+            func.sum(QuizQuestion.score),
         )
+        .join(QuizQuestion, QuizQuestion.id == QuizResponse.question_id)
+        .where(
+            QuizResponse.session_id.in_(select(circle_session_ids_subq.c.id)),
+            QuizResponse.score.isnot(None),
+        )
+        .group_by(QuizResponse.session_id)
+    )
+    domain_accuracy: dict[str, list[float]] = {}
+    for sid, score_sum, max_sum in domain_resp_result.all():
+        subject = session_subjects.get(sid, "综合")
+        acc = float(score_sum or 0) / float(max_sum or 1) if max_sum else 0.0
+        domain_accuracy.setdefault(subject, []).append(acc)
 
-        domain_profiles: dict = profile_data.get("domain_profiles", {})
-        for domain, dp in domain_profiles.items():
-            acc = dp.get("accuracy", 0.0) if isinstance(dp, dict) else 0.0
-            domain_accuracy.setdefault(domain, []).append(acc)
-
+    # Build leaderboard
+    leaderboard: list[LeaderboardEntry] = []
+    for uid, (cm, usr) in user_map.items():
+        stats = user_stats.get(uid, {"total_questions": 0, "score_sum": 0, "max_sum": 0})
+        total_q = stats["total_questions"]
+        overall_acc = stats["score_sum"] / stats["max_sum"] if stats["max_sum"] > 0 else 0.0
         leaderboard.append(
             LeaderboardEntry(
                 user_id=usr.id,
@@ -258,12 +302,10 @@ async def get_circle_stats(
                 full_name=usr.full_name,
                 avatar_url=usr.avatar_url,
                 role=cm.role,
-                total_questions=profile_data.get("total_questions_answered", 0),
-                overall_accuracy=profile_data.get("overall_accuracy", 0.0),
+                total_questions=total_q,
+                overall_accuracy=overall_acc,
             )
         )
-
-    # Sort leaderboard by total_questions desc
     leaderboard.sort(key=lambda e: e.total_questions, reverse=True)
 
     # Build domain_stats
@@ -391,6 +433,118 @@ async def get_session_participants(
         )
         for p, usr in result.all()
     ]
+
+
+async def update_circle_profile(
+    circle_id: int, db: AsyncSession
+) -> CircleProfile:
+    """Aggregate all members' UserProfile data into a CircleProfile snapshot."""
+    member_result = await db.execute(
+        select(CircleMember.user_id).where(CircleMember.circle_id == circle_id)
+    )
+    member_ids = [row[0] for row in member_result.all()]
+
+    if not member_ids:
+        return await _upsert_circle_profile(circle_id, {}, 0, db)
+
+    profile_result = await db.execute(
+        select(UserProfile).where(UserProfile.user_id.in_(member_ids))
+    )
+    profiles = profile_result.scalars().all()
+
+    # Aggregate knowledge_point_profiles
+    kp_agg: dict[str, dict] = {}  # kp -> {total_correct, total_attempts, member_count}
+    domain_agg: dict[str, dict] = {}  # domain -> {total_correct, total_count, member_count}
+
+    for profile in profiles:
+        data = profile.profile_data if profile.profile_data else {}
+
+        for kp, stats in (data.get("knowledge_point_profiles") or {}).items():
+            if kp not in kp_agg:
+                kp_agg[kp] = {"total_correct": 0, "total_attempts": 0, "member_count": 0}
+            kp_agg[kp]["total_correct"] += stats.get("correct", 0)
+            kp_agg[kp]["total_attempts"] += stats.get("attempts", 0)
+            kp_agg[kp]["member_count"] += 1
+
+        for domain, dp in (data.get("domain_profiles") or {}).items():
+            if not isinstance(dp, dict):
+                continue
+            if domain not in domain_agg:
+                domain_agg[domain] = {"total_correct": 0, "total_count": 0, "member_count": 0}
+            domain_agg[domain]["total_correct"] += dp.get("correct", 0)
+            domain_agg[domain]["total_count"] += dp.get("question_count", 0)
+            domain_agg[domain]["member_count"] += 1
+
+    # Build aggregated profile data
+    knowledge_point_profiles = {}
+    for kp, agg in kp_agg.items():
+        attempts = agg["total_attempts"]
+        knowledge_point_profiles[kp] = {
+            "avg_accuracy": agg["total_correct"] / attempts if attempts > 0 else 0.0,
+            "total_attempts": attempts,
+            "member_coverage": agg["member_count"],
+        }
+
+    domain_profiles = {}
+    for domain, agg in domain_agg.items():
+        total = agg["total_count"]
+        domain_profiles[domain] = {
+            "avg_accuracy": agg["total_correct"] / total if total > 0 else 0.0,
+            "total_questions": total,
+            "member_coverage": agg["member_count"],
+        }
+
+    # Compute overall accuracy
+    total_correct = sum(a["total_correct"] for a in domain_agg.values())
+    total_count = sum(a["total_count"] for a in domain_agg.values())
+
+    profile_data = {
+        "overall_accuracy": total_correct / total_count if total_count > 0 else 0.0,
+        "total_questions": total_count,
+        "knowledge_point_profiles": knowledge_point_profiles,
+        "domain_profiles": domain_profiles,
+        "member_count": len(member_ids),
+    }
+
+    return await _upsert_circle_profile(circle_id, profile_data, len(member_ids), db)
+
+
+async def get_circle_profile(
+    circle_id: int, db: AsyncSession
+) -> CircleProfile | None:
+    """Get the circle profile, or None if not yet calculated."""
+    result = await db.execute(
+        select(CircleProfile).where(CircleProfile.circle_id == circle_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def _upsert_circle_profile(
+    circle_id: int, profile_data: dict, member_count: int, db: AsyncSession
+) -> CircleProfile:
+    """Insert or update the circle profile."""
+    result = await db.execute(
+        select(CircleProfile).where(CircleProfile.circle_id == circle_id)
+    )
+    cp = result.scalar_one_or_none()
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    if cp:
+        cp.profile_data = profile_data
+        cp.member_count = member_count
+        cp.last_calculated_at = now
+        cp.updated_at = now
+    else:
+        cp = CircleProfile(
+            circle_id=circle_id,
+            profile_data=profile_data,
+            member_count=member_count,
+            last_calculated_at=now,
+        )
+    db.add(cp)
+    await db.commit()
+    await db.refresh(cp)
+    return cp
 
 
 async def _get_circle_or_404(circle_id: int, session: AsyncSession) -> StudyCircle:

@@ -100,6 +100,7 @@ async def rule_grader(state: GradingState) -> dict:
                     "score": score,
                     "ai_feedback": feedback,
                     "grading_method": "rule",
+                    "correctness_weight": score / item["max_score"] if item["max_score"] > 0 else 0,
                 }
             )
         else:
@@ -111,6 +112,7 @@ async def rule_grader(state: GradingState) -> dict:
                     "score": None,
                     "ai_feedback": None,
                     "grading_method": "pending_llm",
+                    "correctness_weight": 0,
                 }
             )
 
@@ -164,6 +166,7 @@ async def llm_grader(state: GradingState) -> dict:
                 )
                 item["ai_feedback"] = result.get("feedback", "")
                 item["grading_method"] = "llm"
+                item["correctness_weight"] = item["score"] / item["max_score"] if item["max_score"] > 0 else 0
 
             except Exception as e:
                 logger.error(
@@ -173,6 +176,7 @@ async def llm_grader(state: GradingState) -> dict:
                 item["is_correct"] = False
                 item["ai_feedback"] = f"AI批改出错：{str(e)[:100]}"
                 item["grading_method"] = "llm_error"
+                item["correctness_weight"] = 0
 
     return {
         "graded_results": graded,
@@ -188,8 +192,9 @@ async def feedback_generator(state: GradingState) -> dict:
 
     total_score = sum(g.get("score", 0) or 0 for g in graded)
     max_score = sum(g.get("max_score", 1) for g in graded)
-    correct_count = sum(1 for g in graded if g.get("is_correct"))
-    accuracy = correct_count / len(graded) if graded else 0
+    # Use weighted accuracy: sum of correctness_weight / count
+    total_weight = sum(g.get("correctness_weight", 1 if g.get("is_correct") else 0) for g in graded)
+    accuracy = total_weight / len(graded) if graded else 0
 
     # Generate summary
     weak_areas = []

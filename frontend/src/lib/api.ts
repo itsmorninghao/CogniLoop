@@ -613,6 +613,28 @@ export interface CircleQuizSessionItem {
     current_user_status: string | null
 }
 
+export interface CircleKnowledgePointProfile {
+    avg_accuracy: number
+    total_attempts: number
+    member_coverage: number
+}
+
+export interface CircleDomainProfile {
+    avg_accuracy: number
+    total_questions: number
+    member_coverage: number
+}
+
+export interface CircleProfile {
+    circle_id: number
+    overall_accuracy: number
+    total_questions: number
+    member_count: number
+    knowledge_point_profiles: Record<string, CircleKnowledgePointProfile>
+    domain_profiles: Record<string, CircleDomainProfile>
+    last_calculated_at: string | null
+}
+
 export interface CircleMember {
     id: number
     user_id: number
@@ -636,6 +658,7 @@ export const circleApi = {
     removeMember: (circleId: number, userId: number) =>
         api.delete(`/circles/${circleId}/members/${userId}`),
     stats: (id: number) => api.get<CircleStats>(`/circles/${id}/stats`),
+    profile: (id: number) => api.get<CircleProfile>(`/circles/${id}/profile`),
     quizSessions: (id: number, limit = 20) =>
         api.get<CircleQuizSessionItem[]>(`/circles/${id}/quiz-sessions?limit=${limit}`),
     sessionParticipants: (circleId: number, sessionId: string) =>

@@ -54,7 +54,7 @@ async def create_quiz_session(
     """Create a quiz session and trigger background generation."""
     quiz = QuizSession(
         creator_id=user.id,
-        solver_id=req.solver_id or user.id,
+        solver_id=None if req.circle_id else (req.solver_id or user.id),
         mode=req.mode,
         generation_mode=req.generation_mode,
         title=req.title,
@@ -73,10 +73,11 @@ async def create_quiz_session(
         _generate_quiz_background(
             session_id=session_id,
             user_id=user.id,
-            target_user_id=quiz.solver_id or user.id,
+            target_user_id=None if req.circle_id else (quiz.solver_id or user.id),
             knowledge_scope=req.knowledge_scope,
             quiz_config=req.quiz_config,
             generation_mode=req.generation_mode,
+            circle_id=req.circle_id,
         )
     )
     _background_tasks.add(task)
@@ -88,10 +89,11 @@ async def create_quiz_session(
 async def _generate_quiz_background(
     session_id: str,
     user_id: int,
-    target_user_id: int,
+    target_user_id: int | None,
     knowledge_scope: dict,
     quiz_config: dict,
     generation_mode: str,
+    circle_id: int | None = None,
 ) -> None:
     """Background task: run the quiz generation graph."""
     from backend.app.core.database import async_session_factory
@@ -123,6 +125,7 @@ async def _generate_quiz_background(
                 "knowledge_scope": knowledge_scope,
                 "quiz_config": quiz_config,
                 "generation_mode": generation_mode,
+                "circle_id": circle_id,
                 "errors": [],
                 "retry_count": 0,
                 "is_complete": False,
@@ -331,6 +334,16 @@ async def submit_quiz(
     if quiz.status not in ("in_progress", "ready"):
         raise BadRequestError(f"Cannot submit quiz in '{quiz.status}' status")
 
+    # Guard: must have at least one response
+    resp_count_result = await db_session.execute(
+        select(func.count(QuizResponse.id)).where(
+            QuizResponse.session_id == session_id,
+            QuizResponse.user_id == user.id,
+        )
+    )
+    if resp_count_result.scalar() == 0:
+        raise BadRequestError("请至少作答一道题后再提交")
+
     if quiz.circle_id:
         # Circle session: update participant to grading, keep session status as ready
         p_result = await db_session.execute(
@@ -502,6 +515,28 @@ async def _grade_quiz_background(session_id: str, user_id: int) -> None:
                 "AssistantGraph trigger failed for user %d: %s", user_id, assistant_err
             )
 
+        # Update circle profile if this is a circle session
+        try:
+            async with async_session_factory() as check_db:
+                stmt = select(QuizSession).where(QuizSession.id == session_id)
+                q_res = await check_db.execute(stmt)
+                quiz_for_circle = q_res.scalar_one_or_none()
+                if quiz_for_circle and quiz_for_circle.circle_id:
+                    from backend.app.services import circle_service
+
+                    await circle_service.update_circle_profile(
+                        quiz_for_circle.circle_id, check_db
+                    )
+                    logger.info(
+                        "Circle profile updated for circle %d after quiz %s",
+                        quiz_for_circle.circle_id,
+                        session_id,
+                    )
+        except Exception as circle_err:
+            logger.warning(
+                "Circle profile update failed for quiz %s: %s", session_id, circle_err
+            )
+
         await emit_progress(session_id, 1.0, result.get("feedback_summary", "批改完成"))
         await emit_complete(
             session_id,
@@ -527,10 +562,20 @@ async def list_quiz_sessions(
     limit: int = 20,
     offset: int = 0,
 ) -> list[QuizSessionListItem]:
-    """List quiz sessions for a user."""
+    """List quiz sessions for a user, including circle sessions they participated in."""
+    # Subquery for circle sessions the user participated in
+    circle_participant_ids = (
+        select(CircleSessionParticipant.session_id)
+        .where(CircleSessionParticipant.user_id == user.id)
+    ).subquery()
+
     result = await db_session.execute(
         select(QuizSession)
-        .where((QuizSession.creator_id == user.id) | (QuizSession.solver_id == user.id))
+        .where(
+            (QuizSession.creator_id == user.id)
+            | (QuizSession.solver_id == user.id)
+            | (QuizSession.id.in_(select(circle_participant_ids.c.session_id)))
+        )
         .order_by(QuizSession.created_at.desc())
         .offset(offset)
         .limit(limit)

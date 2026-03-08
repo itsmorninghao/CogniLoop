@@ -98,3 +98,25 @@ class CircleQuizSessionItem(BaseModel):
     created_at: datetime
     participant_count: int = 0
     current_user_status: str | None = None
+
+
+class KnowledgePointProfile(BaseModel):
+    avg_accuracy: float
+    total_attempts: int
+    member_coverage: int
+
+
+class DomainProfileItem(BaseModel):
+    avg_accuracy: float
+    total_questions: int
+    member_coverage: int
+
+
+class CircleProfileResponse(BaseModel):
+    circle_id: int
+    overall_accuracy: float = 0.0
+    total_questions: int = 0
+    member_count: int = 0
+    knowledge_point_profiles: dict[str, KnowledgePointProfile] = {}
+    domain_profiles: dict[str, DomainProfileItem] = {}
+    last_calculated_at: datetime | None = None

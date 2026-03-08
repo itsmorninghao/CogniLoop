@@ -10,9 +10,9 @@ import {
     ArrowLeft, Sparkles, BookOpen, ChevronDown, ChevronUp,
     Loader2, CheckCircle2, Brain, Target, Circle, XCircle,
     Clock, ArrowRight, Search, User, FileText, ShieldCheck, Info, Swords, X,
-    ClipboardList, Check
+    ClipboardList, Check, Users
 } from 'lucide-react'
-import { kbApi, quizApi, profileApi, userApi, presetApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type UserPublicInfo, type QuizPreset } from '../lib/api'
+import { kbApi, quizApi, profileApi, userApi, presetApi, circleApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type UserPublicInfo, type QuizPreset } from '../lib/api'
 
 
 type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'fill_blank' | 'short_answer'
@@ -95,6 +95,7 @@ export default function QuizCreateSmartPage() {
         circleIdParam ? 'circle' : targetUserId ? 'challenge' : 'self_test'
     )
     const [challengeTarget, setChallengeTarget] = useState<UserPublicInfo | null>(null)
+    const [circleName, setCircleName] = useState<string | null>(null)
 
     // Presets
     const [presets, setPresets] = useState<QuizPreset[]>([])
@@ -112,6 +113,12 @@ export default function QuizCreateSmartPage() {
         kbApi.list().then(kbs => setKnowledgeBases(kbs.filter(kb => kb.kb_type !== 'question_bank'))).catch(() => toast.error('加载知识库失败'))
         presetApi.list().then(setPresets).catch(() => {})
     }, [])
+
+    // Load circle name for circle mode banner
+    useEffect(() => {
+        if (!circleIdParam) return
+        circleApi.get(circleIdParam).then(c => setCircleName(c.name)).catch(() => {})
+    }, [circleIdParam])
 
     // Load target user profile for suggested difficulty
     useEffect(() => {
@@ -686,6 +693,16 @@ export default function QuizCreateSmartPage() {
                         正在为 <span className="font-semibold">
                             {challengeTarget ? (challengeTarget.full_name || challengeTarget.username) : `#${targetUserId}`}
                         </span> 出题，已根据其学习画像预填难度配置
+                    </span>
+                </div>
+            )}
+
+            {/* Circle mode banner */}
+            {quizMode === 'circle' && circleIdParam && (
+                <div className="flex items-center gap-3 rounded-xl border border-violet-500/30 bg-violet-500/5 px-4 py-3 text-sm">
+                    <Users className="size-4 shrink-0 text-violet-600" />
+                    <span className="text-foreground">
+                        正在为「<span className="font-semibold text-violet-600">{circleName || '加载中...'}</span>」出题 — 题目将基于圈子集体画像的薄弱知识点生成
                     </span>
                 </div>
             )}

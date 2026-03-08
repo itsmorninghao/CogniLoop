@@ -16,6 +16,7 @@ import {
     type CircleStats,
     type CircleQuizSessionItem,
     type CircleSessionParticipantItem,
+    type CircleProfile,
 } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { ActivityCard } from '@/components/circle/ActivityCard'
@@ -23,7 +24,7 @@ import { ChallengeCard } from '@/components/circle/ChallengeCard'
 import { RankBadge } from '@/components/circle/RankBadge'
 import { SessionLeaderboard } from '@/components/circle/SessionLeaderboard'
 
-type Tab = 'activity' | 'challenges' | 'leaderboard'
+type Tab = 'activity' | 'challenges' | 'leaderboard' | 'profile'
 type LucideIcon = React.ComponentType<{ className?: string }>
 
 export default function CircleDetailPage() {
@@ -36,6 +37,7 @@ export default function CircleDetailPage() {
     const [members, setMembers] = useState<CircleMember[]>([])
     const [stats, setStats] = useState<CircleStats | null>(null)
     const [sessions, setSessions] = useState<CircleQuizSessionItem[]>([])
+    const [circleProfile, setCircleProfile] = useState<CircleProfile | null>(null)
     const [loading, setLoading] = useState(true)
     const [searchParams] = useSearchParams()
     const [activeTab, setActiveTab] = useState<Tab>(
@@ -53,16 +55,18 @@ export default function CircleDetailPage() {
     const loadAll = async () => {
         try {
             setLoading(true)
-            const [c, m, st, s] = await Promise.all([
+            const [c, m, st, s, cp] = await Promise.all([
                 circleApi.get(circleId),
                 circleApi.members(circleId),
                 circleApi.stats(circleId),
                 circleApi.quizSessions(circleId),
+                circleApi.profile(circleId),
             ])
             setCircle(c)
             setMembers(m)
             setStats(st)
             setSessions(s)
+            setCircleProfile(cp)
         } catch {
             toast.error('加载失败')
             navigate('/circles')
@@ -133,6 +137,7 @@ export default function CircleDetailPage() {
         { key: 'activity' as Tab, label: '动态', icon: Activity },
         { key: 'challenges' as Tab, label: '挑战', icon: Zap },
         { key: 'leaderboard' as Tab, label: '排行榜', icon: Trophy },
+        { key: 'profile' as Tab, label: '集体画像', icon: BarChart2 },
     ]
 
     return (
@@ -293,6 +298,118 @@ export default function CircleDetailPage() {
                             ) : (
                                 <div className="p-4">
                                     <EmptyTabState message="成员还未完成任何练习" icon={Trophy} />
+                                </div>
+                            )
+                        )}
+
+                        {/* Circle Profile */}
+                        {activeTab === 'profile' && (
+                            circleProfile && circleProfile.total_questions > 0 ? (
+                                <div className="p-5 space-y-6">
+                                    {/* Overall stats */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="rounded-lg bg-muted/30 p-4 text-center">
+                                            <p className="text-2xl font-bold text-foreground">
+                                                {(circleProfile.overall_accuracy * 100).toFixed(1)}%
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">整体正确率</p>
+                                        </div>
+                                        <div className="rounded-lg bg-muted/30 p-4 text-center">
+                                            <p className="text-2xl font-bold text-foreground">
+                                                {circleProfile.total_questions}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">总做题数</p>
+                                        </div>
+                                        <div className="rounded-lg bg-muted/30 p-4 text-center">
+                                            <p className="text-2xl font-bold text-foreground">
+                                                {circleProfile.member_count}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">参与成员</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Knowledge point mastery (sorted by accuracy ascending = weakest first) */}
+                                    {Object.keys(circleProfile.knowledge_point_profiles).length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-foreground mb-3">知识点掌握度</h4>
+                                            <div className="space-y-3">
+                                                {Object.entries(circleProfile.knowledge_point_profiles)
+                                                    .sort(([, a], [, b]) => a.avg_accuracy - b.avg_accuracy)
+                                                    .slice(0, 15)
+                                                    .map(([kp, stats]) => (
+                                                        <div key={kp}>
+                                                            <div className="flex items-center justify-between text-xs mb-1">
+                                                                <span className="truncate font-medium text-foreground max-w-[60%]">{kp}</span>
+                                                                <span className="flex items-center gap-2 shrink-0">
+                                                                    <span className="text-muted-foreground">{stats.member_coverage} 人练习</span>
+                                                                    <span className={`font-mono font-medium ${
+                                                                        stats.avg_accuracy >= 0.8
+                                                                            ? 'text-emerald-600'
+                                                                            : stats.avg_accuracy >= 0.6
+                                                                                ? 'text-amber-600'
+                                                                                : 'text-rose-500'
+                                                                    }`}>
+                                                                        {(stats.avg_accuracy * 100).toFixed(0)}%
+                                                                    </span>
+                                                                </span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                                                <div
+                                                                    className={`h-full rounded-full transition-all duration-700 ${
+                                                                        stats.avg_accuracy >= 0.8
+                                                                            ? 'bg-emerald-500'
+                                                                            : stats.avg_accuracy >= 0.6
+                                                                                ? 'bg-amber-500'
+                                                                                : 'bg-rose-500'
+                                                                    }`}
+                                                                    style={{ width: `${Math.round(stats.avg_accuracy * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Domain accuracy bars */}
+                                    {Object.keys(circleProfile.domain_profiles).length > 0 && (
+                                        <div>
+                                            <h4 className="text-sm font-semibold text-foreground mb-3">学科正确率</h4>
+                                            <div className="space-y-3">
+                                                {Object.entries(circleProfile.domain_profiles)
+                                                    .sort(([, a], [, b]) => b.avg_accuracy - a.avg_accuracy)
+                                                    .map(([domain, stats]) => (
+                                                        <div key={domain}>
+                                                            <div className="flex items-center justify-between text-xs mb-1">
+                                                                <span className="truncate font-medium text-foreground max-w-[60%]">{domain}</span>
+                                                                <span className="flex items-center gap-2 shrink-0">
+                                                                    <span className="text-muted-foreground">{stats.total_questions} 题</span>
+                                                                    <span className={`font-mono font-medium ${
+                                                                        stats.avg_accuracy >= 0.8
+                                                                            ? 'text-emerald-600'
+                                                                            : stats.avg_accuracy >= 0.6
+                                                                                ? 'text-amber-600'
+                                                                                : 'text-rose-500'
+                                                                    }`}>
+                                                                        {(stats.avg_accuracy * 100).toFixed(0)}%
+                                                                    </span>
+                                                                </span>
+                                                            </div>
+                                                            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                                                                <div
+                                                                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
+                                                                    style={{ width: `${Math.round(stats.avg_accuracy * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="p-4">
+                                    <EmptyTabState message="暂无集体画像数据，成员完成答题后自动生成" icon={BarChart2} />
                                 </div>
                             )
                         )}
