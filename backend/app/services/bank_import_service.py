@@ -88,6 +88,10 @@ def _format_answer(answer: Any) -> str:
     return str(answer)
 
 
+EMBED_BATCH_SIZE = 50
+MAX_IMPORT_QUESTIONS = 5000
+
+
 async def import_json_files(
     session: AsyncSession,
     kb_id: int,
@@ -113,6 +117,8 @@ async def import_json_files(
         select(BankQuestion.content).where(BankQuestion.knowledge_base_id == kb_id)
     )
     existing_contents: set[str] = {row[0] for row in existing_result.all()}
+
+    pending: list[tuple[dict, str]] = []  # (BankQuestion kwargs, embed_text)
 
     for file in files:
         try:
@@ -173,22 +179,9 @@ async def import_json_files(
                     total_skipped += 1
                     continue
 
-                # Generate embedding for retrieval
-                embedding = None
-                if embed_service:
-                    try:
-                        embed_text = f"Question: {question_text}\nAnswer: {answer_text}"
-                        # aembed_documents expects a list, returns a list of vectors
-                        # we take the first item
-                        vectors = await embed_service.aembed_documents(
-                            [embed_text[:2000]]
-                        )
-                        if vectors:
-                            embedding = vectors[0]
-                    except Exception as e:
-                        logger.warning(f"Embedding failed for question: {e}")
+                existing_contents.add(question_text) 
 
-                bank_q = BankQuestion(
+                kwargs = dict(
                     knowledge_base_id=kb_id,
                     question_type=qtype,
                     subject=subject,
@@ -198,17 +191,48 @@ async def import_json_files(
                     answer=answer_text,
                     analysis=analysis_text,
                     source_info=source_info,
-                    embedding=embedding,
                 )
-                session.add(bank_q)
-                existing_contents.add(question_text)  # prevent intra-batch duplicates
-                total_imported += 1
+                embed_text = f"Question: {question_text}\nAnswer: {answer_text}"
+                pending.append((kwargs, embed_text[:2000]))
 
         except json.JSONDecodeError:
             errors.append(f"{file.filename}: Invalid JSON format.")
         except Exception as e:
             errors.append(f"{file.filename}: Unexpected error: {str(e)}")
             logger.error(f"Error importing {file.filename}: {e}", exc_info=True)
+
+    total_pending = len(pending)
+    if total_pending > MAX_IMPORT_QUESTIONS:
+        raise ValueError(
+            f"本次导入共 {total_pending} 道新题，超过单次上限 {MAX_IMPORT_QUESTIONS} 条。"
+            f"请分批导入，每次不超过 {MAX_IMPORT_QUESTIONS} 条。"
+        )
+
+    logger.info(f"Bank import: {total_pending} questions to embed for kb_id={kb_id}")
+
+    for batch_start in range(0, total_pending, EMBED_BATCH_SIZE):
+        batch = pending[batch_start : batch_start + EMBED_BATCH_SIZE]
+        batch_texts = [t for _, t in batch]
+
+        embeddings: list | None = None
+        if embed_service:
+            try:
+                embeddings = await embed_service.aembed_documents(batch_texts)
+            except Exception as e:
+                logger.warning(
+                    f"Embedding batch failed (offset {batch_start}): {e}"
+                )
+
+        for i, (kwargs, _) in enumerate(batch):
+            emb = embeddings[i] if embeddings and i < len(embeddings) else None
+            bank_q = BankQuestion(embedding=emb, **kwargs)
+            session.add(bank_q)
+            total_imported += 1
+
+        if batch_start % (EMBED_BATCH_SIZE * 10) == 0 and batch_start > 0:
+            logger.info(
+                f"Bank import progress: {batch_start}/{total_pending} embedded"
+            )
 
     # Update document_count in knowledge_base
     stmt = select(KnowledgeBase).where(KnowledgeBase.id == kb_id)
@@ -217,6 +241,9 @@ async def import_json_files(
         kb.document_count = (kb.document_count or 0) + total_imported
 
     await session.commit()
+    logger.info(
+        f"Bank import done: kb_id={kb_id}, imported={total_imported}, skipped={total_skipped}"
+    )
     return {"imported": total_imported, "skipped": total_skipped, "errors": errors}
 
 

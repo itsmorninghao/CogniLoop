@@ -66,13 +66,16 @@ async def upload_json_question_bank(
             )
         json_files.append(f)
 
-    result = await import_json_files(
-        session=session,
-        kb_id=kb.id,
-        files=json_files,
-        override_subject=subject,
-        override_question_type=question_type,
-    )
+    try:
+        result = await import_json_files(
+            session=session,
+            kb_id=kb.id,
+            files=json_files,
+            override_subject=subject,
+            override_question_type=question_type,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     return {"message": "导入完成", "result": result}
 
