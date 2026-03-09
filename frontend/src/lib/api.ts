@@ -297,6 +297,14 @@ export interface BankQuestion {
 export const kbApi = {
     list: () => api.get<KnowledgeBase[]>('/knowledge-bases/'),
     listAcquired: () => api.get<KnowledgeBase[]>('/knowledge-bases/acquired'),
+    listAll: async () => {
+        const [owned, acquired] = await Promise.all([
+            api.get<KnowledgeBase[]>('/knowledge-bases/'),
+            api.get<KnowledgeBase[]>('/knowledge-bases/acquired'),
+        ])
+        const seen = new Set(owned.map(kb => kb.id))
+        return [...owned, ...acquired.filter(kb => !seen.has(kb.id))]
+    },
     acquire: (shareCode: string) =>
         api.post<KnowledgeBase>('/knowledge-bases/acquire', { share_code: shareCode }),
     create: (data: { name: string; description?: string; tags?: string[]; kb_type?: string }) =>

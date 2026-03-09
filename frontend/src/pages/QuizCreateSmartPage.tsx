@@ -110,7 +110,7 @@ export default function QuizCreateSmartPage() {
 
     // Load knowledge bases (filter out question_bank type for Smart mode)
     useEffect(() => {
-        kbApi.list().then(kbs => setKnowledgeBases(kbs.filter(kb => kb.kb_type !== 'question_bank'))).catch(() => toast.error('加载知识库失败'))
+        kbApi.listAll().then(kbs => setKnowledgeBases(kbs.filter(kb => kb.kb_type !== 'question_bank'))).catch(() => toast.error('加载知识库失败'))
         presetApi.list().then(setPresets).catch(() => {})
     }, [])
 

@@ -395,6 +395,9 @@ async def revoke_share_code(
     kb = await _get_kb_or_404(kb_id, session)
     _check_kb_owner(kb, user)
 
+    if kb.shared_to_plaza_at is not None:
+        raise BadRequestError("请先从广场撤下再吊销分享码")
+
     kb.share_code = None
     kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     session.add(kb)
@@ -406,6 +409,9 @@ async def revoke_share_code(
 async def publish_to_plaza(kb_id: int, user: User, session: AsyncSession) -> KBResponse:
     kb = await _get_kb_or_404(kb_id, session)
     _check_kb_owner(kb, user)
+
+    if not kb.share_code:
+        raise BadRequestError("请先生成分享码再发布到广场")
 
     kb.shared_to_plaza_at = datetime.now(timezone.utc).replace(tzinfo=None)
     kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)

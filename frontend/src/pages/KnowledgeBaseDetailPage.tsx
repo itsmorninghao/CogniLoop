@@ -341,7 +341,7 @@ export default function KnowledgeBaseDetailPage() {
                                         <button onClick={async () => { await navigator.clipboard.writeText(kb.share_code!); toast.success('分享码已复制') }} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent">
                                             <Copy className="size-3.5" />复制
                                         </button>
-                                        <button onClick={handleRevokeShareCode} disabled={revokingCode} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive disabled:opacity-50">
+                                        <button onClick={() => kb.shared_to_plaza_at ? toast.error('请先从广场撤下再吊销分享码') : handleRevokeShareCode()} disabled={revokingCode} title={kb.shared_to_plaza_at ? '请先从广场撤下' : undefined} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground transition-colors hover:border-destructive/40 hover:bg-destructive/5 hover:text-destructive disabled:opacity-50">
                                             {revokingCode ? <Loader2 className="size-3.5 animate-spin" /> : <Link2Off className="size-3.5" />}吊销
                                         </button>
                                     </div>
@@ -376,8 +376,9 @@ export default function KnowledgeBaseDetailPage() {
                                     </button>
                                 ) : (
                                     <button
-                                        onClick={handlePublishToPlaza}
+                                        onClick={() => !kb.share_code ? toast.error('请先生成分享码再发布到广场') : handlePublishToPlaza()}
                                         disabled={publishingPlaza}
+                                        title={!kb.share_code ? '请先生成分享码' : undefined}
                                         className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
                                     >
                                         {publishingPlaza ? <Loader2 className="size-4 animate-spin" /> : <Globe className="size-4" />}发布到广场

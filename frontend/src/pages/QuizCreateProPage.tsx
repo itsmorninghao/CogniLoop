@@ -135,7 +135,7 @@ export default function QuizCreateProPage() {
 
     // Load knowledge bases
     useEffect(() => {
-        kbApi.list().then(setKnowledgeBases).catch(() => toast.error('加载知识库失败'))
+        kbApi.listAll().then(setKnowledgeBases).catch(() => toast.error('加载知识库失败'))
         presetApi.list().then(setPresets).catch(() => {})
     }, [])
 
