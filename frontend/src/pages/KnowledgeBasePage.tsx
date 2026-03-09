@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import {
     Grid3X3, List, Database, Plus, BookMarked, KeyRound,
-    Loader2, ChevronRight, Share2, FileStack,
+    Loader2, ChevronRight, Share2, FileStack, Trash2,
 } from 'lucide-react'
 import { kbApi, type KnowledgeBase } from '@/lib/api'
 
@@ -18,7 +18,6 @@ export default function KnowledgeBasePage() {
     const [kbs, setKbs] = useState<KnowledgeBase[]>([])
     const [loading, setLoading] = useState(true)
 
-    // Tab
     const [activeTab, setActiveTab] = useState<'mine' | 'acquired'>('mine')
     const [acquiredKbs, setAcquiredKbs] = useState<KnowledgeBase[]>([])
     const [acquiredLoading, setAcquiredLoading] = useState(false)
@@ -89,6 +88,18 @@ export default function KnowledgeBasePage() {
             toast.error(err instanceof Error ? err.message : '获取失败，请检查分享码')
         } finally {
             setAcquiring(false)
+        }
+    }
+
+    const handleUnacquire = async (kbId: number, e: React.MouseEvent) => {
+        e.stopPropagation()
+        if (!confirm('确定要移除这个已获取的知识库吗？')) return
+        try {
+            await kbApi.unacquire(kbId)
+            setAcquiredKbs(prev => prev.filter(kb => kb.id !== kbId))
+            toast.success('已移除')
+        } catch {
+            toast.error('移除失败')
         }
     }
 
@@ -179,8 +190,17 @@ export default function KnowledgeBasePage() {
                             <button
                                 key={kb.id}
                                 onClick={() => navigate(`/knowledge/${kb.id}`)}
-                                className="group text-left rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-md hover:-translate-y-0.5"
+                                className="group text-left rounded-xl border border-border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-md hover:-translate-y-0.5 relative"
                             >
+                                {activeTab === 'acquired' && (
+                                    <button
+                                        onClick={(e) => handleUnacquire(kb.id, e)}
+                                        className="absolute top-3 right-3 flex size-7 items-center justify-center rounded-lg text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500"
+                                        title="移除"
+                                    >
+                                        <Trash2 className="size-3.5" />
+                                    </button>
+                                )}
                                 <div className={`mb-4 flex size-12 items-center justify-center rounded-xl bg-gradient-to-br ${activeTab === 'acquired' ? 'from-cyan-500/10 to-blue-500/10' : 'from-indigo-500/10 to-purple-500/10'}`}>
                                     {activeTab === 'acquired'
                                         ? <BookMarked className="size-6 text-cyan-600" />
@@ -253,7 +273,18 @@ export default function KnowledgeBasePage() {
                                 </div>
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-muted-foreground">{new Date(kb.created_at).toLocaleDateString('zh-CN')}</span>
-                                    <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    <div className="flex items-center gap-1">
+                                        {activeTab === 'acquired' && (
+                                            <button
+                                                onClick={(e) => handleUnacquire(kb.id, e)}
+                                                className="flex size-7 items-center justify-center rounded-lg text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10 hover:text-red-500"
+                                                title="移除"
+                                            >
+                                                <Trash2 className="size-3.5" />
+                                            </button>
+                                        )}
+                                        <ChevronRight className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
                                 </div>
                             </button>
                         ))}

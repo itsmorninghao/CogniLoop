@@ -49,6 +49,15 @@ async def list_acquired(
     return await kb_service.list_acquired_kbs(user, session, limit=limit, offset=offset)
 
 
+@router.delete("/acquired/{kb_id}", status_code=204)
+async def unacquire_kb(
+    kb_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    await kb_service.unacquire_kb(kb_id, user, session)
+
+
 @router.get("/{kb_id}", response_model=KBResponse)
 async def get_kb(
     kb_id: int,

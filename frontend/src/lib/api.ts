@@ -44,7 +44,6 @@ async function request<T>(
         throw new ApiError(res.status, message)
     }
 
-    // 204 No Content
     if (res.status === 204) return undefined as T
 
     return res.json()
@@ -177,9 +176,7 @@ export async function subscribeSSE(
                 }
 
                 onEvent(data)
-            } catch {
-                // ignore parse errors
-            }
+            } catch { /* noop */ }
         }
 
         es.addEventListener('node_start', handleEvent)
@@ -212,11 +209,9 @@ export async function subscribeSSE(
 
             try {
                 await connect()
-                // Reconnect succeeded — reset retry count
                 retryCount = 0
                 if (onReconnect) onReconnect()
             } catch {
-                // connect() failed (ticket fetch or network error)
                 if (aborted || streamEnded) return
 
                 retryCount++
@@ -371,6 +366,7 @@ export interface BankQuestion {
 export const kbApi = {
     list: () => api.get<KnowledgeBase[]>('/knowledge-bases/'),
     listAcquired: () => api.get<KnowledgeBase[]>('/knowledge-bases/acquired'),
+    unacquire: (id: number) => api.delete(`/knowledge-bases/acquired/${id}`),
     listAll: async () => {
         const [owned, acquired] = await Promise.all([
             api.get<KnowledgeBase[]>('/knowledge-bases/'),

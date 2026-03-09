@@ -99,6 +99,23 @@ async def list_acquired_kbs(
     return [KBResponse.model_validate(kb) for kb in result.scalars().all()]
 
 
+async def unacquire_kb(
+    kb_id: int, user: User, session: AsyncSession
+) -> None:
+    result = await session.execute(
+        select(KBAcquisition).where(
+            KBAcquisition.user_id == user.id,
+            KBAcquisition.knowledge_base_id == kb_id,
+        )
+    )
+    acq = result.scalar_one_or_none()
+    if not acq:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="未找到该获取记录")
+    await session.delete(acq)
+    await session.commit()
+
+
 async def get_kb(kb_id: int, user: User, session: AsyncSession) -> KBResponse:
     kb = await _get_kb_or_404(kb_id, session)
     await _check_kb_access(kb, user, session)
@@ -208,11 +225,9 @@ async def _process_document_background(
 
     async with async_session_factory() as session:
         try:
-            # Step 1: Parse
             logger.info("Processing doc %d: parsing %s", document_id, file_path)
             parse_result = await parse_document(file_path, file_type)
 
-            # Step 2: Chunk
             logger.info(
                 "Processing doc %d: chunking %d sections",
                 document_id,
@@ -230,7 +245,6 @@ async def _process_document_background(
                 await _update_doc_status(session, document_id, "ready", chunk_count=0)
                 return
 
-            # Step 3: Embed
             logger.info(
                 "Processing doc %d: embedding %d chunks", document_id, len(chunks)
             )
@@ -238,7 +252,6 @@ async def _process_document_background(
                 document_id, knowledge_base_id, chunks, session
             )
 
-            # Step 4: Update status
             await _update_doc_status(session, document_id, "ready", chunk_count=count)
             await session.commit()
             logger.info(
