@@ -312,10 +312,9 @@ export default function QuizCreateProPage() {
 
             setCompletedSessionId(session.id)
 
-            // SSE handler — routes events to prep nodes vs pipeline questions
-            const cleanup = await subscribeSSE(
-                session.id,
-                (event: SSEEvent) => {
+            // SSE handler — routes events to prep nodes vs pipeline questions (with auto-reconnect)
+            const cleanup = await subscribeSSE(session.id, {
+                onEvent: (event: SSEEvent) => {
                     const nodeId = event.node as string | undefined
 
                     // Prep / assembly node events
@@ -492,15 +491,30 @@ export default function QuizCreateProPage() {
                         }))
                     }
                 },
-                () => {
-                    setTimeout(() => {
-                        quizApi.get(session.id).then(s => {
-                            if (s.status === 'ready') { setIsComplete(true); setProgress(1) }
-                            else setErrorMessage('连接中断')
-                        })
-                    }, 2000)
+                onReconnect: async () => {
+                    try {
+                        const s = await quizApi.get(session.id)
+                        if (s.status === 'ready') {
+                            cleanup()
+                            setIsComplete(true)
+                            setProgress(1)
+                            setPrepNodes(prev => prev.map(n => n.status === 'running' ? { ...n, status: 'done', endTime: Date.now() } : n))
+                            setAssemblyNode(prev => prev && prev.status === 'running' ? { ...prev, status: 'done', endTime: Date.now() } : prev)
+                            setQuestionPipelines(prev => prev.map(q => {
+                                if (q.status !== 'running') return q
+                                return { ...q, status: 'done', steps: q.steps.map(s => s.status === 'running' ? { ...s, status: 'done' as const, endTime: Date.now() } : s) }
+                            }))
+                            toast.success('出题完成！')
+                        }
+                    } catch { /* ignore — SSE reconnected, subsequent events will arrive */ }
                 },
-            )
+                onError: () => {
+                    quizApi.get(session.id).then(s => {
+                        if (s.status === 'ready') { setIsComplete(true); setProgress(1) }
+                        else setErrorMessage('连接中断，请刷新页面重试')
+                    }).catch(() => setErrorMessage('连接中断，请刷新页面重试'))
+                },
+            })
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '出题失败')
             setIsGenerating(false)

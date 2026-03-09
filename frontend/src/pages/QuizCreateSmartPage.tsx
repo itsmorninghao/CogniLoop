@@ -311,10 +311,9 @@ export default function QuizCreateSmartPage() {
 
             setCompletedSessionId(session.id)
 
-            // Subscribe to SSE for progress
-            const cleanup = await subscribeSSE(
-                session.id,
-                (event: SSEEvent) => {
+            // Subscribe to SSE for progress (with auto-reconnect)
+            const cleanup = await subscribeSSE(session.id, {
+                onEvent: (event: SSEEvent) => {
                     if (event.type === 'node_start' && event.node) {
                         setNodes(prev => prev.map(n =>
                             n.id === event.node
@@ -360,19 +359,23 @@ export default function QuizCreateSmartPage() {
                         ))
                     }
                 },
-                () => {
-                    // SSE error — session might have completed already
-                    setTimeout(() => {
-                        quizApi.get(session.id).then(s => {
-                            if (s.status === 'ready') {
-                                setIsComplete(true)
-                            } else {
-                                setErrorMessage('连接中断')
-                            }
-                        })
-                    }, 2000)
+                onReconnect: async () => {
+                    try {
+                        const s = await quizApi.get(session.id)
+                        if (s.status === 'ready') {
+                            cleanup()
+                            setIsComplete(true)
+                            toast.success('出题完成！')
+                        }
+                    } catch { /* ignore — SSE reconnected, subsequent events will arrive */ }
                 },
-            )
+                onError: () => {
+                    quizApi.get(session.id).then(s => {
+                        if (s.status === 'ready') setIsComplete(true)
+                        else setErrorMessage('连接中断，请刷新页面重试')
+                    }).catch(() => setErrorMessage('连接中断，请刷新页面重试'))
+                },
+            })
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '出题失败')
             setIsGenerating(false)

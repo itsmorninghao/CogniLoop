@@ -122,43 +122,117 @@ export interface SSEEvent {
     [key: string]: unknown
 }
 
+export interface SubscribeSSEOptions {
+    onEvent: (event: SSEEvent) => void
+    onError?: () => void          // called when all retries exhausted
+    onReconnect?: () => void      // called after each successful reconnect
+    maxRetries?: number           // default 3
+}
+
 /**
- * Subscribe to SSE stream for a quiz session.
+ * Subscribe to SSE stream for a quiz session with auto-reconnect.
  * Fetches a one-time ticket first, then opens the EventSource.
- * Returns a cleanup function to close the connection.
+ * On disconnect, retries with exponential backoff (1s → 2s → 4s).
+ * Returns a cleanup function to close the connection and stop retries.
  */
 export async function subscribeSSE(
     sessionId: string,
-    onEvent: (event: SSEEvent) => void,
-    onError?: (err: Event) => void,
+    options: SubscribeSSEOptions,
 ): Promise<() => void> {
+    const { onEvent, onError, onReconnect, maxRetries = 3 } = options
 
-    const { ticket } = await api.post<{ ticket: string }>('/notifications/sse-ticket')
-    const url = `${BASE_URL}/quiz-sessions/${sessionId}/stream?ticket=${encodeURIComponent(ticket)}`
+    let aborted = false
+    let streamEnded = false
+    let retryCount = 0
+    let pendingTimer: ReturnType<typeof setTimeout> | undefined
+    let currentES: EventSource | undefined
 
-    const es = new EventSource(url)
-
-    const handleEvent = (e: MessageEvent) => {
-        try {
-            const data: SSEEvent = JSON.parse(e.data)
-            onEvent(data)
-        } catch {
-            // ignore parse errors
+    function cleanup() {
+        aborted = true
+        if (pendingTimer !== undefined) {
+            clearTimeout(pendingTimer)
+            pendingTimer = undefined
+        }
+        if (currentES) {
+            currentES.close()
+            currentES = undefined
         }
     }
 
-    es.addEventListener('node_start', handleEvent)
-    es.addEventListener('node_complete', handleEvent)
-    es.addEventListener('progress', handleEvent)
-    es.addEventListener('complete', handleEvent)
-    es.addEventListener('error', handleEvent)
+    async function connect(): Promise<void> {
+        const { ticket } = await api.post<{ ticket: string }>('/notifications/sse-ticket')
+        const url = `${BASE_URL}/quiz-sessions/${sessionId}/stream?ticket=${encodeURIComponent(ticket)}`
 
-    es.onerror = (err) => {
-        if (onError) onError(err)
-        es.close()
+        if (aborted) return
+
+        const es = new EventSource(url)
+        currentES = es
+
+        const handleEvent = (e: MessageEvent) => {
+            try {
+                const data: SSEEvent = JSON.parse(e.data)
+
+                if (data.type === 'complete' || data.type === 'error') {
+                    streamEnded = true
+                }
+
+                onEvent(data)
+            } catch {
+                // ignore parse errors
+            }
+        }
+
+        es.addEventListener('node_start', handleEvent)
+        es.addEventListener('node_complete', handleEvent)
+        es.addEventListener('progress', handleEvent)
+        es.addEventListener('complete', handleEvent)
+        es.addEventListener('error', handleEvent)
+
+        es.onerror = () => {
+            es.close()
+            currentES = undefined
+
+            if (aborted || streamEnded) return
+
+            retryCount++
+            if (retryCount > maxRetries) {
+                if (onError) onError()
+                return
+            }
+
+            scheduleReconnect()
+        }
     }
 
-    return () => es.close()
+    function scheduleReconnect() {
+        const delay = Math.pow(2, retryCount - 1) * 1000 // 1s, 2s, 4s
+        pendingTimer = setTimeout(async () => {
+            pendingTimer = undefined
+            if (aborted || streamEnded) return
+
+            try {
+                await connect()
+                // Reconnect succeeded — reset retry count
+                retryCount = 0
+                if (onReconnect) onReconnect()
+            } catch {
+                // connect() failed (ticket fetch or network error)
+                if (aborted || streamEnded) return
+
+                retryCount++
+                if (retryCount > maxRetries) {
+                    if (onError) onError()
+                    return
+                }
+                scheduleReconnect()
+            }
+        }, delay)
+    }
+
+    // Initial connection — errors propagate to caller's try/catch
+    await connect()
+
+    return cleanup
 }
 
 // Typed API helpers
