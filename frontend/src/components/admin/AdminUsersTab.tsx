@@ -1,32 +1,42 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { adminApi, type AdminUser } from '@/lib/api'
 import { toast } from 'sonner'
-import { Search, Shield, Crown, CheckCircle2, XCircle, Users } from 'lucide-react'
+import { Search, Shield, Crown, CheckCircle2, XCircle, Users, ChevronLeft, ChevronRight } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
+
+const PAGE_SIZE = 20
 
 export function AdminUsersTab() {
     const { user: currentUser } = useAuthStore()
     const [users, setUsers] = useState<AdminUser[]>([])
+    const [total, setTotal] = useState(0)
+    const [page, setPage] = useState(1)
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState('')
+    const [submittedSearch, setSubmittedSearch] = useState('')
 
-    const loadUsers = async (q?: string) => {
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+    const loadUsers = useCallback(async (q: string, p: number) => {
         try {
             setLoading(true)
-            const data = await adminApi.listUsers(q)
-            setUsers(data)
+            const offset = (p - 1) * PAGE_SIZE
+            const data = await adminApi.listUsers(q || undefined, PAGE_SIZE, offset)
+            setUsers(data.items)
+            setTotal(data.total)
         } catch {
             toast.error('加载用户失败')
         } finally {
             setLoading(false)
         }
-    }
+    }, [])
 
-    useEffect(() => { loadUsers() }, [])
+    useEffect(() => { loadUsers(submittedSearch, page) }, [submittedSearch, page, loadUsers])
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault()
-        loadUsers(search)
+        setPage(1)
+        setSubmittedSearch(search)
     }
 
     const toggleActive = async (user: AdminUser) => {
@@ -34,7 +44,7 @@ export function AdminUsersTab() {
         try {
             await adminApi.updateUser(user.id, { is_active: !user.is_active })
             toast.success('状态已更新')
-            loadUsers(search)
+            loadUsers(submittedSearch, page)
         } catch {
             toast.error('更新失败')
         }
@@ -53,7 +63,7 @@ export function AdminUsersTab() {
         try {
             await adminApi.updateUser(user.id, { is_admin: !user.is_admin })
             toast.success('权限已更新')
-            loadUsers(search)
+            loadUsers(submittedSearch, page)
         } catch {
             toast.error('更新权限失败')
         }
@@ -68,7 +78,7 @@ export function AdminUsersTab() {
         try {
             await adminApi.updateUser(user.id, { is_superadmin: !user.is_superadmin })
             toast.success('超级管理员权限已更新')
-            loadUsers(search)
+            loadUsers(submittedSearch, page)
         } catch {
             toast.error('更新超级管理员失败')
         }
@@ -84,7 +94,9 @@ export function AdminUsersTab() {
                     </div>
                     <div>
                         <h2 className="text-base font-semibold text-foreground">用户管理</h2>
-                        <p className="text-xs text-muted-foreground">管理账号状态与权限分配</p>
+                        <p className="text-xs text-muted-foreground">
+                            共 {total} 位用户 · 管理账号状态与权限分配
+                        </p>
                     </div>
                 </div>
                 <form onSubmit={handleSearch} className="relative">
@@ -196,6 +208,55 @@ export function AdminUsersTab() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex items-center justify-between border-t border-border px-6 py-3">
+                        <p className="text-xs text-muted-foreground">
+                            第 {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} 条，共 {total} 条
+                        </p>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page <= 1}
+                                className="inline-flex items-center justify-center size-8 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/40 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                            >
+                                <ChevronLeft className="size-4" />
+                            </button>
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(p => p === 1 || p === totalPages || Math.abs(p - page) <= 2)
+                                .reduce<(number | '...')[]>((acc, p, idx, arr) => {
+                                    if (idx > 0 && p - (arr[idx - 1]) > 1) acc.push('...')
+                                    acc.push(p)
+                                    return acc
+                                }, [])
+                                .map((item, idx) =>
+                                    item === '...' ? (
+                                        <span key={`dot-${idx}`} className="px-1 text-xs text-muted-foreground">...</span>
+                                    ) : (
+                                        <button
+                                            key={item}
+                                            onClick={() => setPage(item)}
+                                            className={`inline-flex items-center justify-center size-8 rounded-lg text-xs font-medium transition-colors ${
+                                                page === item
+                                                    ? 'bg-primary text-primary-foreground'
+                                                    : 'text-muted-foreground hover:text-foreground hover:bg-muted/40'
+                                            }`}
+                                        >
+                                            {item}
+                                        </button>
+                                    )
+                                )}
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page >= totalPages}
+                                className="inline-flex items-center justify-center size-8 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:bg-muted/40 disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                            >
+                                <ChevronRight className="size-4" />
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     )

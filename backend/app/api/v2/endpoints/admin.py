@@ -135,7 +135,12 @@ class UserUpdateRequest(BaseModel):
     is_superadmin: bool | None = None
 
 
-@router.get("/users", response_model=list[UserListItem])
+class PaginatedUsers(BaseModel):
+    items: list[UserListItem]
+    total: int
+
+
+@router.get("/users", response_model=PaginatedUsers)
 async def list_users(
     search: str | None = None,
     limit: int = Query(default=50, le=200),
@@ -143,15 +148,19 @@ async def list_users(
     session: AsyncSession = Depends(get_session),
 ):
     """List all users with optional search."""
-    stmt = select(User).order_by(User.created_at.desc()).offset(offset).limit(limit)
+    base = select(User)
     if search:
-        stmt = stmt.where(
+        base = base.where(
             User.username.icontains(search)
             | User.email.icontains(search)
             | User.full_name.icontains(search)
         )
-    result = await session.execute(stmt)
-    return [UserListItem.model_validate(u) for u in result.scalars().all()]
+    total = (await session.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
+    items_result = await session.execute(base.order_by(User.created_at.desc()).offset(offset).limit(limit))
+    return PaginatedUsers(
+        items=[UserListItem.model_validate(u) for u in items_result.scalars().all()],
+        total=total,
+    )
 
 
 @router.patch("/users/{user_id}", response_model=UserListItem)

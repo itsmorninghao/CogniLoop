@@ -586,7 +586,7 @@ export const adminApi = {
     listUsers: (search?: string, limit = 50, offset = 0) => {
         let url = `/admin/users?limit=${limit}&offset=${offset}`
         if (search) url += `&search=${encodeURIComponent(search)}`
-        return api.get<AdminUser[]>(url)
+        return api.get<{ items: AdminUser[]; total: number }>(url)
     },
     updateUser: (id: number, data: { is_active?: boolean; is_admin?: boolean; is_superadmin?: boolean }) =>
         api.patch<AdminUser>(`/admin/users/${id}`, data),
