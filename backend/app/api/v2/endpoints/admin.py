@@ -45,7 +45,7 @@ async def list_configs(
     session: AsyncSession = Depends(get_session),
 ):
     configs = await config_service.list_configs(session)
-    return [ConfigResponse.model_validate(c) for c in configs]
+    return [ConfigResponse(**c) for c in configs]
 
 
 @router.post("/system-configs", response_model=ConfigResponse)
@@ -53,6 +53,13 @@ async def set_config(
     req: ConfigSetRequest,
     session: AsyncSession = Depends(get_session),
 ):
+    if config_service.is_masked(req.value):
+        from backend.app.models.system_config import SystemConfig as SC
+
+        result = await session.execute(select(SC).where(SC.key == req.key))
+        existing = result.scalar_one_or_none()
+        if existing:
+            return ConfigResponse.model_validate(existing)
     cfg = await config_service.set_config(req.key, req.value, req.description, session)
     return ConfigResponse.model_validate(cfg)
 
@@ -298,30 +305,37 @@ async def delete_broadcast(
 
 
 class TestLLMRequest(BaseModel):
-    api_key: str
+    api_key: str | None = None
     base_url: str | None = None
     model: str
+    use_stored: bool = False
 
 
 class TestEmbeddingRequest(BaseModel):
-    api_key: str
+    api_key: str | None = None
     base_url: str | None = None
     model: str
     dimensions: int | None = None
+    use_stored: bool = False
 
 
 @router.post("/system-configs/test-llm")
-async def test_llm_config(req: TestLLMRequest):
+async def test_llm_config(
+    req: TestLLMRequest,
+    session: AsyncSession = Depends(get_session),
+):
     """Test LLM connection."""
+    api_key = req.api_key
+    if not api_key or config_service.is_masked(api_key) or req.use_stored:
+        api_key = await config_service.get_config("OPENAI_API_KEY", session)
     try:
         chat = ChatOpenAI(
-            api_key=req.api_key or "empty",
+            api_key=api_key or "empty",
             base_url=req.base_url if req.base_url else None,
             model=req.model,
             max_retries=1,
             timeout=10,
         )
-        # Simple hello world test
         res = await chat.ainvoke(
             [HumanMessage(content="Hello world! Reply with 'OK'.")]
         )
@@ -331,11 +345,17 @@ async def test_llm_config(req: TestLLMRequest):
 
 
 @router.post("/system-configs/test-embedding")
-async def test_embedding_config(req: TestEmbeddingRequest):
+async def test_embedding_config(
+    req: TestEmbeddingRequest,
+    session: AsyncSession = Depends(get_session),
+):
     """Test Embedding connection."""
+    api_key = req.api_key
+    if not api_key or config_service.is_masked(api_key) or req.use_stored:
+        api_key = await config_service.get_config("EMBEDDING_API_KEY", session)
     try:
         embeddings = OpenAIEmbeddings(
-            api_key=req.api_key or "empty",
+            api_key=api_key or "empty",
             base_url=req.base_url if req.base_url else None,
             model=req.model,
             dimensions=req.dimensions
@@ -345,7 +365,6 @@ async def test_embedding_config(req: TestEmbeddingRequest):
             timeout=10,
             check_embedding_ctx_length=False,
         )
-        # Simple test
         res = await embeddings.aembed_query("Hello world!")
         return {"ok": True, "dimensions_returned": len(res)}
     except Exception as e:

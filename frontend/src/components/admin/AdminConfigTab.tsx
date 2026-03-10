@@ -124,9 +124,11 @@ export function AdminConfigTab() {
 
     useEffect(() => { loadConfigs() }, [])
 
+    const MASK_PREFIX = '****'
+
     const saveLlmConfig = async () => {
         try {
-            await adminApi.setConfig('OPENAI_API_KEY', llmKey, 'LLM API 密钥')
+            if (!llmKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('OPENAI_API_KEY', llmKey, 'LLM API 密钥')
             if (llmBase) await adminApi.setConfig('OPENAI_BASE_URL', llmBase, 'LLM 基础 URL')
             await adminApi.setConfig('OPENAI_MODEL', llmModel || 'gpt-4o-mini', 'LLM 模型名称')
             toast.success('LLM 配置已保存')
@@ -136,7 +138,7 @@ export function AdminConfigTab() {
 
     const saveEmbeddingConfig = async () => {
         try {
-            await adminApi.setConfig('EMBEDDING_API_KEY', embKey, 'Embedding API 密钥')
+            if (!embKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('EMBEDDING_API_KEY', embKey, 'Embedding API 密钥')
             if (embBase) await adminApi.setConfig('EMBEDDING_BASE_URL', embBase, 'Embedding 基础 URL')
             await adminApi.setConfig('EMBEDDING_MODEL', embModel || 'text-embedding-3-small', 'Embedding 模型名称')
             if (embDims) await adminApi.setConfig('EMBEDDING_DIMS', embDims, '向量维度')
@@ -146,13 +148,28 @@ export function AdminConfigTab() {
     }
 
     const handleTestLlm = () => {
-        if (!llmKey || !llmModel) return toast.error('请填写 Key 和 Model')
-        runTest(() => adminApi.testLlm({ api_key: llmKey, base_url: llmBase || undefined, model: llmModel }), setTestingLlm)
+        if (!llmModel) return toast.error('请填写 Model')
+        if (!llmKey && !llmKey.startsWith(MASK_PREFIX)) return toast.error('请填写 Key')
+        const isMasked = llmKey.startsWith(MASK_PREFIX)
+        runTest(() => adminApi.testLlm({
+            api_key: isMasked ? undefined : llmKey,
+            base_url: llmBase || undefined,
+            model: llmModel,
+            use_stored: isMasked,
+        }), setTestingLlm)
     }
 
     const handleTestEmb = () => {
-        if (!embKey || !embModel) return toast.error('请填写 Key 和 Model')
-        runTest(() => adminApi.testEmbedding({ api_key: embKey, base_url: embBase || undefined, model: embModel, dimensions: embDims ? parseInt(embDims) : undefined }), setTestingEmb)
+        if (!embModel) return toast.error('请填写 Model')
+        if (!embKey && !embKey.startsWith(MASK_PREFIX)) return toast.error('请填写 Key')
+        const isMasked = embKey.startsWith(MASK_PREFIX)
+        runTest(() => adminApi.testEmbedding({
+            api_key: isMasked ? undefined : embKey,
+            base_url: embBase || undefined,
+            model: embModel,
+            dimensions: embDims ? parseInt(embDims) : undefined,
+            use_stored: isMasked,
+        }), setTestingEmb)
     }
 
     const runTest = async (apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
@@ -216,7 +233,7 @@ export function AdminConfigTab() {
             for (const node of PRO_NODES) {
                 const cfg = nodeConfigs[node.key]
                 const prefix = `PRO_NODE_${node.key}`
-                if (cfg.apiKey) await adminApi.setConfig(`${prefix}_API_KEY`, cfg.apiKey, `${node.label} API Key`)
+                if (cfg.apiKey && !cfg.apiKey.startsWith(MASK_PREFIX)) await adminApi.setConfig(`${prefix}_API_KEY`, cfg.apiKey, `${node.label} API Key`)
                 if (cfg.baseUrl) await adminApi.setConfig(`${prefix}_BASE_URL`, cfg.baseUrl, `${node.label} Base URL`)
                 if (cfg.model) await adminApi.setConfig(`${prefix}_MODEL`, cfg.model, `${node.label} 模型名称`)
             }
@@ -248,7 +265,7 @@ export function AdminConfigTab() {
             setSavingLd(true)
             await adminApi.setConfig('LINUX_DO_ENABLED', String(ldEnabled), 'Linux DO 登录开关')
             if (ldClientId) await adminApi.setConfig('LINUX_DO_CLIENT_ID', ldClientId, 'Linux DO Client ID')
-            if (ldClientSecret) await adminApi.setConfig('LINUX_DO_CLIENT_SECRET', ldClientSecret, 'Linux DO Client Secret（加密存储）')
+            if (ldClientSecret && !ldClientSecret.startsWith(MASK_PREFIX)) await adminApi.setConfig('LINUX_DO_CLIENT_SECRET', ldClientSecret, 'Linux DO Client Secret（加密存储）')
             if (ldRedirectUri) await adminApi.setConfig('LINUX_DO_REDIRECT_URI', ldRedirectUri, 'Linux DO 回调地址')
             await adminApi.setConfig('LINUX_DO_MIN_TRUST_LEVEL', ldMinTrust || '1', 'Linux DO 最低信任等级')
             await adminApi.setConfig('ALLOW_REGISTRATION', String(allowRegistration), '公开注册开关')
