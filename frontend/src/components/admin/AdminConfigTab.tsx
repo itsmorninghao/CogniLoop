@@ -68,6 +68,8 @@ export function AdminConfigTab() {
     const [ocrKey, setOcrKey] = useState('')
     const [ocrBase, setOcrBase] = useState('')
     const [ocrModel, setOcrModel] = useState('')
+    const [ocrMode, setOcrMode] = useState<'multimodal' | 'ocr_plus_llm'>('multimodal')
+    const [ocrLlmModel, setOcrLlmModel] = useState('')
 
     const [ldEnabled, setLdEnabled] = useState(false)
     const [ldClientId, setLdClientId] = useState('')
@@ -196,6 +198,8 @@ export function AdminConfigTab() {
             setOcrKey(get('OCR_API_KEY'))
             setOcrBase(get('OCR_API_URL'))
             setOcrModel(get('OCR_MODEL'))
+            setOcrMode((get('OCR_MODE') as 'multimodal' | 'ocr_plus_llm') || 'multimodal')
+            setOcrLlmModel(get('OCR_LLM_MODEL') || '')
 
             setLdEnabled(get('LINUX_DO_ENABLED') === 'true')
             setLdClientId(get('LINUX_DO_CLIENT_ID'))
@@ -265,6 +269,10 @@ export function AdminConfigTab() {
             if (ocrKey && !ocrKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('OCR_API_KEY', ocrKey, 'OCR API 密钥')
             if (ocrBase) await adminApi.setConfig('OCR_API_URL', ocrBase, 'OCR API 基础 URL')
             await adminApi.setConfig('OCR_MODEL', ocrModel || 'gpt-4o', 'OCR 视觉模型名称')
+            await adminApi.setConfig('OCR_MODE', ocrMode, 'OCR 识别模式')
+            if (ocrMode === 'ocr_plus_llm') {
+                await adminApi.setConfig('OCR_LLM_MODEL', ocrLlmModel, 'OCR 结构化 LLM 模型')
+            }
             toast.success('AI 服务配置已保存')
             loadConfigs()
         } catch { toast.error('保存失败') } finally { setSavingAiServices(false) }
@@ -551,6 +559,31 @@ export function AdminConfigTab() {
                                 <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> Model Name</label>
                                 <input type="text" value={ocrModel} onChange={e => setOcrModel(e.target.value)} placeholder="默认 gpt-4o" className={inputClass} />
                             </div>
+                        </div>
+                        <div className="px-6 py-5 border-t border-border space-y-3">
+                            <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> 识别模式</label>
+                            <div className="flex flex-col gap-2">
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input type="radio" name="ocrMode" value="multimodal" checked={ocrMode === 'multimodal'} onChange={() => setOcrMode('multimodal')} className="mt-0.5 accent-primary" />
+                                    <div>
+                                        <p className="text-sm font-medium text-foreground">多模态大模型</p>
+                                        <p className="text-xs text-muted-foreground">图片直接发给视觉大模型，一步输出结构化 JSON（默认）</p>
+                                    </div>
+                                </label>
+                                <label className="flex items-start gap-3 cursor-pointer">
+                                    <input type="radio" name="ocrMode" value="ocr_plus_llm" checked={ocrMode === 'ocr_plus_llm'} onChange={() => setOcrMode('ocr_plus_llm')} className="mt-0.5 accent-primary" />
+                                    <div>
+                                        <p className="text-sm font-medium text-foreground">OCR + LLM 两步识别</p>
+                                        <p className="text-xs text-muted-foreground">Step 1 用 OCR 模型提取文字，Step 2 用全局 LLM 结构化（适合 PaddleOCR-VL 等专用 OCR 模型）</p>
+                                    </div>
+                                </label>
+                            </div>
+                            {ocrMode === 'ocr_plus_llm' && (
+                                <div className="mt-2 space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> 结构化 LLM 模型（Step 2，使用全局 LLM API Key）</label>
+                                    <input type="text" value={ocrLlmModel} onChange={e => setOcrLlmModel(e.target.value)} placeholder="留空则使用全局 LLM 模型" className={inputClass} />
+                                </div>
+                            )}
                         </div>
                         <div className="flex items-center gap-3 px-6 py-3 border-t border-border bg-muted/10">
                             <button onClick={handleTestOcr} disabled={testingOcr} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">

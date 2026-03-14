@@ -652,7 +652,7 @@ export const adminApi = {
     testEmbedding: (data: { api_key?: string; base_url?: string; model: string; dimensions?: number; use_stored?: boolean }) =>
         api.post<{ ok: boolean; dimensions_returned: number; test_text?: string }>('/admin/system-configs/test-embedding', data),
     testOcr: () =>
-        api.post<{ ok: boolean; message: string; image_base64?: string }>('/admin/system-configs/test-ocr', {}),
+        api.post<{ ok: boolean; message: string; image_base64?: string; raw_ocr_text?: string; mode?: string }>('/admin/system-configs/test-ocr', {}),
     listKBs: (search?: string, plazaOnly = false, limit = 50, offset = 0) => {
         let url = `/admin/knowledge-bases?limit=${limit}&offset=${offset}&plaza_only=${plazaOnly}`
         if (search) url += `&search=${encodeURIComponent(search)}`

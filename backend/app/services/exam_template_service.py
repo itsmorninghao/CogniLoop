@@ -518,6 +518,26 @@ async def acquire_template(
     return await _load_relationships(new_template, session)
 
 
+OCR_STRUCTURING_SYSTEM_PROMPT = """你是一个专业的试卷结构化提取工具。
+请从图片中提取所有题目，以 JSON 数组格式输出，每道题包含以下字段：
+- position: 题号（整数）
+- question_type: 题型，只能是以下之一：single_choice / multi_choice / fill_blank / short_answer
+- content: 题目正文（含选项内容，如有）
+- answer: 答案（如图片中有明确标注；若无则不输出此字段）
+
+规则：
+1. 识别不到的字段直接不输出，不要输出 null 或空字符串
+2. 只输出 JSON 数组，不要任何解释文字
+3. content 中如有数学公式，尽量用 LaTeX 格式表示（用 $ 包裹）
+4. 如果某题无法识别（如纯图形题），content 写"[图形题，需手动填写]"
+
+示例输出：
+[
+  {"position": 1, "question_type": "single_choice", "content": "设 $f(x)=x^2$，则...", "answer": "B"},
+  {"position": 2, "question_type": "fill_blank", "content": "函数 $y=\\\\sin x$ 的最小正周期为____"}
+]"""
+
+
 async def ocr_scan_file(
     file_bytes: bytes,
     content_type: str,
@@ -553,6 +573,11 @@ async def ocr_scan_file(
         )
         api_key = ocr_key or await get_config("OPENAI_API_KEY", db_session)
 
+        ocr_mode = await get_config("OCR_MODE", db_session) or "multimodal"
+        ocr_llm_model = await get_config("OCR_LLM_MODEL", db_session) or await get_config("OPENAI_MODEL", db_session)
+        llm_key = await get_config("OPENAI_API_KEY", db_session)
+        llm_base_url = await get_config("OPENAI_BASE_URL", db_session) or "https://api.openai.com/v1"
+
     if not api_key:
         yield (
             f"data: {json.dumps({'type': 'error', 'message': '未配置 OCR 或 LLM API Key，请在管理后台 → 系统配置中设置'})}\n\n"
@@ -561,24 +586,12 @@ async def ocr_scan_file(
 
     client = AsyncOpenAI(base_url=base_url, api_key=api_key)
 
-    system_prompt = """你是一个专业的试卷结构化提取工具。
-请从图片中提取所有题目，以 JSON 数组格式输出，每道题包含以下字段：
-- position: 题号（整数）
-- question_type: 题型，只能是以下之一：single_choice / multi_choice / fill_blank / short_answer
-- content: 题目正文（含选项内容，如有）
-- answer: 答案（如图片中有明确标注；若无则不输出此字段）
-
-规则：
-1. 识别不到的字段直接不输出，不要输出 null 或空字符串
-2. 只输出 JSON 数组，不要任何解释文字
-3. content 中如有数学公式，尽量用 LaTeX 格式表示（用 $ 包裹）
-4. 如果某题无法识别（如纯图形题），content 写"[图形题，需手动填写]"
-
-示例输出：
-[
-  {"position": 1, "question_type": "single_choice", "content": "设 $f(x)=x^2$，则...", "answer": "B"},
-  {"position": 2, "question_type": "fill_blank", "content": "函数 $y=\\\\sin x$ 的最小正周期为____"}
-]"""
+    llm_client = None
+    if ocr_mode == "ocr_plus_llm":
+        if not llm_key:
+            yield f"data: {json.dumps({'type': 'error', 'message': '未配置全局 LLM API Key（OCR+LLM 模式需要）'})}\n\n"
+            return
+        llm_client = AsyncOpenAI(base_url=llm_base_url, api_key=llm_key)
 
     # For PDF: extract pages as images; for images: single page
     pages: list[bytes] = []
@@ -614,31 +627,71 @@ async def ocr_scan_file(
         mime = "image/png" if content_type == "application/pdf" else content_type
 
         try:
-            response = await client.chat.completions.create(
-                model=ocr_model,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": f"请提取第 {page_num} 页的所有题目。",
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:{mime};base64,{b64}",
+            if ocr_mode == "ocr_plus_llm":
+                # Step 1: extract raw text
+                step1_response = await client.chat.completions.create(
+                    model=ocr_model,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"请识别并提取第 {page_num} 页中的所有文字内容，包括题目、选项和答案，保持原始格式输出。",
                                 },
-                            },
-                        ],
-                    },
-                ],
-                temperature=0.1,
-                max_tokens=4096,
-            )
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime};base64,{b64}",
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    temperature=0.0,
+                    max_tokens=4096,
+                )
+                raw_text = step1_response.choices[0].message.content or ""
 
-            raw = response.choices[0].message.content or "[]"
+                # Step 2: structure into JSON
+                step2_response = await llm_client.chat.completions.create(
+                    model=ocr_llm_model,
+                    messages=[
+                        {"role": "system", "content": OCR_STRUCTURING_SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": f"以下是第 {page_num} 页的 OCR 识别文字，请提取所有题目并以 JSON 数组输出：\n\n{raw_text}",
+                        },
+                    ],
+                    temperature=0.1,
+                    max_tokens=4096,
+                )
+                raw = step2_response.choices[0].message.content or "[]"
+            else:
+                response = await client.chat.completions.create(
+                    model=ocr_model,
+                    messages=[
+                        {"role": "system", "content": OCR_STRUCTURING_SYSTEM_PROMPT},
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"请提取第 {page_num} 页的所有题目。",
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{mime};base64,{b64}",
+                                    },
+                                },
+                            ],
+                        },
+                    ],
+                    temperature=0.1,
+                    max_tokens=4096,
+                )
+                raw = response.choices[0].message.content or "[]"
             # Strip markdown code fence if present
             if raw.strip().startswith("```"):
                 raw = raw.strip().split("```")[1]

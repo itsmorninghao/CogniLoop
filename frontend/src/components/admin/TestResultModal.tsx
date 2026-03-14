@@ -18,7 +18,9 @@ const TITLES: Record<Props['type'], string> = {
 export function TestResultModal({ open, onClose, type, loading, result, error }: Props) {
     if (!open) return null
 
-    const maxW = type === 'ocr' ? 'max-w-2xl' : 'max-w-lg'
+    const maxW = type === 'ocr'
+        ? (result?.mode === 'ocr_plus_llm' ? 'max-w-4xl' : 'max-w-2xl')
+        : 'max-w-lg'
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
@@ -113,6 +115,39 @@ function EmbeddingResult({ result }: { result: any }) {
 }
 
 function OcrResult({ result }: { result: any }) {
+    if (result.mode === 'ocr_plus_llm') {
+        return (
+            <div className="grid grid-cols-3 gap-4">
+                <div>
+                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">测试图片</p>
+                    <div className="rounded-lg border border-border bg-muted p-2">
+                        {result.image_base64 ? (
+                            <img
+                                src={`data:image/png;base64,${result.image_base64}`}
+                                alt="OCR test"
+                                className="w-full rounded object-contain"
+                            />
+                        ) : (
+                            <p className="py-8 text-center text-sm text-muted-foreground">图片未返回</p>
+                        )}
+                    </div>
+                </div>
+                <div>
+                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">Step 1 原始文字</p>
+                    <div className="rounded-lg bg-muted p-3 font-mono text-sm text-foreground whitespace-pre-wrap break-all min-h-[120px] max-h-[400px] overflow-y-auto">
+                        {result.raw_ocr_text || '（无输出）'}
+                    </div>
+                </div>
+                <div>
+                    <p className="mb-1.5 text-sm font-medium text-muted-foreground">Step 2 结构化结果</p>
+                    <div className="rounded-lg bg-muted p-3 font-mono text-sm text-foreground whitespace-pre-wrap break-all min-h-[120px] max-h-[400px] overflow-y-auto">
+                        {result.message}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="grid grid-cols-2 gap-4">
             <div>

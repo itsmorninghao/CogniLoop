@@ -14,6 +14,8 @@ from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
+from backend.app.services.exam_template_service import OCR_STRUCTURING_SYSTEM_PROMPT
+
 from backend.app.core.database import get_session
 from backend.app.core.deps import get_admin_user
 from backend.app.models.circle import StudyCircle
@@ -431,6 +433,11 @@ async def test_ocr_config(
     base_url = await config_service.get_config("OCR_API_URL", session) or await config_service.get_config("OPENAI_BASE_URL", session)
     model = await config_service.get_config("OCR_MODEL", session) or "gpt-4o"
 
+    ocr_mode = await config_service.get_config("OCR_MODE", session) or "multimodal"
+    ocr_llm_model = await config_service.get_config("OCR_LLM_MODEL", session) or await config_service.get_config("OPENAI_MODEL", session)
+    llm_key = await config_service.get_config("OPENAI_API_KEY", session)
+    llm_base_url = await config_service.get_config("OPENAI_BASE_URL", session)
+
     if not api_key:
         raise HTTPException(status_code=400, detail="未配置 OCR 或 LLM API Key")
 
@@ -442,19 +449,57 @@ async def test_ocr_config(
 
     try:
         client = AsyncOpenAI(api_key=api_key, base_url=base_url or None)
-        res = await client.chat.completions.create(
-            model=model,
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+
+        if ocr_mode == "ocr_plus_llm":
+            if not llm_key:
+                raise HTTPException(status_code=400, detail="未配置全局 LLM API Key（OCR+LLM 模式需要）")
+
+            # Step 1: extract raw text
+            step1_res = await client.chat.completions.create(
+                model=model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "请识别并提取图片中的所有文字内容，保持原始格式输出。"},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                    ],
+                }],
+                temperature=0.0,
+                max_tokens=512,
+                timeout=20,
+            )
+            raw_ocr_text = step1_res.choices[0].message.content or ""
+
+            # Step 2: structure into JSON
+            llm_client = AsyncOpenAI(api_key=llm_key, base_url=llm_base_url or None)
+            step2_res = await llm_client.chat.completions.create(
+                model=ocr_llm_model,
+                messages=[
+                    {"role": "system", "content": OCR_STRUCTURING_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"以下是 OCR 识别文字，请提取所有题目并以 JSON 数组输出：\n\n{raw_ocr_text}"},
                 ],
-            }],
-            max_tokens=512,
-            timeout=20,
-        )
-        text = res.choices[0].message.content or ""
-        return {"ok": True, "message": text, "image_base64": b64}
+                temperature=0.1,
+                max_tokens=512,
+                timeout=20,
+            )
+            structured = step2_res.choices[0].message.content or ""
+            return {"ok": True, "message": structured, "image_base64": b64, "raw_ocr_text": raw_ocr_text, "mode": "ocr_plus_llm"}
+        else:
+            res = await client.chat.completions.create(
+                model=model,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                    ],
+                }],
+                max_tokens=512,
+                timeout=20,
+            )
+            text = res.choices[0].message.content or ""
+            return {"ok": True, "message": text, "image_base64": b64}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
