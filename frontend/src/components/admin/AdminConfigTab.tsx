@@ -22,7 +22,7 @@ export function AdminConfigTab() {
     const [configs, setConfigs] = useState<SystemConfig[]>([])
     const [loading, setLoading] = useState(true)
 
-    const [activeTab, setActiveTab] = useState<'llm' | 'embedding' | 'pro_nodes' | 'linux_do' | 'raw'>('llm')
+    const [activeTab, setActiveTab] = useState<'llm' | 'embedding' | 'pro_nodes' | 'ocr' | 'linux_do' | 'raw'>('llm')
 
     const [llmKey, setLlmKey] = useState('')
     const [llmBase, setLlmBase] = useState('')
@@ -52,6 +52,10 @@ export function AdminConfigTab() {
     )
     const [savingProNodes, setSavingProNodes] = useState(false)
 
+    const [ocrKey, setOcrKey] = useState('')
+    const [ocrBase, setOcrBase] = useState('')
+    const [ocrModel, setOcrModel] = useState('')
+
     const [ldEnabled, setLdEnabled] = useState(false)
     const [ldClientId, setLdClientId] = useState('')
     const [ldClientSecret, setLdClientSecret] = useState('')
@@ -77,7 +81,6 @@ export function AdminConfigTab() {
             setEmbModel(get('EMBEDDING_MODEL'))
             setEmbDims(get('EMBEDDING_DIMS'))
 
-            // Load Pro node configs
             const newNodeConfigs = { ...nodeConfigs }
             for (const node of PRO_NODES) {
                 newNodeConfigs[node.key] = {
@@ -105,14 +108,16 @@ export function AdminConfigTab() {
             }
             setProConcurrency(get('PRO_CONCURRENCY') || '3')
 
-            // Linux DO
+            setOcrKey(get('OCR_API_KEY'))
+            setOcrBase(get('OCR_API_URL'))
+            setOcrModel(get('OCR_MODEL'))
+
             setLdEnabled(get('LINUX_DO_ENABLED') === 'true')
             setLdClientId(get('LINUX_DO_CLIENT_ID'))
             setLdClientSecret(get('LINUX_DO_CLIENT_SECRET'))
             setLdRedirectUri(get('LINUX_DO_REDIRECT_URI'))
             setLdMinTrust(get('LINUX_DO_MIN_TRUST_LEVEL') || '1')
 
-            // Access control
             const allowReg = data.find((c: SystemConfig) => c.key === 'ALLOW_REGISTRATION')?.value
             setAllowRegistration(allowReg !== 'false')
         } catch {
@@ -143,6 +148,16 @@ export function AdminConfigTab() {
             await adminApi.setConfig('EMBEDDING_MODEL', embModel || 'text-embedding-3-small', 'Embedding 模型名称')
             if (embDims) await adminApi.setConfig('EMBEDDING_DIMS', embDims, '向量维度')
             toast.success('向量配置已保存')
+            loadConfigs()
+        } catch { toast.error('保存失败') }
+    }
+
+    const saveOcrConfig = async () => {
+        try {
+            if (ocrKey && !ocrKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('OCR_API_KEY', ocrKey, 'OCR API 密钥')
+            if (ocrBase) await adminApi.setConfig('OCR_API_URL', ocrBase, 'OCR API 基础 URL')
+            await adminApi.setConfig('OCR_MODEL', ocrModel || 'gpt-4o', 'OCR 视觉模型名称')
+            toast.success('OCR 配置已保存')
             loadConfigs()
         } catch { toast.error('保存失败') }
     }
@@ -317,6 +332,7 @@ export function AdminConfigTab() {
         { key: 'llm' as const, label: 'LLM 核心模型' },
         { key: 'embedding' as const, label: 'Embedding 向量' },
         { key: 'pro_nodes' as const, label: '仿真组卷设置' },
+        { key: 'ocr' as const, label: 'OCR 识别' },
         { key: 'linux_do' as const, label: '登录与访问控制' },
         { key: 'raw' as const, label: '高级变量' },
     ]
@@ -610,6 +626,35 @@ export function AdminConfigTab() {
                         >
                             {savingProNodes ? '保存中...' : '保存所有节点配置'}
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {activeTab === 'ocr' && (
+                <div className="animate-in fade-in p-6">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-sm text-muted-foreground">用于试卷模板 OCR 扫描识别的视觉模型。留空则自动使用全局 LLM 配置。</p>
+                        </div>
+                        <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> API Key</label>
+                                <input type="password" value={ocrKey} onChange={e => setOcrKey(e.target.value)} placeholder="留空则使用全局 LLM Key" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> Base URL</label>
+                                <input type="text" value={ocrBase} onChange={e => setOcrBase(e.target.value)} placeholder="留空则使用全局 LLM URL" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> Model Name</label>
+                                <input type="text" value={ocrModel} onChange={e => setOcrModel(e.target.value)} placeholder="默认 gpt-4o" className={inputClass} />
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
+                            <button onClick={saveOcrConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90">
+                                保存
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

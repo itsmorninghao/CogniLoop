@@ -20,6 +20,7 @@ import {
     Sun,
     Sword,
     FileText,
+    ClipboardList,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -30,6 +31,7 @@ import { GlobalSearchBar } from '@/components/shared/GlobalSearchBar'
 const NAV_ITEMS = [
     { path: '/', icon: LayoutDashboard, label: '仪表盘' },
     { path: '/knowledge', icon: BookOpen, label: '我的知识库' },
+    { path: '/exam-templates', icon: ClipboardList, label: '试卷模板' },
     { path: '/quiz', icon: PlusCircle, label: '出题中心' },
     { path: '/my-quizzes', icon: FileText, label: '我的试卷' },
     { path: '/circles', icon: Users, label: '学习圈' },

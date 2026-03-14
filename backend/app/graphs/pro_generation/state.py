@@ -27,11 +27,14 @@ class ProQuizState(TypedDict):
     subject_scope: str  # E.g., "高中数学"
     kb_ids: list[int]  # Legacy: all KB IDs combined
     document_kb_ids: list[int]  # document KB IDs for RAG knowledge retrieval
-    bank_kb_ids: list[int]  # question_bank KB IDs for few-shot examples
-    bank_kb_subjects: dict[int, list[str]]  # kb_id -> selected subjects; empty list = all subjects
     doc_ids: list[int]  # individual document IDs within document KBs
-    target_count: dict[str, int]  # e.g. {"single_choice": 5}
     target_difficulty: str  # "easy", "medium", "hard"
+
+    # Exam template fields
+    template_ids: list[int]  # list of exam template IDs
+    selected_slot_positions: list[int]  # user-selected slot positions
+    merged_slots: list[dict]  # [{position, question_type, label, question_count}]
+    few_shot_map: dict[int, list[dict]]  # {position: [question_dicts]}
 
     # Pre-fetched context pools
     rag_chunks: list[
@@ -40,20 +43,17 @@ class ProQuizState(TypedDict):
     hotspot_items: list[
         str
     ]  # list of hotspot strings — for distributor to assign individually
-    few_shot_pool: dict[
-        str, list[dict]
-    ]  # qtype -> list of examples — for rule-based distribution
 
     # Distributed context map (output of distributor)
-    # key: "{qtype}_{local_index}", e.g. "single_choice_0"
-    # value: {rag_context, hotspot, few_shot_examples}
+    # key: "slot_{position}", e.g. "slot_1"
+    # value: {rag_context, hotspot, few_shot_examples, question_type, slot_position, slot_label}
     question_context_map: dict[str, dict]
 
     # Working questions
     completed_questions: list[ProQuizQuestionDict]
 
     # Batch pipeline state
-    # each entry is a context key: "{qtype}_{local_index}", e.g. "single_choice_0"
+    # each entry is a context key: "slot_{position}", e.g. "slot_1"
     current_batch_types: list[str]
     batch_results: list[ProQuizQuestionDict]
 

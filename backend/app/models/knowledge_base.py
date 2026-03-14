@@ -16,7 +16,7 @@ class KnowledgeBase(SQLModel, table=True):
     name: str = Field(max_length=200)
     description: str | None = Field(default=None)
     tags: Any = Field(default=[], sa_column=Column(JSON, server_default="[]"))
-    kb_type: str = Field(default="document", max_length=20)  # document | question_bank
+    kb_type: str = Field(default="document", max_length=20)  # document
     share_code: str | None = Field(default=None, max_length=12, unique=True)
     shared_to_plaza_at: datetime | None = Field(default=None)
     document_count: int = Field(default=0)

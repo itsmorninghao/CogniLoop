@@ -1,5 +1,5 @@
 /**
- * QuizCreatePage — select knowledge scope + configure quiz parameters.
+ * QuizCreateSmartPage — select knowledge scope + configure Smart mode generation.
  * Shows full-chain traceability panel during generation.
  */
 
@@ -68,7 +68,6 @@ export default function QuizCreateSmartPage() {
     const [kbExpanded, setKbExpanded] = useState<number[]>([])
     const [kbDocs, setKbDocs] = useState<Record<number, KBDocument[]>>({})
 
-    // Config
     const [questionCounts, setQuestionCounts] = useState<Record<QuestionType, number>>({
         single_choice: 0,
         multiple_choice: 0,
@@ -108,9 +107,8 @@ export default function QuizCreateSmartPage() {
     const [userResults, setUserResults] = useState<UserPublicInfo[]>([])
     const [userSearching, setUserSearching] = useState(false)
 
-    // Load knowledge bases (filter out question_bank type for Smart mode)
     useEffect(() => {
-        kbApi.listAll().then(kbs => setKnowledgeBases(kbs.filter(kb => kb.kb_type !== 'question_bank'))).catch(() => toast.error('加载知识库失败'))
+        kbApi.listAll().then(kbs => setKnowledgeBases(kbs)).catch(() => toast.error('加载知识库失败'))
         presetApi.list().then(setPresets).catch(() => {})
     }, [])
 

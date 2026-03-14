@@ -27,6 +27,8 @@ import ProfilePage from '@/pages/ProfilePage'
 import UserProfileViewPage from '@/pages/UserProfileViewPage'
 import NotificationsPage from '@/pages/NotificationsPage'
 import AdminPage from '@/pages/AdminPage'
+import ExamTemplatePage from '@/pages/ExamTemplatePage'
+import ExamTemplateEditorPage from '@/pages/ExamTemplateEditorPage'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { token, isLoading } = useAuthStore()
@@ -71,6 +73,8 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="knowledge" element={<KnowledgeBasePage />} />
           <Route path="knowledge/:id" element={<KnowledgeBaseDetailPage />} />
+          <Route path="exam-templates" element={<ExamTemplatePage />} />
+          <Route path="exam-templates/:id" element={<ExamTemplateEditorPage />} />
           <Route path="quiz" element={<QuizPage />} />
           <Route path="quiz/create-smart" element={<QuizCreateSmartPage />} />
           <Route path="quiz/create-pro" element={<QuizCreateProPage />} />

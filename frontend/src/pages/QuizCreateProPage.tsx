@@ -1,5 +1,5 @@
 /**
- * QuizCreatePage — select knowledge scope + configure quiz parameters.
+ * QuizCreateProPage — select exam templates + configure Pro mode generation.
  * Shows full-chain traceability panel during generation.
  */
 
@@ -12,7 +12,11 @@ import {
     Clock, ArrowRight, Search, PenTool, FileText, Shuffle,
     ClipboardList, Check, X
 } from 'lucide-react'
-import { kbApi, quizApi, presetApi, subscribeSSE, type KnowledgeBase, type KBDocument, type SSEEvent, type QuizPreset } from '../lib/api'
+import {
+    kbApi, quizApi, presetApi, examTemplateApi, subscribeSSE,
+    type KnowledgeBase, type KBDocument, type SSEEvent, type QuizPreset,
+    type ExamTemplateListItem, type ExamTemplate, type ConflictDetail,
+} from '../lib/api'
 
 
 type QuestionType = 'single_choice' | 'multiple_choice' | 'true_false' | 'fill_blank' | 'short_answer'
@@ -68,14 +72,14 @@ interface NodeTrace {
 // Left-panel nodes that run once (non-loop)
 const PREP_NODES: { id: string; label: string; icon: typeof Brain }[] = [
     { id: 'scope_resolver', label: '解析出题范围', icon: Target },
+    { id: 'template_resolver', label: '加载试卷模板', icon: BookOpen },
     { id: 'rag_retriever', label: '检索文档知识', icon: Search },
     { id: 'hotspot_searcher', label: '检索时事热点', icon: Search },
-    { id: 'few_shot_retriever', label: '预取真题范例', icon: BookOpen },
     { id: 'distributor', label: '分配出题素材', icon: Shuffle },
 ]
 const ASSEMBLY_NODE = { id: 'paper_assembler', label: '组卷', icon: FileText }
 
-// Loop sub-step node IDs → labels (few_shot_retriever moved to prep phase)
+// Loop sub-step node IDs → labels
 const PIPELINE_STEP_LABELS: Record<string, string> = {
     question_generator: '原创命题',
     quality_checker: '质量快审',
@@ -87,23 +91,22 @@ const PIPELINE_STEP_IDS = new Set(Object.keys(PIPELINE_STEP_LABELS))
 export default function QuizCreateProPage() {
     const navigate = useNavigate()
 
-    // KB selection — split into document KBs and question bank KBs
+    // KB selection — document KBs only
     const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBase[]>([])
     const [selectedDocumentKbIds, setSelectedDocumentKbIds] = useState<number[]>([])
     const [selectedDocumentDocIds, setSelectedDocumentDocIds] = useState<number[]>([])
     const [kbExpanded, setKbExpanded] = useState<number[]>([])
     const [kbDocs, setKbDocs] = useState<Record<number, KBDocument[]>>({})
-    const [selectedBankKbIds, setSelectedBankKbIds] = useState<number[]>([])
-    const [bankKbSubjects, setBankKbSubjects] = useState<Record<number, string[]>>({})
-    const [selectedBankKbSubjects, setSelectedBankKbSubjects] = useState<Record<number, string[]>>({})
 
-    const documentKBs = knowledgeBases.filter(kb => kb.kb_type !== 'question_bank')
-    const bankKBs = knowledgeBases.filter(kb => kb.kb_type === 'question_bank')
+    const documentKBs = knowledgeBases
 
-    // Config
-    const [questionCounts, setQuestionCounts] = useState<Record<QuestionType, number>>({
-        single_choice: 0, multiple_choice: 0, true_false: 0, fill_blank: 0, short_answer: 0,
-    })
+    // Template selection
+    const [templates, setTemplates] = useState<ExamTemplateListItem[]>([])
+    const [selectedTemplateIds, setSelectedTemplateIds] = useState<number[]>([])
+    const [templateDetails, setTemplateDetails] = useState<Record<number, ExamTemplate>>({})
+    const [selectedSlotPositions, setSelectedSlotPositions] = useState<number[]>([])
+    const [conflicts, setConflicts] = useState<ConflictDetail[]>([])
+
     const [difficulty, setDifficulty] = useState<Difficulty>('medium')
     const [title, setTitle] = useState('')
     const [customPrompt, setCustomPrompt] = useState('')
@@ -133,11 +136,19 @@ export default function QuizCreateProPage() {
     // For pipeline view: which questions are expanded (for many-question scrollable list)
     const [expandedQuestions, setExpandedQuestions] = useState<Set<number>>(new Set())
 
-    // Load knowledge bases
     useEffect(() => {
         kbApi.listAll().then(setKnowledgeBases).catch(() => toast.error('加载知识库失败'))
         presetApi.list().then(setPresets).catch(() => {})
+        examTemplateApi.list().then(setTemplates).catch(() => {})
     }, [])
+
+    // Conflict detection
+    useEffect(() => {
+        if (selectedTemplateIds.length <= 1) { setConflicts([]); return }
+        examTemplateApi.checkConflicts(selectedTemplateIds, selectedSlotPositions)
+            .then(data => setConflicts(data.conflicts))
+            .catch(() => {})
+    }, [selectedTemplateIds, selectedSlotPositions])
 
     const toggleKbExpand = useCallback(async (id: number) => {
         setKbExpanded(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -199,35 +210,47 @@ export default function QuizCreateProPage() {
         return selectedDocumentDocIds.includes(docId)
     }, [selectedDocumentKbIds, selectedDocumentDocIds])
 
-    const toggleBankKbSelect = useCallback((kbId: number) => {
-        if (selectedBankKbIds.includes(kbId)) {
-            setSelectedBankKbIds(prev => prev.filter(id => id !== kbId))
-            setSelectedBankKbSubjects(prev => { const { [kbId]: _, ...rest } = prev; return rest })
-            setBankKbSubjects(prev => { const { [kbId]: _, ...rest } = prev; return rest })
-        } else {
-            setSelectedBankKbIds(prev => [...prev, kbId])
-            kbApi.getBankSubjects(kbId)
-                .then(data => setBankKbSubjects(prev => ({ ...prev, [kbId]: data.subjects })))
-                .catch(() => {})
+    const toggleTemplateSelect = useCallback(async (id: number) => {
+        const newIds = selectedTemplateIds.includes(id)
+            ? selectedTemplateIds.filter(x => x !== id)
+            : [...selectedTemplateIds, id]
+        setSelectedTemplateIds(newIds)
+
+        // Load detail if not cached
+        if (!templateDetails[id] && !selectedTemplateIds.includes(id)) {
+            try {
+                const detail = await examTemplateApi.get(id)
+                setTemplateDetails(prev => ({ ...prev, [id]: detail }))
+            } catch { /* ignore */ }
         }
-    }, [selectedBankKbIds])
+    }, [selectedTemplateIds, templateDetails])
 
-    const toggleBankSubject = useCallback((kbId: number, subject: string) => {
-        setSelectedBankKbSubjects(prev => {
-            const current = prev[kbId] ?? []
-            const has = current.includes(subject)
-            return { ...prev, [kbId]: has ? current.filter(s => s !== subject) : [...current, subject] }
-        })
-    }, [])
-
-    const updateCount = (type: QuestionType, delta: number) => {
-        setQuestionCounts(prev => ({ ...prev, [type]: Math.max(0, Math.min(20, prev[type] + delta)) }))
-    }
+    // Compute merged slots from selected template details
+    const mergedSlots = useMemo(() => {
+        const slotsByPos = new Map<number, { position: number; question_type: string; label: string; question_count: number }>()
+        for (const id of selectedTemplateIds) {
+            const tmpl = templateDetails[id]
+            if (!tmpl) continue
+            for (const slot of tmpl.slots) {
+                const existing = slotsByPos.get(slot.position)
+                if (existing) {
+                    existing.question_count += slot.questions.length
+                } else {
+                    slotsByPos.set(slot.position, {
+                        position: slot.position,
+                        question_type: slot.question_type,
+                        label: slot.label || '',
+                        question_count: slot.questions.length,
+                    })
+                }
+            }
+        }
+        return Array.from(slotsByPos.values()).sort((a, b) => a.position - b.position)
+    }, [selectedTemplateIds, templateDetails])
 
     const loadPreset = (p: QuizPreset) => {
         if (p.title) setTitle(p.title)
         setDifficulty(p.difficulty as Difficulty)
-        setQuestionCounts(prev => ({ ...prev, ...p.question_counts }))
         if (p.subject) setSubject(p.subject)
         if (p.custom_prompt) setCustomPrompt(p.custom_prompt)
         setShowPresetPanel(false)
@@ -241,7 +264,7 @@ export default function QuizCreateProPage() {
                 name: savingName.trim(),
                 title: title || null,
                 difficulty,
-                question_counts: questionCounts,
+                question_counts: {},
                 subject: subject || null,
                 custom_prompt: customPrompt || null,
             })
@@ -273,8 +296,12 @@ export default function QuizCreateProPage() {
     }, [questionPipelines])
 
     const handleGenerate = useCallback(async () => {
-        if (selectedDocumentKbIds.length === 0 && selectedDocumentDocIds.length === 0 && selectedBankKbIds.length === 0) {
-            toast.error('请至少选择一个文档知识库或真题库')
+        if (selectedTemplateIds.length === 0) {
+            toast.error('请至少选择一个试卷模板')
+            return
+        }
+        if (selectedSlotPositions.length === 0) {
+            toast.error('请至少选择一个题位')
             return
         }
 
@@ -297,12 +324,11 @@ export default function QuizCreateProPage() {
                 title: title || undefined,
                 knowledge_scope: {
                     document_kb_ids: selectedDocumentKbIds,
-                    bank_kb_ids: selectedBankKbIds,
-                    bank_kb_subjects: selectedBankKbSubjects,
                     doc_ids: selectedDocumentDocIds,
                 },
                 quiz_config: {
-                    question_counts: questionCounts,
+                    template_ids: selectedTemplateIds,
+                    selected_slot_positions: selectedSlotPositions,
                     difficulty,
                     custom_prompt: customPrompt,
                     subject: subject.trim() || undefined,
@@ -519,7 +545,7 @@ export default function QuizCreateProPage() {
             toast.error(err instanceof Error ? err.message : '出题失败')
             setIsGenerating(false)
         }
-    }, [selectedDocumentKbIds, selectedDocumentDocIds, selectedBankKbIds, selectedBankKbSubjects, questionCounts, difficulty, title, customPrompt, subject, useHotspot])
+    }, [selectedDocumentKbIds, selectedDocumentDocIds, selectedTemplateIds, selectedSlotPositions, difficulty, title, customPrompt, subject, useHotspot])
 
     const StatusIcon = ({ status }: { status: string }) => {
         if (status === 'done') return <CheckCircle2 className="size-4 text-emerald-500 shrink-0" />
@@ -864,12 +890,12 @@ export default function QuizCreateProPage() {
                 </button>
                 <div>
                     <h1 className="text-foreground">仿真组卷</h1>
-                    <p className="text-sm text-muted-foreground">引入时事热点与真实题库特征，并通过 AI 学生模拟解答来严格把控难度与质量。</p>
+                    <p className="text-sm text-muted-foreground">引入时事热点与试卷模板特征，并通过 AI 学生模拟解答来严格把控难度与质量。</p>
                 </div>
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
-                {/* Left Column: Knowledge Base Selection */}
+                {/* Left Column: Knowledge Base + Template Selection */}
                 <div className="space-y-6">
                     {/* Panel 1: Document Knowledge Bases */}
                     <div className="rounded-2xl border border-border bg-card overflow-hidden">
@@ -937,80 +963,104 @@ export default function QuizCreateProPage() {
                         </div>
                     </div>
 
-                    {/* Panel 2: Question Bank KBs */}
-                    <div className="rounded-2xl border border-border bg-card overflow-hidden">
-                        <div className="flex items-center gap-3 p-6 border-b border-border bg-accent/10">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
-                                <FileText className="size-5 text-amber-600" />
+                    {/* Panel 2: Exam Template Selection */}
+                    <div className="rounded-xl border border-border bg-card p-5">
+                        <h3 className="flex items-center gap-2 text-sm font-medium text-foreground mb-4">
+                            <BookOpen className="size-4 text-primary" />
+                            试卷模板（必选）
+                        </h3>
+                        {templates.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">暂无模板，请先在「试卷模板」页面创建</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {templates.map(t => (
+                                    <label key={t.id} className="flex items-center gap-3 rounded-lg border border-border p-3 cursor-pointer hover:bg-accent/50 transition-colors">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedTemplateIds.includes(t.id)}
+                                            onChange={() => toggleTemplateSelect(t.id)}
+                                            className="rounded border-border"
+                                        />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-foreground truncate">{t.name}</p>
+                                            <p className="text-xs text-muted-foreground">{t.subject || '未标注学科'} · {t.slot_count}题位 · {t.question_count}道真题</p>
+                                        </div>
+                                    </label>
+                                ))}
                             </div>
-                            <div className="text-left">
-                                <h3 className="font-medium text-foreground">选择真题库</h3>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                    {selectedBankKbIds.length > 0
-                                        ? (() => {
-                                            const totalSubjects = Object.values(selectedBankKbSubjects).reduce((acc, s) => acc + s.length, 0)
-                                            return totalSubjects > 0
-                                                ? `已选择 ${selectedBankKbIds.length} 个真题库，共 ${totalSubjects} 个科目`
-                                                : `已选择 ${selectedBankKbIds.length} 个真题库`
-                                        })()
-                                        : '提供出题风格与格式的参考范例'}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="p-4 space-y-3">
-                            {bankKBs.length === 0 ? (
-                                <p className="py-8 text-center text-sm text-muted-foreground">暂无真题库</p>
-                            ) : bankKBs.map(kb => {
-                                const isSelected = selectedBankKbIds.includes(kb.id)
-                                return (
-                                    <div key={kb.id} className={`rounded-xl border transition-all ${isSelected ? 'border-primary/40 bg-primary/5' : 'border-border bg-card hover:border-primary/20'}`}>
-                                        <button onClick={() => toggleBankKbSelect(kb.id)} className="w-full p-3 text-left">
-                                            <div className="flex items-center gap-3">
-                                                <div className={`flex-shrink-0 flex size-5 items-center justify-center rounded border transition-colors ${isSelected ? 'border-primary bg-primary' : 'border-border hover:border-primary/50'}`}>
-                                                    {isSelected && <CheckCircle2 className="size-3.5 text-white" />}
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="truncate text-sm font-semibold text-foreground">{kb.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{kb.document_count} 套真题</p>
-                                                </div>
-                                            </div>
-                                        </button>
-                                        {isSelected && bankKbSubjects[kb.id]?.length > 0 && (
-                                            <div className="pb-3 pl-8 pr-3 flex flex-wrap gap-1.5">
-                                                {bankKbSubjects[kb.id].map(subject => {
-                                                    const subjectSelected = (selectedBankKbSubjects[kb.id] ?? []).includes(subject)
-                                                    return (
-                                                        <button
-                                                            key={subject}
-                                                            onClick={e => { e.stopPropagation(); toggleBankSubject(kb.id, subject) }}
-                                                            className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors border
-                                                                ${subjectSelected
-                                                                    ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40'
-                                                                    : 'bg-muted text-muted-foreground border-border hover:border-amber-500/30'
-                                                                }`}
-                                                        >
-                                                            {subject}
-                                                        </button>
-                                                    )
-                                                })}
-                                                {(selectedBankKbSubjects[kb.id]?.length ?? 0) > 0 && (
-                                                    <button
-                                                        onClick={e => {
-                                                            e.stopPropagation()
-                                                            setSelectedBankKbSubjects(prev => ({ ...prev, [kb.id]: [] }))
-                                                        }}
-                                                        className="rounded-full px-2.5 py-0.5 text-xs text-muted-foreground hover:text-foreground border border-border"
-                                                    >
-                                                        全部
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </div>
+                        )}
                     </div>
+
+                    {/* Panel 3: Slot Selection (only if templates selected) */}
+                    {selectedTemplateIds.length > 0 && mergedSlots.length > 0 && (
+                        <div className="rounded-xl border border-border bg-card p-5">
+                            <h3 className="flex items-center gap-2 text-sm font-medium text-foreground mb-4">
+                                <ClipboardList className="size-4 text-primary" />
+                                选择题位
+                            </h3>
+
+                            {/* Type quick-select */}
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                {(() => {
+                                    const typeCounts = new Map<string, { total: number; selected: number }>()
+                                    for (const slot of mergedSlots) {
+                                        const tc = typeCounts.get(slot.question_type) || { total: 0, selected: 0 }
+                                        tc.total++
+                                        if (selectedSlotPositions.includes(slot.position)) tc.selected++
+                                        typeCounts.set(slot.question_type, tc)
+                                    }
+                                    return Array.from(typeCounts.entries()).map(([qtype, counts]) => (
+                                        <div key={qtype} className="flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm">
+                                            <span className="text-foreground">{QUESTION_TYPE_LABELS[qtype as QuestionType] || qtype}:</span>
+                                            <span className="font-medium text-primary">{counts.selected}</span>
+                                            <span className="text-muted-foreground">/ {counts.total}</span>
+                                        </div>
+                                    ))
+                                })()}
+                            </div>
+
+                            {/* Slot checklist */}
+                            <div className="space-y-1 max-h-80 overflow-y-auto">
+                                {mergedSlots.map(slot => {
+                                    const hasConflict = conflicts.some(c => c.position === slot.position)
+                                    return (
+                                        <label
+                                            key={slot.position}
+                                            className={`flex items-center gap-3 rounded-lg border p-2.5 cursor-pointer transition-colors ${
+                                                hasConflict ? 'border-red-400 bg-red-50 dark:bg-red-950/20' : 'border-border hover:bg-accent/50'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedSlotPositions.includes(slot.position)}
+                                                onChange={() => {
+                                                    setSelectedSlotPositions(prev =>
+                                                        prev.includes(slot.position)
+                                                            ? prev.filter(p => p !== slot.position)
+                                                            : [...prev, slot.position]
+                                                    )
+                                                }}
+                                                className="rounded border-border"
+                                            />
+                                            <span className="text-xs font-mono text-muted-foreground w-6">{slot.position}</span>
+                                            <span className="text-xs text-muted-foreground w-16">
+                                                {QUESTION_TYPE_LABELS[slot.question_type as QuestionType] || slot.question_type}
+                                            </span>
+                                            <span className="text-sm text-foreground flex-1 truncate">{slot.label || '\u2014'}</span>
+                                            <span className="text-xs text-muted-foreground">{slot.question_count}题</span>
+                                            {hasConflict && <span className="text-xs text-red-500 font-medium">冲突</span>}
+                                            {slot.question_count === 0 && <span className="text-xs text-amber-500">无真题</span>}
+                                        </label>
+                                    )
+                                })}
+                            </div>
+
+                            <p className="mt-3 text-xs text-muted-foreground">
+                                已选 {selectedSlotPositions.length} 个题位
+                                {conflicts.length > 0 && <span className="text-red-500 ml-2">{conflicts.length} 个位置存在跨模板冲突</span>}
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 {/* Right Column: Quiz Config */}
@@ -1023,7 +1073,7 @@ export default function QuizCreateProPage() {
                                 </div>
                                 <div>
                                     <h3 className="font-medium text-foreground">题目配置</h3>
-                                    <p className="text-xs text-muted-foreground">自定义题型、数量和难度</p>
+                                    <p className="text-xs text-muted-foreground">自定义难度和出题要求</p>
                                 </div>
                             </div>
                             {/* Preset button */}
@@ -1105,32 +1155,6 @@ export default function QuizCreateProPage() {
                             </div>
                         </div>
 
-                        {/* Question Type Counts */}
-                        <div>
-                            <div className="flex items-center justify-between mb-2">
-                                <label className="text-sm font-medium text-foreground">题型与数量</label>
-                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary/10 text-primary">
-                                    总计: {Object.values(questionCounts).reduce((a, b) => a + b, 0)} 题
-                                </span>
-                            </div>
-                            <div className="space-y-2 rounded-xl border border-border bg-card overflow-hidden">
-                                {(Object.entries(QUESTION_TYPE_LABELS) as [QuestionType, string][]).map(([type, label]) => (
-                                    <div key={type} className="flex items-center justify-between px-4 py-3 hover:bg-accent/30 transition-colors border-b border-border last:border-0">
-                                        <span className={`text-sm ${questionCounts[type] > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>{label}</span>
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={() => updateCount(type, -1)} disabled={questionCounts[type] <= 0} className="flex size-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                                <span className="text-lg leading-none font-medium mb-0.5">-</span>
-                                            </button>
-                                            <span className="w-6 text-center text-sm font-medium text-foreground">{questionCounts[type]}</span>
-                                            <button onClick={() => updateCount(type, 1)} disabled={questionCounts[type] >= 20 || Object.values(questionCounts).reduce((a, b) => a + b, 0) >= 50} className="flex size-7 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                                                <span className="text-lg leading-none font-medium mb-0.5">+</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
                         {/* Subject */}
                         <div>
                             <label className="text-sm font-medium text-foreground">科目 / 主题（可选）</label>
@@ -1168,9 +1192,9 @@ export default function QuizCreateProPage() {
                         </div>
 
                         <div className="pt-2">
-                            <button onClick={handleGenerate} disabled={(selectedDocumentKbIds.length === 0 && selectedDocumentDocIds.length === 0 && selectedBankKbIds.length === 0) || Object.values(questionCounts).reduce((a, b) => a + b, 0) === 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleGenerate} disabled={selectedTemplateIds.length === 0 || selectedSlotPositions.length === 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
                                 <Sparkles className="size-4" />
-                                开始 AI 出题
+                                开始 AI 出题（{selectedSlotPositions.length} 个题位）
                             </button>
                         </div>
                     </div>

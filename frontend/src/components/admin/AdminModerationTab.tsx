@@ -42,7 +42,6 @@ export function AdminModerationTab() {
                 </button>
             </div>
 
-            {/* Panel content */}
             <div className="p-6">
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                     {subTab === 'kb' && <KBModerationPanel />}
@@ -103,7 +102,6 @@ function KBModerationPanel() {
                 </label>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
                 {loading ? (
                     <div className="flex h-32 items-center justify-center">
@@ -131,7 +129,7 @@ function KBModerationPanel() {
                                     </td>
                                     <td className="px-5 py-3 text-muted-foreground text-sm">@{kb.owner_username}</td>
                                     <td className="px-5 py-3 text-center">
-                                        <span className="rounded-full bg-accent px-2 py-0.5 text-xs">{kb.kb_type === 'question_bank' ? '题库' : '文档'}</span>
+                                        <span className="rounded-full bg-accent px-2 py-0.5 text-xs">文档</span>
                                     </td>
                                     <td className="px-5 py-3 text-center">
                                         {kb.shared_to_plaza_at ? (
@@ -196,7 +194,6 @@ function CircleModerationPanel() {
 
     return (
         <>
-            {/* Search */}
             <div className="px-5 py-3.5 border-b border-border">
                 <div className="relative max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -209,7 +206,6 @@ function CircleModerationPanel() {
                 </div>
             </div>
 
-            {/* Table */}
             <div className="overflow-x-auto">
                 {loading ? (
                     <div className="flex h-32 items-center justify-center">

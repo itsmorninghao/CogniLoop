@@ -9,7 +9,7 @@ class KBCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: str | None = None
     tags: list[str] = []
-    kb_type: str = Field(default="document", pattern="^(document|question_bank)$")
+    kb_type: str = Field(default="document", pattern="^document$")
 
 
 class KBUpdateRequest(BaseModel):

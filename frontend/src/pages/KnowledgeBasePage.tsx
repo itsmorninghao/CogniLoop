@@ -26,7 +26,6 @@ export default function KnowledgeBasePage() {
     const [showCreate, setShowCreate] = useState(false)
     const [newName, setNewName] = useState('')
     const [newDesc, setNewDesc] = useState('')
-    const [newKbType, setNewKbType] = useState('document')
     const [creating, setCreating] = useState(false)
 
     // Acquire by share code modal
@@ -61,12 +60,11 @@ export default function KnowledgeBasePage() {
         if (!newName.trim()) return
         setCreating(true)
         try {
-            const kb = await kbApi.create({ name: newName.trim(), description: newDesc.trim() || undefined, kb_type: newKbType })
+            const kb = await kbApi.create({ name: newName.trim(), description: newDesc.trim() || undefined, kb_type: 'document' })
             toast.success('知识库创建成功')
             setShowCreate(false)
             setNewName('')
             setNewDesc('')
-            setNewKbType('document')
             navigate(`/knowledge/${kb.id}`)
         } catch {
             toast.error('创建失败')
@@ -152,7 +150,6 @@ export default function KnowledgeBasePage() {
                 </button>
             </div>
 
-            {/* Content */}
             <div className="mt-5">
                 {isLoadingCurrent ? (
                     <div className="flex items-center justify-center py-24">
@@ -212,9 +209,6 @@ export default function KnowledgeBasePage() {
                                     <ChevronRight className="size-4 shrink-0 text-muted-foreground/50 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                                 </div>
                                 <div className="flex flex-wrap items-center gap-1.5 mb-2">
-                                    {kb.kb_type === 'question_bank' && (
-                                        <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 border border-blue-500/20">题库</span>
-                                    )}
                                     {activeTab === 'acquired' && (
                                         <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-600 border border-cyan-500/20">已获取</span>
                                     )}
@@ -224,7 +218,7 @@ export default function KnowledgeBasePage() {
                                 </div>
                                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                     <FileStack className="size-3.5" />
-                                    {kb.document_count} {kb.kb_type === 'question_bank' ? '道题目' : '个文档'}
+                                    {kb.document_count} 个文档
                                 </div>
                                 {kb.description && (
                                     <p className="mt-2 line-clamp-2 text-xs text-muted-foreground">{kb.description}</p>
@@ -257,7 +251,6 @@ export default function KnowledgeBasePage() {
                                 <div className="min-w-0">
                                     <div className="flex items-center gap-2">
                                         <p className="truncate text-sm font-medium text-foreground">{kb.name}</p>
-                                        {kb.kb_type === 'question_bank' && <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 border border-blue-500/20">题库</span>}
                                         {activeTab === 'acquired' && <span className="rounded bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-600 border border-cyan-500/20">已获取</span>}
                                     </div>
                                     {kb.description && <p className="truncate text-xs text-muted-foreground mt-0.5">{kb.description}</p>}
@@ -322,18 +315,11 @@ export default function KnowledgeBasePage() {
                             <div>
                                 <label className="text-sm font-medium text-foreground">类型</label>
                                 <div className="mt-1.5 flex gap-3">
-                                    <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                                        <input type="radio" name="kb_type" value="document" checked={newKbType === 'document'} onChange={() => setNewKbType('document')} className="text-primary" />
+                                    <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-primary p-3 bg-primary/5">
+                                        <input type="radio" name="kb_type" value="document" checked readOnly className="text-primary" />
                                         <div className="flex flex-col">
                                             <span className="text-sm font-medium">普通知识库</span>
                                             <span className="text-xs text-muted-foreground">PDF/Word 等文档</span>
-                                        </div>
-                                    </label>
-                                    <label className="flex flex-1 cursor-pointer items-center gap-2 rounded-lg border border-border p-3 transition-colors hover:bg-accent/50 has-[:checked]:border-primary has-[:checked]:bg-primary/5">
-                                        <input type="radio" name="kb_type" value="question_bank" checked={newKbType === 'question_bank'} onChange={() => setNewKbType('question_bank')} className="text-primary" />
-                                        <div className="flex flex-col">
-                                            <span className="text-sm font-medium">真题库</span>
-                                            <span className="text-xs text-muted-foreground">GAOKAO JSON</span>
                                         </div>
                                     </label>
                                 </div>

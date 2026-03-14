@@ -5,7 +5,7 @@ so every generated question draws from a distinct knowledge perspective.
 
 Distribution strategy:
   - RAG chunks + hotspot:  LLM-controlled, with rule-based fallback
-  - Few-shot examples:     Rule-based round-robin (guaranteed non-repeating per type)
+  - Few-shot examples:     Random sample from template slot questions (via few_shot_map)
 
 Fallback hierarchy:
   1. JSON parse completely fails  → full rule-based fallback for all generators
@@ -16,6 +16,7 @@ Fallback hierarchy:
 import json
 import logging
 import math
+import random
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -34,21 +35,6 @@ def _fallback_chunk_ids(gen_idx: int, total_gens: int, n_chunks: int) -> list[in
     chunks_per_gen = max(math.ceil(n_chunks / max(total_gens, 1)), 2)
     start = (gen_idx * chunks_per_gen) % n_chunks
     return [(start + j) % n_chunks for j in range(chunks_per_gen)]
-
-
-def _assign_few_shots(
-    qtype: str, local_index: int, few_shot_pool: dict[str, list[dict]]
-) -> list[dict]:
-    """Rule-based: give each generator of the same type a different pair of examples."""
-    examples = few_shot_pool.get(qtype, [])
-    if not examples:
-        return []
-    n = len(examples)
-    if n <= 2:
-        return examples  # pool too small, everyone gets the same
-    # Slide a window of 2 by local_index * 2, wrapping around
-    start = (local_index * 2) % n
-    return [examples[(start + j) % n] for j in range(2)]
 
 
 async def _llm_distribute(
@@ -130,13 +116,19 @@ async def distributor_node(state: ProQuizState) -> dict:
 
     rag_chunks: list[dict] = state.get("rag_chunks", [])
     hotspot_items: list[str] = state.get("hotspot_items", [])
-    few_shot_pool: dict[str, list[dict]] = state.get("few_shot_pool", {})
-    target_count: dict[str, int] = state.get("target_count", {})
+    merged_slots: list[dict] = state.get("merged_slots", [])
+    few_shot_map: dict[int, list[dict]] = state.get("few_shot_map", {})
 
     generators: list[dict] = []
-    for qtype, count in target_count.items():
-        for i in range(count):
-            generators.append({"key": f"{qtype}_{i}", "type": qtype, "local_index": i})
+    for slot in merged_slots:
+        pos = slot["position"]
+        generators.append({
+            "key": f"slot_{pos}",
+            "type": slot["question_type"],
+            "position": pos,
+            "label": slot.get("label", ""),
+            "local_index": 0,
+        })
 
     if not generators:
         await emit_node_complete(
@@ -183,12 +175,20 @@ async def distributor_node(state: ProQuizState) -> dict:
             hotspot_index = gen_idx % len(hotspot_items) if hotspot_items else 0
         hotspot = hotspot_items[hotspot_index] if hotspot_items else ""
 
-        few_shot_examples = _assign_few_shots(qtype, local_index, few_shot_pool)
+        position = gen.get("position")
+        pool = few_shot_map.get(position, []) if position is not None else []
+        if pool:
+            few_shot_examples = random.sample(pool, min(2, len(pool)))
+        else:
+            few_shot_examples = []
 
         question_context_map[key] = {
             "rag_context": rag_context,
             "hotspot": hotspot,
             "few_shot_examples": few_shot_examples,
+            "question_type": gen["type"],
+            "slot_position": position,
+            "slot_label": gen.get("label", ""),
         }
 
     fallback_note = (

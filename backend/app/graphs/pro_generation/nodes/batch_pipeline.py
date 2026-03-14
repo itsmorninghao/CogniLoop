@@ -32,18 +32,18 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
     difficulty = state.get("target_difficulty", "medium")
     question_context_map: dict[str, dict] = state.get("question_context_map", {})
     completed_count = len(state.get("completed_questions", []))
-    total_q = sum(state.get("target_count", {}).values())
+    total_q = len(state.get("selected_slot_positions", []))
     batch_size = len(batch_keys)
 
     async def _run_single(ctx_key: str, index: int) -> dict | None:
         """Independent pipeline: generate → quality(retry) → solve → difficulty(retry)."""
-        # Parse question type from context key, e.g. "single_choice_0" → "single_choice"
-        qtype = ctx_key.rsplit("_", 1)[0]
+        pkg = question_context_map.get(ctx_key, {})
+        # Parse question type from context package or fallback to context key
+        qtype = pkg.get("question_type", ctx_key.rsplit("_", 1)[0])
         q_label = f"第 {index}/{total_q} 题"
         qi = index
         max_retry = 2
 
-        pkg = question_context_map.get(ctx_key, {})
         ctx = {
             "subject": subject,
             "difficulty": difficulty,
@@ -166,6 +166,7 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
 
             if acceptable or attempt >= max_retry:
                 question["difficulty_score"] = score
+                question["slot_position"] = pkg.get("slot_position")
                 await emit_node_complete(
                     session_id,
                     "difficulty_analyzer",
@@ -202,6 +203,8 @@ async def batch_pipeline_node(state: ProQuizState) -> dict:
                     question_index=qi,
                 )
 
+        if question is not None:
+            question["slot_position"] = pkg.get("slot_position")
         return question
 
     tasks = [

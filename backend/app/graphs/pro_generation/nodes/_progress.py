@@ -12,7 +12,7 @@ def compute_loop_progress(
         completed_count: number of questions already finished.
         total_questions: total questions to generate.
         step_fraction: sub-step within the current question.
-            0.0 = few_shot_retriever
+            0.0 = start
             0.2 = question_generator
             0.4 = quality_checker
             0.6 = solve_verifier

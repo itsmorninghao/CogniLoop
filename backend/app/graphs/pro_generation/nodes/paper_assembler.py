@@ -9,6 +9,9 @@ async def paper_assembler_node(state: ProQuizState) -> dict:
 
     completed = state.get("completed_questions", [])
 
+    # Sort by slot_position for consistent ordering
+    completed = sorted(completed, key=lambda q: q.get("slot_position", 0))
+
     final = []
     index = 1
     for q in completed:

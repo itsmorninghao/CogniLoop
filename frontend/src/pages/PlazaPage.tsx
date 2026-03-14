@@ -4,11 +4,11 @@
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { Search, BookOpen, Database, Star, Tag, Download, Loader2, FileText, Users } from 'lucide-react'
-import { plazaApi, kbApi, quizPlazaApi, quizApi, type KnowledgeBase, type QuizPlazaItem } from '@/lib/api'
+import { Search, BookOpen, Database, Star, Tag, Download, Loader2, FileText, Users, ClipboardList } from 'lucide-react'
+import { plazaApi, kbApi, quizPlazaApi, quizApi, examTemplateApi, type KnowledgeBase, type QuizPlazaItem, type PlazaTemplateItem } from '@/lib/api'
 import { toast } from 'sonner'
 
-type PlazaTab = 'knowledge' | 'quizzes'
+type PlazaTab = 'knowledge' | 'quizzes' | 'templates'
 
 export default function PlazaPage() {
     const navigate = useNavigate()
@@ -24,6 +24,11 @@ export default function PlazaPage() {
     const [quizzes, setQuizzes] = useState<QuizPlazaItem[]>([])
     const [quizLoading, setQuizLoading] = useState(false)
     const [acquiringQuizId, setAcquiringQuizId] = useState<string | null>(null)
+
+    // Template state
+    const [plazaTemplates, setPlazaTemplates] = useState<PlazaTemplateItem[]>([])
+    const [templateLoading, setTemplateLoading] = useState(false)
+    const [acquiringTemplateId, setAcquiringTemplateId] = useState<number | null>(null)
 
     const handleAcquireKb = async (kb: KnowledgeBase) => {
         if (!kb.share_code) return
@@ -60,6 +65,19 @@ export default function PlazaPage() {
         }
     }
 
+    const handleAcquireTemplate = async (tmpl: PlazaTemplateItem) => {
+        setAcquiringTemplateId(tmpl.id)
+        try {
+            const acquired = await examTemplateApi.acquire(tmpl.id)
+            toast.success(`已获取「${tmpl.name}」，可在试卷模板页面查看`)
+            navigate(`/exam-templates/${acquired.id}`)
+        } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : '获取失败')
+        } finally {
+            setAcquiringTemplateId(null)
+        }
+    }
+
     useEffect(() => {
         loadKbs()
     }, [])
@@ -67,6 +85,9 @@ export default function PlazaPage() {
     useEffect(() => {
         if (activeTab === 'quizzes' && quizzes.length === 0) {
             loadQuizzes()
+        }
+        if (activeTab === 'templates' && plazaTemplates.length === 0) {
+            loadTemplates()
         }
     }, [activeTab])
 
@@ -84,6 +105,14 @@ export default function PlazaPage() {
             const data = await quizPlazaApi.list()
             setQuizzes(data)
         } catch { /* empty */ } finally { setQuizLoading(false) }
+    }
+
+    const loadTemplates = async () => {
+        try {
+            setTemplateLoading(true)
+            const data = await examTemplateApi.listPlaza()
+            setPlazaTemplates(data)
+        } catch { /* empty */ } finally { setTemplateLoading(false) }
     }
 
     const filtered = search
@@ -133,15 +162,22 @@ export default function PlazaPage() {
                     试卷
                     {quizzes.length > 0 && <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{quizzes.length}</span>}
                 </button>
+                <button
+                    onClick={() => setActiveTab('templates')}
+                    className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-all ${activeTab === 'templates' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                    <ClipboardList className="size-3.5" />
+                    试卷模板
+                    {plazaTemplates.length > 0 && <span className="ml-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary">{plazaTemplates.length}</span>}
+                </button>
             </div>
 
             {activeTab === 'knowledge' && (
                 <>
                     {/* Stats row */}
-                    <div className="grid gap-4 md:grid-cols-3">
+                    <div className="grid gap-4 md:grid-cols-2">
                         <StatCard icon={Database} label="公开知识库" value={kbs.length} color="from-blue-500 to-cyan-500" />
-                        <StatCard icon={BookOpen} label="文档知识库" value={kbs.filter((k) => k.kb_type === 'document').length} color="from-violet-500 to-purple-500" />
-                        <StatCard icon={Star} label="题库资源" value={kbs.filter((k) => k.kb_type === 'question_bank').length} color="from-amber-500 to-orange-500" />
+                        <StatCard icon={Star} label="试卷模板" value={plazaTemplates.length} color="from-amber-500 to-orange-500" />
                     </div>
 
                     {kbLoading ? (
@@ -163,13 +199,13 @@ export default function PlazaPage() {
                             {filtered.map((kb) => (
                                 <div key={kb.id} className="group rounded-xl border border-border bg-card p-5 transition-all hover:shadow-lg hover:-translate-y-0.5">
                                     <div className="flex items-start gap-3 mb-3">
-                                        <div className={`flex size-10 items-center justify-center rounded-lg bg-gradient-to-br ${kb.kb_type === 'question_bank' ? 'from-amber-500 to-orange-500' : 'from-blue-500 to-cyan-500'}`}>
-                                            {kb.kb_type === 'question_bank' ? <Star className="size-5 text-white" /> : <BookOpen className="size-5 text-white" />}
+                                        <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                                            <BookOpen className="size-5 text-white" />
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <h4 className="font-medium text-foreground truncate">{kb.name}</h4>
                                             <p className="text-xs text-muted-foreground mt-0.5">
-                                                {kb.document_count} 文档 · {kb.kb_type === 'question_bank' ? '题库' : '文档库'}
+                                                {kb.document_count} 文档 · 文档库
                                             </p>
                                         </div>
                                     </div>
@@ -236,6 +272,71 @@ export default function PlazaPage() {
                                     acquiringId={acquiringQuizId}
                                     onAcquire={() => handleAcquireQuiz(quiz)}
                                 />
+                            ))}
+                        </div>
+                    )}
+                </>
+            )}
+
+            {activeTab === 'templates' && (
+                <>
+                    {/* Stats row */}
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <StatCard icon={ClipboardList} label="公开模板" value={plazaTemplates.length} color="from-indigo-500 to-purple-500" />
+                        <StatCard icon={FileText} label="总题位数" value={plazaTemplates.reduce((s, t) => s + t.slot_count, 0)} color="from-amber-500 to-orange-500" />
+                    </div>
+
+                    {templateLoading ? (
+                        <div className="flex h-40 items-center justify-center">
+                            <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                        </div>
+                    ) : plazaTemplates.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-border bg-card py-16 text-center">
+                            <ClipboardList className="mx-auto size-10 text-muted-foreground mb-3" />
+                            <p className="text-sm font-medium text-foreground">暂无公开试卷模板</p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                在「试卷模板」中将模板发布到广场，分享考试结构
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 stagger-children">
+                            {plazaTemplates.map((tmpl) => (
+                                <div key={tmpl.id} className="group rounded-xl border border-border bg-card p-5 transition-all hover:shadow-lg hover:-translate-y-0.5">
+                                    <div className="flex items-start gap-3 mb-3">
+                                        <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 shrink-0">
+                                            <ClipboardList className="size-5 text-white" />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-medium text-foreground truncate">{tmpl.name}</h4>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {tmpl.slot_count} 题位 · {tmpl.question_count} 道真题 · {tmpl.creator_full_name}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {tmpl.description && (
+                                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{tmpl.description}</p>
+                                    )}
+                                    {tmpl.subject && (
+                                        <div className="flex flex-wrap gap-1 mb-3">
+                                            <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                                                <Tag className="size-2.5" />{tmpl.subject}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t border-border/50">
+                                        <span>{new Date(tmpl.created_at).toLocaleDateString('zh-CN')}</span>
+                                        <button
+                                            onClick={() => handleAcquireTemplate(tmpl)}
+                                            disabled={acquiringTemplateId === tmpl.id}
+                                            className="flex items-center gap-1 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary transition-colors hover:bg-primary/20 disabled:opacity-50"
+                                        >
+                                            {acquiringTemplateId === tmpl.id
+                                                ? <><Loader2 className="size-3 animate-spin" /> 获取中</>
+                                                : <><Download className="size-3" /> 获取</>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
                             ))}
                         </div>
                     )}

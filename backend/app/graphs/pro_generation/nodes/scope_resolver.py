@@ -47,29 +47,39 @@ async def scope_resolver_node(state: ProQuizState) -> dict:
 
     subject_scope, kb_ids = parse_knowledge_scope(scope)
 
-    # Parse bank_kb_subjects early — JSON keys are strings; convert to int
-    bank_kb_subjects_raw = scope.get("bank_kb_subjects", {})
-    bank_kb_subjects = {int(k): v for k, v in bank_kb_subjects_raw.items()}
+    template_ids = config.get("template_ids", [])
+    selected_slot_positions = config.get("selected_slot_positions", [])
 
-    # 优先级 1：用户手动指定的科目
+    # Subject resolution priority: explicit config > template subject > KB names > default
     user_subject = config.get("subject", "").strip()
     if user_subject:
         subject_scope = user_subject
     else:
-        # 优先级 2：从已解析的 bank_kb_subjects 提取科目列表
-        all_subjects: list[str] = []
-        for subjects in bank_kb_subjects.values():
-            for s in subjects:
-                if s and s not in all_subjects:
-                    all_subjects.append(s)
+        template_subject = ""
+        if template_ids:
+            async with async_session_factory() as _s:
+                from sqlalchemy import select as _select
 
-        if all_subjects:
-            subject_scope = "、".join(all_subjects)
+                from backend.app.models.exam_template import ExamTemplate
+
+                rows = (
+                    await _s.execute(
+                        _select(ExamTemplate.subject)
+                        .where(ExamTemplate.id.in_(template_ids))
+                        .order_by(ExamTemplate.id)
+                    )
+                ).scalars().all()
+                for r in rows:
+                    if r and r.strip():
+                        template_subject = r.strip()
+                        break
+
+        if template_subject:
+            subject_scope = template_subject
         else:
-            # 优先级 3：查 DB 获取 KB 名称
+            # Fall back to KB names from database
             document_kb_ids_tmp = scope.get("document_kb_ids", [])
-            bank_kb_ids_tmp = scope.get("bank_kb_ids", [])
-            all_kb_ids = list(set(document_kb_ids_tmp + bank_kb_ids_tmp))
+            all_kb_ids = list(set(document_kb_ids_tmp))
             if all_kb_ids:
                 async with async_session_factory() as _s:
                     from sqlalchemy import select as _select
@@ -85,34 +95,27 @@ async def scope_resolver_node(state: ProQuizState) -> dict:
                     ).scalars().all()
                 if rows:
                     subject_scope = "、".join(rows)
-            # 优先级4：保持 parse_knowledge_scope 的返回值（"通用综合领域"）
-
-    # Target counts from {"question_counts": {"single_choice": 5}} or legacy {"question_types": ["single_choice"], "count": 5}
-    target_count = config.get("question_counts", {})
-    if not target_count and config.get("question_types"):
-        types = config["question_types"]
-        count_per_type = config.get("count", 5) // max(len(types), 1)
-        target_count = {t: count_per_type for t in types}
+            # else: keep subject_scope from parse_knowledge_scope ("通用综合领域")
 
     target_difficulty = config.get("difficulty", "medium")
 
-    # Parse separated KB IDs for Pro mode
+    # KB IDs and doc IDs scoped for Pro mode RAG retrieval
     document_kb_ids = scope.get("document_kb_ids", [])
-    bank_kb_ids = scope.get("bank_kb_ids", [])
     doc_ids = scope.get("doc_ids", [])
 
-    total_questions = sum(target_count.values())
-    msg = f"已解析：{subject_scope[:60]}，共 {total_questions} 道题"
+    slot_count = len(selected_slot_positions) if selected_slot_positions else "全部"
+    msg = f"已解析：{subject_scope[:60]}，{slot_count} 个题位"
     await emit_node_complete(
         session_id,
         "scope_resolver",
         msg,
         input_summary={
             "subject_scope": subject_scope[:200],
-            "target_count": target_count,
+            "template_ids": template_ids,
+            "selected_slot_positions": selected_slot_positions,
         },
         output_summary={
-            "total_questions": total_questions,
+            "slot_count": slot_count,
             "difficulty": target_difficulty,
         },
         progress=0.05,
@@ -122,11 +125,10 @@ async def scope_resolver_node(state: ProQuizState) -> dict:
         "subject_scope": subject_scope,
         "kb_ids": kb_ids,
         "document_kb_ids": document_kb_ids,
-        "bank_kb_ids": bank_kb_ids,
-        "bank_kb_subjects": bank_kb_subjects,
         "doc_ids": doc_ids,
-        "target_count": target_count,
         "target_difficulty": target_difficulty,
+        "template_ids": template_ids,
+        "selected_slot_positions": selected_slot_positions,
         "completed_questions": [],
         "retry_count": 0,
         "final_questions": [],

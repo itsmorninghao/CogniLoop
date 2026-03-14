@@ -331,36 +331,95 @@ export interface QuizPlazaItem {
     share_code: string | null
 }
 
-export interface ScanFileEntry {
-    filename: string
-    relative_path: string
-    subject: string
-    question_type: string
-    question_count: number
-    sample: string
-}
-
-export interface ScanResult {
-    scan_id: string
-    files: ScanFileEntry[]
-}
-
-export interface ImportResult {
-    imported: number
-    skipped: number
-    errors: string[]
-}
-
-export interface BankQuestion {
+export interface ExamTemplate {
     id: number
-    content: string
-    answer: string
-    subject: string
+    user_id: number
+    name: string
+    description: string | null
+    subject: string | null
+    is_public: boolean
+    source_template_id: number | null
+    created_at: string
+    updated_at: string
+    slots: ExamTemplateSlot[]
+}
+
+export interface ExamTemplateSlot {
+    id: number
+    template_id: number
+    position: number
     question_type: string
-    difficulty: string
-    options: Record<string, string> | null
+    label: string | null
+    difficulty_hint: string | null
+    questions: ExamTemplateSlotQuestion[]
+}
+
+export interface ExamTemplateSlotQuestion {
+    id: number
+    slot_id: number
+    content: string
+    answer: string | null
     analysis: string | null
-    source_file: string | null
+    difficulty: string | null
+    knowledge_points: string[] | null
+    source_label: string | null
+    created_at: string
+}
+
+export interface ExamTemplateListItem {
+    id: number
+    name: string
+    description: string | null
+    subject: string | null
+    is_public: boolean
+    slot_count: number
+    question_count: number
+    created_at: string
+    updated_at: string
+}
+
+export interface PlazaTemplateItem {
+    id: number
+    name: string
+    description: string | null
+    subject: string | null
+    slot_count: number
+    question_count: number
+    creator_username: string
+    creator_full_name: string
+    created_at: string
+}
+
+export interface ConflictDetail {
+    position: number
+    conflicting_types: Record<number, string>
+}
+
+export const examTemplateApi = {
+    list: () => api.get<ExamTemplateListItem[]>('/exam-templates/'),
+    get: (id: number) => api.get<ExamTemplate>(`/exam-templates/${id}`),
+    create: (data: { name: string; description?: string; subject?: string; slots?: unknown[] }) =>
+        api.post<ExamTemplate>('/exam-templates/', data),
+    update: (id: number, data: { name?: string; description?: string; subject?: string }) =>
+        api.patch<ExamTemplate>(`/exam-templates/${id}`, data),
+    delete: (id: number) => api.delete(`/exam-templates/${id}`),
+    replaceSlots: (id: number, slots: unknown[]) =>
+        api.put<ExamTemplate>(`/exam-templates/${id}/slots`, { slots }),
+    addQuestion: (id: number, slotId: number, data: Record<string, unknown>) =>
+        api.post<ExamTemplateSlotQuestion>(`/exam-templates/${id}/slots/${slotId}/questions`, data),
+    updateQuestion: (id: number, slotId: number, qid: number, data: Record<string, unknown>) =>
+        api.patch<ExamTemplateSlotQuestion>(`/exam-templates/${id}/slots/${slotId}/questions/${qid}`, data),
+    deleteQuestion: (id: number, slotId: number, qid: number) =>
+        api.delete(`/exam-templates/${id}/slots/${slotId}/questions/${qid}`),
+    checkConflicts: (templateIds: number[], positions: number[]) =>
+        api.post<{ conflicts: ConflictDetail[] }>('/exam-templates/check-conflicts', {
+            template_ids: templateIds, selected_slot_positions: positions,
+        }),
+    publish: (id: number) => api.post<ExamTemplate>(`/exam-templates/${id}/publish`),
+    unpublish: (id: number) => api.delete<ExamTemplate>(`/exam-templates/${id}/publish`),
+    listPlaza: (limit = 50, offset = 0) =>
+        api.get<PlazaTemplateItem[]>(`/exam-templates/plaza?limit=${limit}&offset=${offset}`),
+    acquire: (id: number) => api.post<ExamTemplate>(`/exam-templates/${id}/acquire`),
 }
 
 export const kbApi = {
@@ -386,12 +445,6 @@ export const kbApi = {
     listDocs: (kbId: number) => api.get<KBDocument[]>(`/knowledge-bases/${kbId}/documents`),
     deleteDoc: (kbId: number, docId: number) =>
         api.delete(`/knowledge-bases/${kbId}/documents/${docId}`),
-    uploadBank: (kbId: number, file: File) =>
-        api.upload<{ message: string; result: { imported: number; skipped: number; errors: string[] } }>(`/knowledge-bases/${kbId}/bank-import`, file, 'files'),
-    listBankQuestions: (kbId: number, limit = 50, offset = 0) =>
-        api.get<{ total: number; items: BankQuestion[] }>(`/knowledge-bases/${kbId}/bank-questions?limit=${limit}&offset=${offset}`),
-    getBankSubjects: (kbId: number) =>
-        api.get<{ subjects: string[] }>(`/knowledge-bases/${kbId}/bank-questions/subjects`),
     generateShareCode: (id: number) =>
         api.post<KnowledgeBase>(`/knowledge-bases/${id}/share`),
     revokeShareCode: (id: number) =>
@@ -400,23 +453,6 @@ export const kbApi = {
         api.post<KnowledgeBase>(`/knowledge-bases/${id}/publish`),
     unpublishFromPlaza: (id: number) =>
         api.delete<KnowledgeBase>(`/knowledge-bases/${id}/publish`),
-    scanArchive: (kbId: number, data: { url?: string; zipFile?: File }) => {
-        const form = new FormData()
-        if (data.url) form.append('url', data.url)
-        if (data.zipFile) form.append('zip_file', data.zipFile)
-
-        return fetch(`${BASE_URL}/knowledge-bases/${kbId}/bank-import/scan`, {
-            method: 'POST', headers: getAuthHeaders(), body: form,
-        }).then(res => {
-            if (!res.ok) return res.json().catch(() => ({ detail: res.statusText })).then(b => { throw new ApiError(res.status, b.detail || '扫描失败') })
-            return res.json() as Promise<ScanResult>
-        })
-    },
-    confirmArchive: (kbId: number, scanId: string, selectedFiles: string[]) =>
-        api.post<{ message: string; result: ImportResult }>(
-            `/knowledge-bases/${kbId}/bank-import/confirm`,
-            { scan_id: scanId, selected_files: selectedFiles },
-        ),
 }
 
 export const quizApi = {
@@ -478,7 +514,7 @@ export interface UserProfile {
     learning_trajectory: { date: string; accuracy: number; question_count: number; session_id: string }[]
     profile_version: number
     last_calculated_at: string | null
-    // AI 分析字段
+    // AI analysis fields
     knowledge_point_profiles: Record<string, { attempts: number; correct: number; accuracy: number }>
     weakness_analysis: Record<string, string>
     insight_summary: string

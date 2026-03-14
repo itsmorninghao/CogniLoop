@@ -7,8 +7,7 @@ from fastapi import APIRouter
 from backend.app.api.v2.endpoints.admin import router as admin_router
 from backend.app.api.v2.endpoints.assistant import router as assistant_router
 from backend.app.api.v2.endpoints.auth import router as auth_router
-from backend.app.api.v2.endpoints.bank_import import router as bank_import_router
-from backend.app.api.v2.endpoints.bank_questions import router as bank_questions_router
+from backend.app.api.v2.endpoints.exam_templates import router as exam_templates_router
 from backend.app.api.v2.endpoints.quiz_presets import router as quiz_presets_router
 from backend.app.api.v2.endpoints.challenges import router as challenges_router
 from backend.app.api.v2.endpoints.circles import router as circles_router
@@ -34,6 +33,5 @@ api_v2_router.include_router(quiz_router)
 api_v2_router.include_router(quiz_plaza_router)
 api_v2_router.include_router(profiles_router)
 api_v2_router.include_router(notifications_router)
-api_v2_router.include_router(bank_import_router)
-api_v2_router.include_router(bank_questions_router)
 api_v2_router.include_router(quiz_presets_router)
+api_v2_router.include_router(exam_templates_router)
