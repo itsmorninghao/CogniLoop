@@ -104,6 +104,24 @@ async def list_configs(session: AsyncSession) -> list[dict]:
     return out
 
 
+async def export_configs(session: AsyncSession) -> list[dict]:
+    """Export all configs with sensitive values decrypted (for migration)."""
+    from backend.app.core.encryption import decrypt
+
+    result = await session.execute(select(SystemConfig).order_by(SystemConfig.key))
+    configs = list(result.scalars().all())
+    out: list[dict] = []
+    for c in configs:
+        value = c.value
+        if _is_sensitive(c.key) and value:
+            try:
+                value = decrypt(value)
+            except Exception:
+                pass
+        out.append({"key": c.key, "value": value, "description": c.description})
+    return out
+
+
 async def delete_config(key: str, session: AsyncSession) -> None:
     result = await session.execute(select(SystemConfig).where(SystemConfig.key == key))
     cfg = result.scalar_one_or_none()

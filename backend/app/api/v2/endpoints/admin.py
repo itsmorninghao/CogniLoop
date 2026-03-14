@@ -1,8 +1,12 @@
 """Admin endpoints — system config, user management, stats, broadcasts, content moderation."""
 
+import base64
+import json
 from datetime import datetime
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import BaseModel
@@ -70,6 +74,47 @@ async def delete_config(
     session: AsyncSession = Depends(get_session),
 ):
     await config_service.delete_config(key, session)
+
+
+@router.post("/system-configs/export")
+async def export_configs(
+    current_admin: User = Depends(get_admin_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Export all configs with plaintext secrets for migration. Superadmin only."""
+    if not current_admin.is_superadmin:
+        raise HTTPException(status_code=403, detail="仅超级管理员可导出配置")
+    configs = await config_service.export_configs(session)
+    content = json.dumps(configs, ensure_ascii=False, indent=2)
+    return Response(
+        content=content,
+        media_type="application/json",
+        headers={"Content-Disposition": "attachment; filename=cogniloop-configs.json"},
+    )
+
+
+class ConfigImportItem(BaseModel):
+    key: str
+    value: str | None = None
+    description: str | None = None
+
+
+@router.post("/system-configs/import")
+async def import_configs(
+    items: list[ConfigImportItem],
+    current_admin: User = Depends(get_admin_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Import configs from exported JSON. Superadmin only."""
+    if not current_admin.is_superadmin:
+        raise HTTPException(status_code=403, detail="仅超级管理员可导入配置")
+    count = 0
+    for item in items:
+        if item.key and item.value is not None:
+            await config_service.set_config(item.key, item.value, item.description, session)
+            count += 1
+    await session.commit()
+    return {"imported": count}
 
 
 class PlatformStatsResponse(BaseModel):
@@ -339,7 +384,7 @@ async def test_llm_config(
         res = await chat.ainvoke(
             [HumanMessage(content="Hello world! Reply with 'OK'.")]
         )
-        return {"ok": True, "message": str(res.content)}
+        return {"ok": True, "message": str(res.content), "prompt": "Hello world! Reply with 'OK'."}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -365,8 +410,51 @@ async def test_embedding_config(
             timeout=10,
             check_embedding_ctx_length=False,
         )
-        res = await embeddings.aembed_query("Hello world!")
-        return {"ok": True, "dimensions_returned": len(res)}
+        test_text = "Hello world!"
+        res = await embeddings.aembed_query(test_text)
+        return {"ok": True, "dimensions_returned": len(res), "test_text": test_text}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+_OCR_TEST_IMAGE = Path(__file__).parent.parent.parent.parent / "assets" / "ocr_test_sample.png"
+
+
+@router.post("/system-configs/test-ocr")
+async def test_ocr_config(
+    session: AsyncSession = Depends(get_session),
+):
+    """Test OCR connection using the built-in test sample image."""
+    from openai import AsyncOpenAI
+
+    api_key = await config_service.get_config("OCR_API_KEY", session) or await config_service.get_config("OPENAI_API_KEY", session)
+    base_url = await config_service.get_config("OCR_API_URL", session) or await config_service.get_config("OPENAI_BASE_URL", session)
+    model = await config_service.get_config("OCR_MODEL", session) or "gpt-4o"
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="未配置 OCR 或 LLM API Key")
+
+    if not _OCR_TEST_IMAGE.exists():
+        raise HTTPException(status_code=500, detail="测试图片不存在，请联系管理员")
+
+    img_bytes = _OCR_TEST_IMAGE.read_bytes()
+    b64 = base64.b64encode(img_bytes).decode()
+
+    try:
+        client = AsyncOpenAI(api_key=api_key, base_url=base_url or None)
+        res = await client.chat.completions.create(
+            model=model,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
+                ],
+            }],
+            max_tokens=512,
+            timeout=20,
+        )
+        text = res.choices[0].message.content or ""
+        return {"ok": True, "message": text, "image_base64": b64}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -630,14 +630,29 @@ export const adminApi = {
     setConfig: (key: string, value: string, description?: string) =>
         api.post<SystemConfig>('/admin/system-configs', { key, value, description }),
     deleteConfig: (key: string) => api.delete(`/admin/system-configs/${key}`),
+    exportConfigs: async () => {
+        const res = await fetch(`${BASE_URL}/admin/system-configs/export`, {
+            method: 'POST',
+            headers: { ...getAuthHeaders() },
+        })
+        if (!res.ok) {
+            const body = await res.json().catch(() => ({ detail: res.statusText }))
+            throw new ApiError(res.status, typeof body.detail === 'string' ? body.detail : '导出失败')
+        }
+        return res.blob()
+    },
+    importConfigs: (items: { key: string; value: string | null; description: string | null }[]) =>
+        api.post<{ imported: number }>('/admin/system-configs/import', items),
     broadcast: (title: string, content?: string) =>
         api.post<{ sent_count: number }>('/admin/system-broadcasts', { title, content }),
     listBroadcasts: () => api.get<BroadcastHistoryItem[]>('/admin/system-broadcasts'),
     deleteBroadcast: (id: number) => api.delete(`/admin/system-broadcasts/${id}`),
     testLlm: (data: { api_key?: string; base_url?: string; model: string; use_stored?: boolean }) =>
-        api.post<{ ok: boolean; message: string }>('/admin/system-configs/test-llm', data),
+        api.post<{ ok: boolean; message: string; prompt?: string }>('/admin/system-configs/test-llm', data),
     testEmbedding: (data: { api_key?: string; base_url?: string; model: string; dimensions?: number; use_stored?: boolean }) =>
-        api.post<{ ok: boolean; dimensions_returned: number }>('/admin/system-configs/test-embedding', data),
+        api.post<{ ok: boolean; dimensions_returned: number; test_text?: string }>('/admin/system-configs/test-embedding', data),
+    testOcr: () =>
+        api.post<{ ok: boolean; message: string; image_base64?: string }>('/admin/system-configs/test-ocr', {}),
     listKBs: (search?: string, plazaOnly = false, limit = 50, offset = 0) => {
         let url = `/admin/knowledge-bases?limit=${limit}&offset=${offset}&plaza_only=${plazaOnly}`
         if (search) url += `&search=${encodeURIComponent(search)}`

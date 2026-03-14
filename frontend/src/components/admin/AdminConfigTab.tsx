@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { adminApi, type SystemConfig } from '@/lib/api'
 import { toast } from 'sonner'
-import { Play, Database, Server, Key, Plus, Trash2, Tag, ShieldAlert, ChevronDown, ChevronUp, RefreshCw, Zap, Settings2 } from 'lucide-react'
+import { Play, Database, Server, Key, Plus, Trash2, Tag, ShieldAlert, ChevronDown, ChevronUp, RefreshCw, Zap, Settings2, Download, Upload } from 'lucide-react'
+import { TestResultModal } from './TestResultModal'
+import { useAuthStore } from '@/stores/auth'
 
 
 const PRO_NODES = [
@@ -22,7 +24,7 @@ export function AdminConfigTab() {
     const [configs, setConfigs] = useState<SystemConfig[]>([])
     const [loading, setLoading] = useState(true)
 
-    const [activeTab, setActiveTab] = useState<'llm' | 'embedding' | 'pro_nodes' | 'ocr' | 'linux_do' | 'raw'>('llm')
+    const [activeTab, setActiveTab] = useState<'llm' | 'ai_services' | 'pro_nodes' | 'linux_do' | 'raw'>('llm')
 
     const [llmKey, setLlmKey] = useState('')
     const [llmBase, setLlmBase] = useState('')
@@ -35,6 +37,17 @@ export function AdminConfigTab() {
 
     const [testingLlm, setTestingLlm] = useState(false)
     const [testingEmb, setTestingEmb] = useState(false)
+    const [testingOcr, setTestingOcr] = useState(false)
+    const [savingAiServices, setSavingAiServices] = useState(false)
+
+    // Test result modal state
+    const [testModal, setTestModal] = useState<{
+        open: boolean
+        type: 'llm' | 'embedding' | 'ocr'
+        loading: boolean
+        result: any | null
+        error: string | null
+    }>({ open: false, type: 'llm', loading: false, result: null, error: null })
 
     // Pro node config state
     const [nodeConfigs, setNodeConfigs] = useState<Record<ProNodeKey, NodeConfig>>({
@@ -67,6 +80,78 @@ export function AdminConfigTab() {
 
     const [rawConfirmInput, setRawConfirmInput] = useState('')
     const rawUnlocked = rawConfirmInput === '我明白我在做什么并且我确认我需要这么做'
+
+    const [showExportConfirm, setShowExportConfirm] = useState(false)
+    const [exporting, setExporting] = useState(false)
+    const { user } = useAuthStore()
+
+    const handleExport = async () => {
+        setShowExportConfirm(false)
+        setExporting(true)
+        try {
+            const blob = await adminApi.exportConfigs()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            const date = new Date().toISOString().slice(0, 10)
+            a.href = url
+            a.download = `cogniloop-configs-${date}.json`
+            a.click()
+            URL.revokeObjectURL(url)
+            toast.success('配置已导出')
+        } catch (err: any) {
+            toast.error(err.message || '导出失败')
+        } finally {
+            setExporting(false)
+        }
+    }
+
+    const importFileRef = useRef<HTMLInputElement>(null)
+    const [importing, setImporting] = useState(false)
+    const [showImportConfirm, setShowImportConfirm] = useState(false)
+    const [importFile, setImportFile] = useState<File | null>(null)
+    const [importPreview, setImportPreview] = useState<{ key: string; value: string | null; description: string | null }[]>([])
+
+    const handleImportFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        e.target.value = ''
+        const reader = new FileReader()
+        reader.onload = () => {
+            try {
+                const data = JSON.parse(reader.result as string)
+                if (!Array.isArray(data) || data.length === 0) {
+                    toast.error('JSON 格式不正确，应为配置项数组')
+                    return
+                }
+                if (!data[0].key) {
+                    toast.error('JSON 格式不正确，每项须包含 key 字段')
+                    return
+                }
+                setImportFile(file)
+                setImportPreview(data)
+                setShowImportConfirm(true)
+            } catch {
+                toast.error('无法解析 JSON 文件')
+            }
+        }
+        reader.readAsText(file)
+    }
+
+    const handleImport = async () => {
+        setShowImportConfirm(false)
+        setImporting(true)
+        try {
+            const res = await adminApi.importConfigs(importPreview)
+            toast.success(`已导入 ${res.imported} 项配置`)
+            await loadConfigs()
+        } catch (err: any) {
+            toast.error(err.message || '导入失败')
+        } finally {
+            setImporting(false)
+            setImportFile(null)
+            setImportPreview([])
+        }
+    }
 
     const loadConfigs = async () => {
         try {
@@ -141,32 +226,11 @@ export function AdminConfigTab() {
         } catch { toast.error('保存失败') }
     }
 
-    const saveEmbeddingConfig = async () => {
-        try {
-            if (!embKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('EMBEDDING_API_KEY', embKey, 'Embedding API 密钥')
-            if (embBase) await adminApi.setConfig('EMBEDDING_BASE_URL', embBase, 'Embedding 基础 URL')
-            await adminApi.setConfig('EMBEDDING_MODEL', embModel || 'text-embedding-3-small', 'Embedding 模型名称')
-            if (embDims) await adminApi.setConfig('EMBEDDING_DIMS', embDims, '向量维度')
-            toast.success('向量配置已保存')
-            loadConfigs()
-        } catch { toast.error('保存失败') }
-    }
-
-    const saveOcrConfig = async () => {
-        try {
-            if (ocrKey && !ocrKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('OCR_API_KEY', ocrKey, 'OCR API 密钥')
-            if (ocrBase) await adminApi.setConfig('OCR_API_URL', ocrBase, 'OCR API 基础 URL')
-            await adminApi.setConfig('OCR_MODEL', ocrModel || 'gpt-4o', 'OCR 视觉模型名称')
-            toast.success('OCR 配置已保存')
-            loadConfigs()
-        } catch { toast.error('保存失败') }
-    }
-
     const handleTestLlm = () => {
         if (!llmModel) return toast.error('请填写 Model')
         if (!llmKey && !llmKey.startsWith(MASK_PREFIX)) return toast.error('请填写 Key')
         const isMasked = llmKey.startsWith(MASK_PREFIX)
-        runTest(() => adminApi.testLlm({
+        runTestModal('llm', () => adminApi.testLlm({
             api_key: isMasked ? undefined : llmKey,
             base_url: llmBase || undefined,
             model: llmModel,
@@ -178,7 +242,7 @@ export function AdminConfigTab() {
         if (!embModel) return toast.error('请填写 Model')
         if (!embKey && !embKey.startsWith(MASK_PREFIX)) return toast.error('请填写 Key')
         const isMasked = embKey.startsWith(MASK_PREFIX)
-        runTest(() => adminApi.testEmbedding({
+        runTestModal('embedding', () => adminApi.testEmbedding({
             api_key: isMasked ? undefined : embKey,
             base_url: embBase || undefined,
             model: embModel,
@@ -187,28 +251,41 @@ export function AdminConfigTab() {
         }), setTestingEmb)
     }
 
-    const runTest = async (apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
+    const handleTestOcr = () => {
+        runTestModal('ocr', () => adminApi.testOcr(), setTestingOcr)
+    }
+
+    const saveAiServicesConfig = async () => {
+        setSavingAiServices(true)
         try {
-            setLoader(true)
+            if (!embKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('EMBEDDING_API_KEY', embKey, 'Embedding API 密钥')
+            if (embBase) await adminApi.setConfig('EMBEDDING_BASE_URL', embBase, 'Embedding 基础 URL')
+            await adminApi.setConfig('EMBEDDING_MODEL', embModel || 'text-embedding-3-small', 'Embedding 模型名称')
+            if (embDims) await adminApi.setConfig('EMBEDDING_DIMS', embDims, '向量维度')
+            if (ocrKey && !ocrKey.startsWith(MASK_PREFIX)) await adminApi.setConfig('OCR_API_KEY', ocrKey, 'OCR API 密钥')
+            if (ocrBase) await adminApi.setConfig('OCR_API_URL', ocrBase, 'OCR API 基础 URL')
+            await adminApi.setConfig('OCR_MODEL', ocrModel || 'gpt-4o', 'OCR 视觉模型名称')
+            toast.success('AI 服务配置已保存')
+            loadConfigs()
+        } catch { toast.error('保存失败') } finally { setSavingAiServices(false) }
+    }
+
+    const runTestModal = async (type: 'llm' | 'embedding' | 'ocr', apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
+        setTestModal({ open: true, type, loading: true, result: null, error: null })
+        setLoader(true)
+        try {
             const res = await apiCall()
             if (res.ok) {
-                const detail = res.message || (res.dimensions_returned != null ? `向量维度: ${res.dimensions_returned}` : '成功')
-                toast.success(<div className="flex flex-col gap-1">
-                    <span className="font-bold">连接成功</span>
-                    <span className="text-xs text-muted-foreground break-all">{detail}</span>
-                </div>)
+                setTestModal(prev => ({ ...prev, loading: false, result: res }))
             } else {
-                toast.error(<div className="flex flex-col gap-1">
-                    <span className="font-bold">测试异常</span>
-                    <span className="text-xs break-all">{res.message || '未知错误'}</span>
-                </div>)
+                setTestModal(prev => ({ ...prev, loading: false, error: res.message || '未知错误' }))
             }
         } catch (error: any) {
-            toast.error(<div className="flex flex-col gap-1">
-                <span className="font-bold">连接失败</span>
-                <span className="text-xs break-all opacity-80">{error.response?.data?.detail || error.message}</span>
-            </div>)
-        } finally { setLoader(false) }
+            const detail = error.response?.data?.detail || error.message || '连接失败'
+            setTestModal(prev => ({ ...prev, loading: false, error: detail }))
+        } finally {
+            setLoader(false)
+        }
     }
 
     const updateNodeConfig = (nodeKey: ProNodeKey, field: keyof NodeConfig, value: string) => {
@@ -330,9 +407,8 @@ export function AdminConfigTab() {
 
     const SUB_TABS = [
         { key: 'llm' as const, label: 'LLM 核心模型' },
-        { key: 'embedding' as const, label: 'Embedding 向量' },
+        { key: 'ai_services' as const, label: 'AI 服务配置' },
         { key: 'pro_nodes' as const, label: '仿真组卷设置' },
-        { key: 'ocr' as const, label: 'OCR 识别' },
         { key: 'linux_do' as const, label: '登录与访问控制' },
         { key: 'raw' as const, label: '高级变量' },
     ]
@@ -344,10 +420,31 @@ export function AdminConfigTab() {
                 <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 shadow-lg shadow-violet-500/25">
                     <Settings2 className="size-5 text-white" />
                 </div>
-                <div>
+                <div className="flex-1">
                     <h2 className="text-base font-semibold text-foreground">系统设置</h2>
                     <p className="text-xs text-muted-foreground">配置 LLM 模型、向量模型及仿真组卷参数</p>
                 </div>
+                {user?.is_superadmin && (
+                    <>
+                        <button
+                            onClick={() => importFileRef.current?.click()}
+                            disabled={importing}
+                            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition disabled:opacity-50"
+                        >
+                            <Upload className="size-3.5" />
+                            {importing ? '导入中...' : '导入配置'}
+                        </button>
+                        <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportFileSelect} />
+                        <button
+                            onClick={() => setShowExportConfirm(true)}
+                            disabled={exporting}
+                            className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted transition disabled:opacity-50"
+                        >
+                            <Download className="size-3.5" />
+                            {exporting ? '导出中...' : '导出配置'}
+                        </button>
+                    </>
+                )}
             </div>
 
             {/* Sub-tabs */}
@@ -397,10 +494,12 @@ export function AdminConfigTab() {
                 </div>
             )}
 
-            {activeTab === 'embedding' && (
-                <div className="animate-in fade-in p-6">
+            {activeTab === 'ai_services' && (
+                <div className="animate-in fade-in p-6 space-y-4">
+                    {/* Embedding section */}
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="px-6 py-4 border-b border-border">
+                            <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-0.5">Embedding 向量</p>
                             <p className="text-sm text-muted-foreground">负责将文档和题目转化为向量数组，用于知识库检索 (RAG)。</p>
                         </div>
                         <div className="grid lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
@@ -425,22 +524,53 @@ export function AdminConfigTab() {
                                 </div>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
-                            <button onClick={saveEmbeddingConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90">
-                                保存
-                            </button>
+                        <div className="flex items-center gap-3 px-6 py-3 border-t border-border bg-muted/10">
                             <button onClick={handleTestEmb} disabled={testingEmb} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
                                 {testingEmb ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
                                 {testingEmb ? '测试中...' : '测试连接'}
                             </button>
                         </div>
                     </div>
+
+                    {/* OCR section */}
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-0.5">OCR 识别</p>
+                            <p className="text-sm text-muted-foreground">用于试卷模板 OCR 扫描识别的视觉模型。留空则自动使用全局 LLM 配置。</p>
+                        </div>
+                        <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> API Key</label>
+                                <input type="password" value={ocrKey} onChange={e => setOcrKey(e.target.value)} placeholder="留空则使用全局 LLM Key" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> Base URL</label>
+                                <input type="text" value={ocrBase} onChange={e => setOcrBase(e.target.value)} placeholder="留空则使用全局 LLM URL" className={inputClass} />
+                            </div>
+                            <div className="px-6 py-5 space-y-1">
+                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> Model Name</label>
+                                <input type="text" value={ocrModel} onChange={e => setOcrModel(e.target.value)} placeholder="默认 gpt-4o" className={inputClass} />
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-6 py-3 border-t border-border bg-muted/10">
+                            <button onClick={handleTestOcr} disabled={testingOcr} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                {testingOcr ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
+                                {testingOcr ? '识别中...' : '测试识别'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Shared save button */}
+                    <div>
+                        <button onClick={saveAiServicesConfig} disabled={savingAiServices} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50">
+                            {savingAiServices ? '保存中...' : '保存'}
+                        </button>
+                    </div>
                 </div>
             )}
 
             {activeTab === 'pro_nodes' && (
                 <div className="animate-in fade-in p-6 space-y-4">
-                    {/* Node accordion card */}
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                             <p className="text-sm text-muted-foreground">为仿真组卷的每个 AI 节点单独配置 LLM 模型。留空则自动使用全局 LLM 配置。</p>
@@ -630,35 +760,6 @@ export function AdminConfigTab() {
                 </div>
             )}
 
-            {activeTab === 'ocr' && (
-                <div className="animate-in fade-in p-6">
-                    <div className="rounded-xl border border-border bg-card overflow-hidden">
-                        <div className="px-6 py-4 border-b border-border">
-                            <p className="text-sm text-muted-foreground">用于试卷模板 OCR 扫描识别的视觉模型。留空则自动使用全局 LLM 配置。</p>
-                        </div>
-                        <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
-                            <div className="px-6 py-5 space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> API Key</label>
-                                <input type="password" value={ocrKey} onChange={e => setOcrKey(e.target.value)} placeholder="留空则使用全局 LLM Key" className={inputClass} />
-                            </div>
-                            <div className="px-6 py-5 space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> Base URL</label>
-                                <input type="text" value={ocrBase} onChange={e => setOcrBase(e.target.value)} placeholder="留空则使用全局 LLM URL" className={inputClass} />
-                            </div>
-                            <div className="px-6 py-5 space-y-1">
-                                <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Tag className="size-3" /> Model Name</label>
-                                <input type="text" value={ocrModel} onChange={e => setOcrModel(e.target.value)} placeholder="默认 gpt-4o" className={inputClass} />
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
-                            <button onClick={saveOcrConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90">
-                                保存
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {activeTab === 'linux_do' && (
                 <div className="animate-in fade-in p-6 space-y-4">
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
@@ -742,18 +843,18 @@ export function AdminConfigTab() {
                 <div className="animate-in fade-in p-6">
                     {!rawUnlocked ? (
                         <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 overflow-hidden">
-                            <div className="px-6 py-5 flex gap-3">
-                                <ShieldAlert className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                <div className="space-y-1">
-                                    <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">高风险操作区域</p>
-                                    <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
-                                        此功能允许直接向运行时注入任意环境变量。写入未知的 Key 可能导致服务崩溃、数据丢失或安全漏洞。<br />
-                                        请不要在不了解后果的情况下修改任何变量。如需继续，请在下方输入确认语句。
-                                    </p>
+                            <div className="px-6 py-5 space-y-4">
+                                <div className="flex gap-3">
+                                    <ShieldAlert className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                    <div className="space-y-1">
+                                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">高风险操作区域</p>
+                                        <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
+                                            此功能允许直接向运行时注入任意环境变量。写入未知的 Key 可能导致服务崩溃、数据丢失或安全漏洞。<br />
+                                            请不要在不了解后果的情况下修改任何变量。如需继续，请在下方输入确认语句。
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="px-6 pb-6 space-y-2">
-                                <label className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                <label className="block text-xs font-medium text-amber-700 dark:text-amber-400">
                                     输入：<span className="font-mono">我明白我在做什么并且我确认我需要这么做</span>
                                 </label>
                                 <input
@@ -825,6 +926,103 @@ export function AdminConfigTab() {
                         </div>
                     </div>
                     )}
+                </div>
+            )}
+
+            <TestResultModal
+                open={testModal.open}
+                onClose={() => setTestModal(prev => ({ ...prev, open: false }))}
+                type={testModal.type}
+                loading={testModal.loading}
+                result={testModal.result}
+                error={testModal.error}
+            />
+
+            {showExportConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowExportConfirm(false)}>
+                    <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-xl" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+                                    <ShieldAlert className="size-5 text-amber-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-foreground">确认导出配置</h3>
+                                    <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+                                        导出文件将包含所有系统配置的<span className="font-semibold text-amber-500">明文内容</span>，包括 API Key 等敏感信息。请妥善保管导出文件，避免泄露。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+                            <button
+                                onClick={() => setShowExportConfirm(false)}
+                                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleExport}
+                                className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 transition"
+                            >
+                                <Download className="size-4" />
+                                确认导出
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showImportConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowImportConfirm(false)}>
+                    <div className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-xl" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10">
+                                    <Upload className="size-5 text-blue-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-semibold text-foreground">确认导入配置</h3>
+                                    <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+                                        将从 <span className="font-mono text-foreground">{importFile?.name}</span> 导入 <span className="font-semibold text-foreground">{importPreview.length}</span> 项配置。已存在的配置项将被覆盖。
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-muted/30">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="sticky top-0 bg-muted text-muted-foreground">
+                                        <tr>
+                                            <th className="px-3 py-2 font-medium">Key</th>
+                                            <th className="px-3 py-2 font-medium">Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                        {importPreview.map(item => (
+                                            <tr key={item.key}>
+                                                <td className="px-3 py-1.5 font-mono font-bold text-foreground/90">{item.key}</td>
+                                                <td className="px-3 py-1.5 font-mono text-muted-foreground truncate max-w-[200px]">{item.value ? '••••' : '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+                            <button
+                                onClick={() => setShowImportConfirm(false)}
+                                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleImport}
+                                className="flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition"
+                            >
+                                <Upload className="size-4" />
+                                确认导入
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
