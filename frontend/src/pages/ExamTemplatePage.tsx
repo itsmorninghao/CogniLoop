@@ -2,17 +2,18 @@
  * ExamTemplatePage — manage exam templates for Pro mode.
  */
 
-import { useEffect, useState, useRef } from 'react'
+import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import { Plus, FileText, Trash2, Globe, GlobeLock, Loader2, ScanLine, PenTool, Download, Upload, CheckSquare, X } from 'lucide-react'
 import { examTemplateApi, type ExamTemplateListItem } from '@/lib/api'
 import OcrScanModal from '@/components/exam-template/OcrScanModal'
+import { useAsync } from '@/hooks/useAsync'
 
 export default function ExamTemplatePage() {
     const navigate = useNavigate()
-    const [templates, setTemplates] = useState<ExamTemplateListItem[]>([])
-    const [loading, setLoading] = useState(true)
+    const { data: templatesRaw, loading, refetch: refetchTemplates } = useAsync(() => examTemplateApi.list(), [])
+    const templates = templatesRaw ?? []
     const [deleting, setDeleting] = useState<number | null>(null)
     const [showCreateChoice, setShowCreateChoice] = useState(false)
     const [showOcrModal, setShowOcrModal] = useState(false)
@@ -23,31 +24,13 @@ export default function ExamTemplatePage() {
     const [batchDeleting, setBatchDeleting] = useState(false)
     const importFileRef = useRef<HTMLInputElement>(null)
 
-    useEffect(() => {
-        loadTemplates()
-    }, [])
-
-    const loadTemplates = async () => {
-        try {
-            setLoading(true)
-            const data = await examTemplateApi.list()
-            setTemplates(data)
-            setSelectedIds(new Set())
-            setSelectMode(false)
-        } catch {
-            toast.error('加载模板列表失败')
-        } finally {
-            setLoading(false)
-        }
-    }
-
     const handleDelete = async (id: number, e: React.MouseEvent) => {
         e.stopPropagation()
         if (!confirm('确定删除此模板？')) return
         setDeleting(id)
         try {
             await examTemplateApi.delete(id)
-            setTemplates(prev => prev.filter(t => t.id !== id))
+            refetchTemplates()
             toast.success('模板已删除')
         } catch {
             toast.error('删除失败')
@@ -66,7 +49,7 @@ export default function ExamTemplatePage() {
                 await examTemplateApi.publish(t.id)
                 toast.success('已发布到广场')
             }
-            loadTemplates()
+            refetchTemplates()
         } catch {
             toast.error('操作失败')
         }
@@ -166,7 +149,7 @@ export default function ExamTemplatePage() {
                 created++
             }
             toast.success(`成功导入 ${created} 个模板`)
-            loadTemplates()
+            refetchTemplates()
         } catch (err) {
             toast.error(err instanceof Error ? err.message : '导入失败')
         } finally {
@@ -181,10 +164,10 @@ export default function ExamTemplatePage() {
         try {
             await Promise.all(Array.from(selectedIds).map(id => examTemplateApi.delete(id)))
             toast.success(`已删除 ${selectedIds.size} 个模板`)
-            loadTemplates()
+            refetchTemplates()
         } catch {
             toast.error('部分模板删除失败')
-            loadTemplates()
+            refetchTemplates()
         } finally {
             setBatchDeleting(false)
         }

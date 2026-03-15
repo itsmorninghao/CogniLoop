@@ -13,6 +13,7 @@ import { examTemplateApi } from '@/lib/api'
 import type { SlotDraft, QuestionDraft } from '@/components/exam-template/types'
 import OcrScanner from '@/components/exam-template/OcrScanner'
 import { mergeSlots } from '@/components/exam-template/mergeSlots'
+import { useAsync } from '@/hooks/useAsync'
 
 const QUESTION_TYPE_OPTIONS = [
     { value: 'single_choice', label: '单选题' },
@@ -37,10 +38,49 @@ export default function ExamTemplateEditorPage() {
     const [subject, setSubject] = useState('')
     const [slots, setSlots] = useState<SlotDraft[]>([])
     const [expandedSlots, setExpandedSlots] = useState<Set<number>>(new Set())
-    const [loading, setLoading] = useState(!isNew)
     const [saving, setSaving] = useState(false)
     const [showScanDialog, setShowScanDialog] = useState(false)
     const [isPublic, setIsPublic] = useState(false)
+
+    const templateId = isNew ? null : (id ? parseInt(id) : null)
+    const { loading } = useAsync(
+        async () => {
+            if (templateId === null) return null
+            try {
+                const tmpl = await examTemplateApi.get(templateId)
+                setName(tmpl.name)
+                setDescription(tmpl.description || '')
+                setSubject(tmpl.subject || '')
+                setIsPublic(tmpl.is_public)
+                setSlots(
+                    tmpl.slots
+                        .sort((a, b) => a.position - b.position)
+                        .map(s => ({
+                            position: s.position,
+                            question_type: s.question_type,
+                            label: s.label || '',
+                            difficulty_hint: s.difficulty_hint || '',
+                            questions: s.questions.map(q => ({
+                                id: q.id,
+                                content: q.content,
+                                answer: q.answer || '',
+                                analysis: q.analysis || '',
+                                difficulty: q.difficulty || 'medium',
+                                knowledge_points: q.knowledge_points || [],
+                                source_label: q.source_label || '',
+                            })),
+                        }))
+                )
+                setExpandedSlots(new Set(tmpl.slots.map((_, i) => i)))
+                return tmpl
+            } catch {
+                toast.error('加载模板失败')
+                navigate('/exam-templates')
+                return null
+            }
+        },
+        [templateId]
+    )
 
     const handleMergeScannedSlots = useCallback((incoming: SlotDraft[]) => {
         setSlots(prev => {
@@ -57,53 +97,12 @@ export default function ExamTemplateEditorPage() {
     }, [])
 
     useEffect(() => {
-        if (!isNew && id) {
-            loadTemplate(parseInt(id))
-        }
-    }, [id, isNew])
-
-    useEffect(() => {
         if (isNew && location.state?.ocrSlots) {
             const ocrSlots = location.state.ocrSlots as SlotDraft[]
             setSlots(ocrSlots)
             setExpandedSlots(new Set(ocrSlots.map((_, i) => i)))
         }
     }, [isNew, location.state])
-
-    const loadTemplate = async (templateId: number) => {
-        try {
-            setLoading(true)
-            const tmpl = await examTemplateApi.get(templateId)
-            setName(tmpl.name)
-            setDescription(tmpl.description || '')
-            setSubject(tmpl.subject || '')
-            setIsPublic(tmpl.is_public)
-            setSlots(
-                tmpl.slots
-                    .sort((a, b) => a.position - b.position)
-                    .map(s => ({
-                        position: s.position,
-                        question_type: s.question_type,
-                        label: s.label || '',
-                        difficulty_hint: s.difficulty_hint || '',
-                        questions: s.questions.map(q => ({
-                            id: q.id,
-                            content: q.content,
-                            answer: q.answer || '',
-                            analysis: q.analysis || '',
-                            difficulty: q.difficulty || 'medium',
-                            knowledge_points: q.knowledge_points || [],
-                            source_label: q.source_label || '',
-                        })),
-                    }))
-            )
-        } catch {
-            toast.error('加载模板失败')
-            navigate('/exam-templates')
-        } finally {
-            setLoading(false)
-        }
-    }
 
     const addSlot = () => {
         const maxPos = slots.length > 0 ? Math.max(...slots.map(s => s.position)) : 0

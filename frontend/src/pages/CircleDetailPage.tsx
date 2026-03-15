@@ -11,18 +11,14 @@ import {
 import { toast } from 'sonner'
 import {
     circleApi,
-    type Circle,
-    type CircleMember,
-    type CircleStats,
-    type CircleQuizSessionItem,
     type CircleSessionParticipantItem,
-    type CircleProfile,
 } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { ActivityCard } from '@/components/circle/ActivityCard'
 import { ChallengeCard } from '@/components/circle/ChallengeCard'
 import { RankBadge } from '@/components/circle/RankBadge'
 import { SessionLeaderboard } from '@/components/circle/SessionLeaderboard'
+import { useAsync } from '@/hooks/useAsync'
 
 type Tab = 'activity' | 'challenges' | 'leaderboard' | 'profile'
 type LucideIcon = React.ComponentType<{ className?: string }>
@@ -33,12 +29,6 @@ export default function CircleDetailPage() {
     const navigate = useNavigate()
     const { user } = useAuthStore()
 
-    const [circle, setCircle] = useState<Circle | null>(null)
-    const [members, setMembers] = useState<CircleMember[]>([])
-    const [stats, setStats] = useState<CircleStats | null>(null)
-    const [sessions, setSessions] = useState<CircleQuizSessionItem[]>([])
-    const [circleProfile, setCircleProfile] = useState<CircleProfile | null>(null)
-    const [loading, setLoading] = useState(true)
     const [searchParams] = useSearchParams()
     const [activeTab, setActiveTab] = useState<Tab>(
         (searchParams.get('tab') as Tab) || 'activity'
@@ -47,33 +37,22 @@ export default function CircleDetailPage() {
     const [rankingParticipants, setRankingParticipants] = useState<CircleSessionParticipantItem[] | null>(null)
     const [rankingLoading, setRankingLoading] = useState(false)
 
-    useEffect(() => {
-        if (!circleId) return
-        loadAll()
-    }, [circleId])
+    const { data: circleData, loading, error } = useAsync(
+        () => circleId ? Promise.all([
+            circleApi.get(circleId),
+            circleApi.members(circleId),
+            circleApi.stats(circleId),
+            circleApi.quizSessions(circleId),
+            circleApi.profile(circleId),
+        ]) : Promise.resolve(null),
+        [circleId]
+    )
 
-    const loadAll = async () => {
-        try {
-            setLoading(true)
-            const [c, m, st, s, cp] = await Promise.all([
-                circleApi.get(circleId),
-                circleApi.members(circleId),
-                circleApi.stats(circleId),
-                circleApi.quizSessions(circleId),
-                circleApi.profile(circleId),
-            ])
-            setCircle(c)
-            setMembers(m)
-            setStats(st)
-            setSessions(s)
-            setCircleProfile(cp)
-        } catch {
-            toast.error('加载失败')
-            navigate('/circles')
-        } finally {
-            setLoading(false)
-        }
-    }
+    const [circle, members, stats, sessions, circleProfile] = circleData ?? [null, [], null, [], null]
+
+    useEffect(() => {
+        if (error) { toast.error('加载失败'); navigate('/circles') }
+    }, [error, navigate])
 
     const copyInviteCode = () => {
         if (!circle) return

@@ -2,7 +2,7 @@
  * MyQuizzesPage — manage created quizzes and view acquired quizzes.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import {
@@ -10,27 +10,26 @@ import {
     Trash2, Share2, Globe, GlobeOff, Eye, ClipboardCheck,
 } from 'lucide-react'
 import { quizApi, type QuizSessionListItem } from '@/lib/api'
-
-const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-    generating: { label: '生成中', cls: 'bg-amber-500/10 text-amber-600 border-amber-500/20' },
-    ready:      { label: '待作答', cls: 'bg-blue-500/10 text-blue-600 border-blue-500/20' },
-    in_progress:{ label: '进行中', cls: 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' },
-    grading:    { label: '批改中', cls: 'bg-purple-500/10 text-purple-600 border-purple-500/20' },
-    graded:     { label: '已批改', cls: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' },
-    error:      { label: '出错', cls: 'bg-destructive/10 text-destructive border-destructive/20' },
-}
+import { QuizStatusBadge } from '@/components/shared/QuizStatusBadge'
+import { useAsync } from '@/hooks/useAsync'
 
 export default function MyQuizzesPage() {
     const navigate = useNavigate()
     const [activeTab, setActiveTab] = useState<'created' | 'acquired'>('created')
 
     // Created quizzes
-    const [myQuizzes, setMyQuizzes] = useState<QuizSessionListItem[]>([])
-    const [myLoading, setMyLoading] = useState(true)
+    const { data: myQuizzesRaw, loading: myLoading, refetch: refetchMyQuizzes } = useAsync<QuizSessionListItem[]>(
+        () => quizApi.listMyQuizzes(),
+        []
+    )
+    const myQuizzes = myQuizzesRaw ?? []
 
     // Acquired quizzes
-    const [acquiredQuizzes, setAcquiredQuizzes] = useState<QuizSessionListItem[]>([])
-    const [acquiredLoading, setAcquiredLoading] = useState(false)
+    const { data: acquiredQuizzesRaw, loading: acquiredLoading, refetch: refetchAcquiredQuizzes } = useAsync<QuizSessionListItem[]>(
+        () => quizApi.listAcquired(),
+        []
+    )
+    const acquiredQuizzes = acquiredQuizzesRaw ?? []
 
     // Per-card loading states
     const [sharingId, setSharingId] = useState<string | null>(null)
@@ -46,99 +45,71 @@ export default function MyQuizzesPage() {
     // Delete confirmation modal
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-    const loadMyQuizzes = useCallback(() => {
-        setMyLoading(true)
-        quizApi.listMyQuizzes()
-            .then(setMyQuizzes)
-            .catch(() => toast.error('加载试卷列表失败'))
-            .finally(() => setMyLoading(false))
-    }, [])
-
-    const loadAcquiredQuizzes = useCallback(() => {
-        setAcquiredLoading(true)
-        quizApi.listAcquired()
-            .then(setAcquiredQuizzes)
-            .catch(() => toast.error('加载已获取列表失败'))
-            .finally(() => setAcquiredLoading(false))
-    }, [])
-
-    useEffect(() => {
-        loadMyQuizzes()
-        loadAcquiredQuizzes()
-    }, [loadMyQuizzes, loadAcquiredQuizzes])
-
-    const handleTabChange = (tab: 'created' | 'acquired') => {
-        setActiveTab(tab)
-    }
-
-    const handleGenerateShareCode = async (id: string) => {
+    const handleGenerateShareCode = useCallback(async (id: string) => {
         setSharingId(id)
         try {
-            const updated = await quizApi.generateShareCode(id)
-            setMyQuizzes(prev => prev.map(q => q.id === id ? { ...q, share_code: updated.share_code } : q))
+            await quizApi.generateShareCode(id)
             toast.success('分享码已生成')
+            refetchMyQuizzes()
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '操作失败')
         } finally {
             setSharingId(null)
         }
-    }
+    }, [refetchMyQuizzes])
 
-    const handleRevokeShareCode = async (id: string) => {
+    const handleRevokeShareCode = useCallback(async (id: string) => {
         setSharingId(id)
         try {
-            const updated = await quizApi.revokeShareCode(id)
-            setMyQuizzes(prev => prev.map(q => q.id === id
-                ? { ...q, share_code: updated.share_code, shared_to_plaza_at: updated.shared_to_plaza_at }
-                : q
-            ))
+            await quizApi.revokeShareCode(id)
             toast.success('分享码已撤销')
+            refetchMyQuizzes()
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '操作失败')
         } finally {
             setSharingId(null)
         }
-    }
+    }, [refetchMyQuizzes])
 
-    const handlePublish = async (id: string) => {
+    const handlePublish = useCallback(async (id: string) => {
         setPublishingId(id)
         try {
-            const updated = await quizApi.publishToPlaza(id)
-            setMyQuizzes(prev => prev.map(q => q.id === id ? { ...q, shared_to_plaza_at: updated.shared_to_plaza_at } : q))
+            await quizApi.publishToPlaza(id)
             toast.success('已发布到广场')
+            refetchMyQuizzes()
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '发布失败，请确保试卷已批改')
         } finally {
             setPublishingId(null)
         }
-    }
+    }, [refetchMyQuizzes])
 
-    const handleUnpublish = async (id: string) => {
+    const handleUnpublish = useCallback(async (id: string) => {
         setPublishingId(id)
         try {
-            const updated = await quizApi.unpublishFromPlaza(id)
-            setMyQuizzes(prev => prev.map(q => q.id === id ? { ...q, shared_to_plaza_at: updated.shared_to_plaza_at } : q))
+            await quizApi.unpublishFromPlaza(id)
             toast.success('已从广场下架')
+            refetchMyQuizzes()
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '操作失败')
         } finally {
             setPublishingId(null)
         }
-    }
+    }, [refetchMyQuizzes])
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = useCallback(async (id: string) => {
         setDeletingId(id)
         try {
             await quizApi.deleteSession(id)
-            setMyQuizzes(prev => prev.filter(q => q.id !== id))
             toast.success('试卷已删除')
+            refetchMyQuizzes()
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '删除失败')
         } finally {
             setDeletingId(null)
             setConfirmDeleteId(null)
         }
-    }
+    }, [refetchMyQuizzes])
 
     const handleCopyShareCode = (id: string, code: string) => {
         navigator.clipboard.writeText(code).then(() => {
@@ -155,7 +126,7 @@ export default function MyQuizzesPage() {
             toast.success('试卷获取成功！')
             setShowAcquire(false)
             setAcquireCode('')
-            loadAcquiredQuizzes()
+            refetchAcquiredQuizzes()
         } catch (err: unknown) {
             toast.error(err instanceof Error ? err.message : '获取失败，请检查分享码')
         } finally {
@@ -210,7 +181,7 @@ export default function MyQuizzesPage() {
             {/* Tab switcher */}
             <div className="mt-5 flex gap-1 rounded-xl border border-border bg-muted/30 p-1 w-fit">
                 <button
-                    onClick={() => handleTabChange('created')}
+                    onClick={() => setActiveTab('created')}
                     className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-all ${activeTab === 'created' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                     <FileText className="size-3.5" />
@@ -220,7 +191,7 @@ export default function MyQuizzesPage() {
                     )}
                 </button>
                 <button
-                    onClick={() => handleTabChange('acquired')}
+                    onClick={() => setActiveTab('acquired')}
                     className={`flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-all ${activeTab === 'acquired' ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
                 >
                     <BookMarked className="size-3.5" />
@@ -383,7 +354,6 @@ function CreatedQuizCard({
     onView, onGenerateShare, onRevokeShare, onCopy, onPublish, onUnpublish,
     onConfirmDelete, onCancelDelete, onDelete,
 }: CreatedQuizCardProps) {
-    const st = STATUS_LABEL[quiz.status] ?? { label: quiz.status, cls: 'bg-muted text-muted-foreground border-muted' }
     const isSharingThis = sharingId === quiz.id
     const isPublishingThis = publishingId === quiz.id
     const isDeletingThis = deletingId === quiz.id
@@ -400,9 +370,7 @@ function CreatedQuizCard({
                         <h4 className="font-medium text-foreground truncate">
                             {quiz.title || `试卷 ${quiz.id.slice(0, 8)}`}
                         </h4>
-                        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-medium ${st.cls}`}>
-                            {st.label}
-                        </span>
+                        <QuizStatusBadge status={quiz.status} />
                         {quiz.shared_to_plaza_at && (
                             <span className="rounded border border-cyan-500/20 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] font-medium text-cyan-600">
                                 已在广场

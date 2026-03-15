@@ -2,7 +2,6 @@
  * Dashboard — real data: profile stats, recent quizzes, activity feed.
  */
 
-import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import {
     Sparkles, BookOpen, PenTool, Target, Users, TrendingUp,
@@ -10,34 +9,18 @@ import {
 } from 'lucide-react'
 import { profileApi, quizApi, kbApi, circleApi, type UserProfile, type QuizSessionListItem } from '@/lib/api'
 import { TrajectoryBar } from '@/components/shared/TrajectoryBar'
+import { QuizStatusBadge } from '@/components/shared/QuizStatusBadge'
+import { useAsync } from '@/hooks/useAsync'
 
 /* ── Dashboard Page ───────────────────────── */
 export default function DashboardPage() {
-    const [profile, setProfile] = useState<UserProfile | null>(null)
-    const [recentQuizzes, setRecentQuizzes] = useState<QuizSessionListItem[]>([])
-    const [kbCount, setKbCount] = useState(0)
-    const [circleCount, setCircleCount] = useState(0)
-    const [, setLoading] = useState(true)
+    const { data: profile } = useAsync<UserProfile>(() => profileApi.getMyProfile(), [])
+    const { data: recentQuizzes } = useAsync<QuizSessionListItem[]>(() => quizApi.list(5), [])
+    const { data: kbs } = useAsync(() => kbApi.list(), [])
+    const { data: circles } = useAsync(() => circleApi.list(), [])
 
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const [p, q, kbs, circles] = await Promise.allSettled([
-                    profileApi.getMyProfile(),
-                    quizApi.list(5),
-                    kbApi.list(),
-                    circleApi.list(),
-                ])
-                if (p.status === 'fulfilled') setProfile(p.value)
-                if (q.status === 'fulfilled') setRecentQuizzes(q.value)
-                if (kbs.status === 'fulfilled') setKbCount(kbs.value.length)
-                if (circles.status === 'fulfilled') setCircleCount(circles.value.length)
-            } catch { /* empty */ }
-            setLoading(false)
-        }
-        load()
-    }, [])
-
+    const kbCount = kbs?.length ?? 0
+    const circleCount = circles?.length ?? 0
     const totalAnswered = profile?.total_questions_answered ?? 0
     const accuracy = profile?.overall_accuracy ?? 0
     const trajectory = profile?.learning_trajectory ?? []
@@ -102,7 +85,7 @@ export default function DashboardPage() {
                         </Link>
                     </div>
                     <div className="p-4">
-                        {recentQuizzes.length === 0 ? (
+                        {!recentQuizzes || recentQuizzes.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
                                 <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30">
                                     <Flame className="size-6 text-primary" />
@@ -131,7 +114,7 @@ export default function DashboardPage() {
                                                 {q.accuracy != null && ` · 正确率 ${(q.accuracy * 100).toFixed(0)}%`}
                                             </p>
                                         </div>
-                                        <StatusBadge status={q.status} />
+                                        <QuizStatusBadge status={q.status} />
                                     </Link>
                                 ))}
                             </div>
@@ -185,25 +168,5 @@ function StatCard({ icon: Icon, label, value, gradient }: { icon: React.ElementT
                 </div>
             </div>
         </div>
-    )
-}
-
-function StatusBadge({ status }: { status: string }) {
-    const styles: Record<string, string> = {
-        generating: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-        ready: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-        in_progress: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-        grading: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400',
-        graded: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400',
-        error: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-    }
-    const labels: Record<string, string> = {
-        generating: '生成中', ready: '待作答', in_progress: '进行中',
-        grading: '批改中', graded: '已完成', error: '失败',
-    }
-    return (
-        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${styles[status] || styles.ready}`}>
-            {labels[status] || status}
-        </span>
     )
 }

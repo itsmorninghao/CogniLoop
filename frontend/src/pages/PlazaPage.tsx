@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router'
 import { Search, BookOpen, Database, Star, Tag, Download, Loader2, FileText, Users, ClipboardList } from 'lucide-react'
 import { plazaApi, kbApi, quizPlazaApi, quizApi, examTemplateApi, type KnowledgeBase, type QuizPlazaItem, type PlazaTemplateItem } from '@/lib/api'
 import { toast } from 'sonner'
+import { useAsync } from '@/hooks/useAsync'
 
 type PlazaTab = 'knowledge' | 'quizzes' | 'templates'
 
@@ -15,8 +16,8 @@ export default function PlazaPage() {
     const [activeTab, setActiveTab] = useState<PlazaTab>('knowledge')
 
     // KB state
-    const [kbs, setKbs] = useState<KnowledgeBase[]>([])
-    const [kbLoading, setKbLoading] = useState(true)
+    const { data: kbsRaw, loading: kbLoading } = useAsync(() => plazaApi.list(), [])
+    const kbs = kbsRaw ?? []
     const [search, setSearch] = useState('')
     const [acquiring, setAcquiring] = useState<number | null>(null)
 
@@ -79,10 +80,6 @@ export default function PlazaPage() {
     }
 
     useEffect(() => {
-        loadKbs()
-    }, [])
-
-    useEffect(() => {
         if (activeTab === 'quizzes' && quizzes.length === 0) {
             loadQuizzes()
         }
@@ -90,14 +87,6 @@ export default function PlazaPage() {
             loadTemplates()
         }
     }, [activeTab])
-
-    const loadKbs = async () => {
-        try {
-            setKbLoading(true)
-            const data = await plazaApi.list()
-            setKbs(data)
-        } catch { /* empty */ } finally { setKbLoading(false) }
-    }
 
     const loadQuizzes = async () => {
         try {

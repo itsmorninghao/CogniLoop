@@ -2,10 +2,10 @@
  * UserProfileViewPage — view another user's public learning profile.
  */
 
-import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { Award, Target, BarChart3, Brain, Activity, BookOpen, ArrowLeft, Sparkles } from 'lucide-react'
 import { ApiError, profileApi, type UserProfile } from '@/lib/api'
+import { useAsync } from '@/hooks/useAsync'
 
 const LEVEL_LABELS: Record<string, string> = {
     beginner: '入门',
@@ -28,21 +28,13 @@ const DIFFICULTY_LABELS: Record<string, string> = {
 export default function UserProfileViewPage() {
     const { userId } = useParams<{ userId: string }>()
     const navigate = useNavigate()
-    const [profile, setProfile] = useState<UserProfile | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [forbidden, setForbidden] = useState(false)
-
-    useEffect(() => {
-        if (!userId) return
-        profileApi.getUserProfile(Number(userId))
-            .then(p => setProfile(p))
-            .catch(err => {
-                if (err instanceof ApiError && err.status === 403) {
-                    setForbidden(true)
-                }
-            })
-            .finally(() => setLoading(false))
-    }, [userId])
+    const { data: profile, loading } = useAsync<UserProfile | null>(
+        () => profileApi.getUserProfile(Number(userId)).catch(err => {
+            if (err instanceof ApiError && err.status === 403) return null
+            throw err
+        }),
+        [userId]
+    )
 
     if (loading) {
         return (
@@ -52,7 +44,7 @@ export default function UserProfileViewPage() {
         )
     }
 
-    if (forbidden || !profile) {
+    if (!loading && !profile) {
         return (
             <div className="container mx-auto max-w-lg p-6 animate-fade-in">
                 <button onClick={() => navigate(-1)} className="mb-6 flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition">
@@ -69,6 +61,8 @@ export default function UserProfileViewPage() {
             </div>
         )
     }
+
+    if (!profile) return null
 
     const domainProfiles = profile.domain_profiles ?? {}
     const trajectory = profile.learning_trajectory ?? []

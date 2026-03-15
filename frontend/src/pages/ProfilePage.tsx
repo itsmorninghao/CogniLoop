@@ -2,13 +2,14 @@
  * Profile page — AI insights, knowledge points, domain profiles, learning trajectory, share UI.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { TrendingUp, Award, Target, RefreshCcw, BarChart3, Activity, Link2, Copy, Trash2, BookOpen, Pencil, Brain, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { profileApi, userApi, type UserProfile, type ProfileShare, type UserPublicInfo } from '@/lib/api'
+import { profileApi, userApi, type UserProfile, type ProfileShare } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { TrajectoryBar } from '@/components/shared/TrajectoryBar'
 import { EditProfileModal } from '@/components/profile/EditProfileModal'
+import { useAsync } from '@/hooks/useAsync'
 
 const LEVEL_LABELS: Record<string, string> = {
     beginner: '入门',
@@ -72,44 +73,20 @@ function KnowledgePointCard({ name, stats, weaknessReason }: {
 }
 
 export default function ProfilePage() {
-    const [profile, setProfile] = useState<UserProfile | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [share, setShare] = useState<ProfileShare | null | undefined>(undefined)
-    const [userInfo, setUserInfo] = useState<UserPublicInfo | null>(null)
+    const { data: profile, loading } = useAsync(() => profileApi.getMyProfile(), [])
+    const { data: share } = useAsync(() => profileApi.getMyShare().catch(() => null), [])
+    const { data: userInfo } = useAsync(() => userApi.me(), [])
+    const [profileLocal, setProfileLocal] = useState<UserProfile | null>(null)
+    const effectiveProfile = profileLocal ?? profile
+    const [shareLocal, setShareLocal] = useState<ProfileShare | null | undefined>(undefined)
+    const effectiveShare = shareLocal !== undefined ? shareLocal : share
     const [editOpen, setEditOpen] = useState(false)
     const { setUser } = useAuthStore()
-
-    useEffect(() => {
-        loadProfile()
-        loadShare()
-        userApi.me().then(setUserInfo).catch(() => {})
-    }, [])
-
-    const loadProfile = async () => {
-        try {
-            setLoading(true)
-            const p = await profileApi.getMyProfile()
-            setProfile(p)
-        } catch {
-            setProfile(null)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    const loadShare = async () => {
-        try {
-            const s = await profileApi.getMyShare()
-            setShare(s)
-        } catch {
-            setShare(null)
-        }
-    }
 
     const handleRecalculate = async () => {
         try {
             const p = await profileApi.recalculate()
-            setProfile(p)
+            setProfileLocal(p)
             toast.success('画像已重新计算')
         } catch {
             toast.error('重新计算失败')
@@ -119,7 +96,7 @@ export default function ProfilePage() {
     const handleShare = async () => {
         try {
             const s = await profileApi.share('link')
-            setShare(s)
+            setShareLocal(s)
             toast.success('分享链接已生成')
         } catch {
             toast.error('生成分享链接失败')
@@ -129,7 +106,7 @@ export default function ProfilePage() {
     const handleRevokeShare = async () => {
         try {
             await profileApi.revokeShare()
-            setShare(null)
+            setShareLocal(null)
             toast.success('分享链接已撤销')
         } catch {
             toast.error('撤销失败')
@@ -137,12 +114,12 @@ export default function ProfilePage() {
     }
 
     const handleCopyLink = () => {
-        if (!profile) return
-        const url = `${window.location.origin}/profile/${profile.user_id}`
+        if (!effectiveProfile) return
+        const url = `${window.location.origin}/profile/${effectiveProfile.user_id}`
         navigator.clipboard.writeText(url).then(() => toast.success('链接已复制'))
     }
 
-    if (loading) {
+    if (loading && !effectiveProfile) {
         return (
             <div className="flex h-64 items-center justify-center">
                 <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -150,14 +127,14 @@ export default function ProfilePage() {
         )
     }
 
-    const domainProfiles = profile?.domain_profiles ?? {}
-    const trajectory = profile?.learning_trajectory ?? []
-    const totalAnswered = profile?.total_questions_answered ?? 0
-    const accuracy = profile?.overall_accuracy ?? 0
-    const level = profile?.overall_level ?? 'beginner'
-    const kpProfiles = profile?.knowledge_point_profiles ?? {}
-    const weaknessAnalysis = profile?.weakness_analysis ?? {}
-    const insightSummary = profile?.insight_summary ?? ''
+    const domainProfiles = effectiveProfile?.domain_profiles ?? {}
+    const trajectory = effectiveProfile?.learning_trajectory ?? []
+    const totalAnswered = effectiveProfile?.total_questions_answered ?? 0
+    const accuracy = effectiveProfile?.overall_accuracy ?? 0
+    const level = effectiveProfile?.overall_level ?? 'beginner'
+    const kpProfiles = effectiveProfile?.knowledge_point_profiles ?? {}
+    const weaknessAnalysis = effectiveProfile?.weakness_analysis ?? {}
+    const insightSummary = effectiveProfile?.insight_summary ?? ''
 
     // Domain profiles sorted by question count descending
     const domainEntries = Object.entries(domainProfiles).sort((a, b) => b[1].question_count - a[1].question_count)
@@ -202,11 +179,9 @@ export default function ProfilePage() {
                     userInfo={userInfo}
                     onClose={() => setEditOpen(false)}
                     onAvatarUploaded={(avatarUrl) => {
-                        setUserInfo(prev => prev ? { ...prev, avatar_url: avatarUrl } : prev)
                         setUser({ avatar_url: avatarUrl })
                     }}
                     onSaved={(updated) => {
-                        setUserInfo(updated)
                         setUser({ full_name: updated.full_name, bio: updated.bio, avatar_url: updated.avatar_url })
                         setEditOpen(false)
                     }}
@@ -395,15 +370,15 @@ export default function ProfilePage() {
                     <p className="mt-1 text-sm text-muted-foreground">生成分享链接，让他人查看你的学习画像并为你出题</p>
                 </div>
                 <div className="p-6">
-                    {share === undefined ? (
+                    {effectiveShare === undefined ? (
                         <div className="flex h-10 items-center">
                             <div className="size-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
                         </div>
-                    ) : share ? (
+                    ) : effectiveShare ? (
                         <div className="space-y-3">
                             <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-sm">
                                 <span className="flex-1 truncate text-muted-foreground font-mono">
-                                    {window.location.origin}/profile/{profile?.user_id}
+                                    {window.location.origin}/profile/{effectiveProfile?.user_id}
                                 </span>
                                 <button onClick={handleCopyLink} className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 transition shrink-0">
                                     <Copy className="size-3" />

@@ -2,25 +2,26 @@
  * Knowledge Base list page — shows owned and acquired KBs, navigates to detail page on click.
  */
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import {
     Grid3X3, List, Database, Plus, BookMarked, KeyRound,
     Loader2, ChevronRight, Share2, FileStack, Trash2,
 } from 'lucide-react'
-import { kbApi, type KnowledgeBase } from '@/lib/api'
+import { kbApi } from '@/lib/api'
+import { useAsync } from '@/hooks/useAsync'
 
 export default function KnowledgeBasePage() {
     const navigate = useNavigate()
     const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
-    const [kbs, setKbs] = useState<KnowledgeBase[]>([])
-    const [loading, setLoading] = useState(true)
+    const { data: kbsRaw, loading } = useAsync(() => kbApi.list(), [])
+    const kbs = kbsRaw ?? []
 
     const [activeTab, setActiveTab] = useState<'mine' | 'acquired'>('mine')
-    const [acquiredKbs, setAcquiredKbs] = useState<KnowledgeBase[]>([])
-    const [acquiredLoading, setAcquiredLoading] = useState(false)
+    const { data: acquiredKbsRaw, loading: acquiredLoading, refetch: refetchAcquiredKbs } = useAsync(() => kbApi.listAcquired(), [])
+    const acquiredKbs = acquiredKbsRaw ?? []
 
     // Create KB modal
     const [showCreate, setShowCreate] = useState(false)
@@ -33,28 +34,9 @@ export default function KnowledgeBasePage() {
     const [acquireCode, setAcquireCode] = useState('')
     const [acquiring, setAcquiring] = useState(false)
 
-    const loadKbs = useCallback(() => {
-        setLoading(true)
-        kbApi.list()
-            .then(setKbs)
-            .catch(() => toast.error('加载知识库失败'))
-            .finally(() => setLoading(false))
-    }, [])
-
-    const loadAcquiredKbs = useCallback(() => {
-        setAcquiredLoading(true)
-        kbApi.listAcquired()
-            .then(setAcquiredKbs)
-            .catch(() => toast.error('加载已获取知识库失败'))
-            .finally(() => setAcquiredLoading(false))
-    }, [])
-
     const handleTabChange = (tab: 'mine' | 'acquired') => {
         setActiveTab(tab)
-        if (tab === 'acquired') loadAcquiredKbs()
     }
-
-    useEffect(() => { loadKbs(); loadAcquiredKbs() }, [loadKbs, loadAcquiredKbs])
 
     const handleCreateKb = async () => {
         if (!newName.trim()) return
@@ -94,7 +76,7 @@ export default function KnowledgeBasePage() {
         if (!confirm('确定要移除这个已获取的知识库吗？')) return
         try {
             await kbApi.unacquire(kbId)
-            setAcquiredKbs(prev => prev.filter(kb => kb.id !== kbId))
+            refetchAcquiredKbs()
             toast.success('已移除')
         } catch {
             toast.error('移除失败')

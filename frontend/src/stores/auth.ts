@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     fetchUser: async () => {
         try {
             const user = await api.get<User>('/auth/me')
-            set({ user, token: localStorage.getItem('token') })
+            set({ user })
         } catch {
             localStorage.removeItem('token')
             set({ token: null, user: null })

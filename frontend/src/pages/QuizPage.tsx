@@ -2,7 +2,6 @@
  * Quiz page — quiz center with mode selection + recent history.
  */
 
-import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 
 import {
@@ -10,30 +9,12 @@ import {
     Loader2, Target
 } from 'lucide-react'
 import { quizApi, type QuizSessionListItem } from '@/lib/api'
+import { QuizStatusBadge } from '@/components/shared/QuizStatusBadge'
+import { useAsync } from '@/hooks/useAsync'
 
 export default function QuizPage() {
     const navigate = useNavigate()
-    const [sessions, setSessions] = useState<QuizSessionListItem[]>([])
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-        quizApi.list(10, 0)
-            .then(setSessions)
-            .catch(() => { })
-            .finally(() => setLoading(false))
-    }, [])
-
-    const statusBadge = (status: string) => {
-        switch (status) {
-            case 'generating': return <span className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-600"><Loader2 className="size-3 animate-spin" />生成中</span>
-            case 'ready': return <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-600">待作答</span>
-            case 'in_progress': return <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-xs text-indigo-600">作答中</span>
-            case 'grading': return <span className="flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-xs text-purple-600"><Loader2 className="size-3 animate-spin" />批改中</span>
-            case 'graded': return <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-600">已完成</span>
-            case 'error': return <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600">出错</span>
-            default: return <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">{status}</span>
-        }
-    }
+    const { data: sessions, loading } = useAsync<QuizSessionListItem[]>(() => quizApi.list(10, 0), [])
 
     const handleSessionClick = (s: QuizSessionListItem) => {
         if (s.status === 'graded') {
@@ -121,13 +102,13 @@ export default function QuizPage() {
                     <div className="flex items-center justify-center py-12">
                         <Loader2 className="size-5 animate-spin text-primary" />
                     </div>
-                ) : sessions.length === 0 ? (
+                ) : !sessions || sessions.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-12 text-center">
                         <p className="text-sm text-muted-foreground">暂无测验记录</p>
                     </div>
                 ) : (
                     <div className="divide-y divide-border">
-                        {sessions.map(s => (
+                        {(sessions ?? []).map(s => (
                             <button
                                 key={s.id}
                                 onClick={() => handleSessionClick(s)}
@@ -140,7 +121,7 @@ export default function QuizPage() {
                                     <p className="truncate text-sm font-medium text-foreground">{s.title || '自测测验'}</p>
                                     <p className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString('zh-CN')}</p>
                                 </div>
-                                {statusBadge(s.status)}
+                                <QuizStatusBadge status={s.status} />
                                 {s.status === 'graded' && s.accuracy !== null && (
                                     <div className="flex items-center gap-1 text-sm">
                                         <Target className="size-3.5" />

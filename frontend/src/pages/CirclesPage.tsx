@@ -2,29 +2,20 @@
  * Study Circles — list + create/join modals. Detail via /circles/:id.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router'
 import {
     Users, Plus, Search, UserPlus, ChevronRight, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { circleApi, type Circle } from '@/lib/api'
+import { circleApi } from '@/lib/api'
+import { useAsync } from '@/hooks/useAsync'
 
 export default function CirclesPage() {
-    const [circles, setCircles] = useState<Circle[]>([])
-    const [loading, setLoading] = useState(true)
+    const { data, loading, refetch } = useAsync(() => circleApi.list(), [])
+    const circles = data ?? []
     const [showCreate, setShowCreate] = useState(false)
     const [showJoin, setShowJoin] = useState(false)
-
-    useEffect(() => { loadCircles() }, [])
-
-    const loadCircles = async () => {
-        try {
-            setLoading(true)
-            const data = await circleApi.list()
-            setCircles(data)
-        } catch { /* empty */ } finally { setLoading(false) }
-    }
 
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
@@ -75,8 +66,8 @@ export default function CirclesPage() {
                 </div>
             )}
 
-            {showCreate && <CreateCircleModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); loadCircles() }} />}
-            {showJoin && <JoinCircleModal onClose={() => setShowJoin(false)} onJoined={() => { setShowJoin(false); loadCircles() }} />}
+            {showCreate && <CreateCircleModal onClose={() => setShowCreate(false)} onCreated={() => { setShowCreate(false); refetch() }} />}
+            {showJoin && <JoinCircleModal onClose={() => setShowJoin(false)} onJoined={() => { setShowJoin(false); refetch() }} />}
         </div>
     )
 }

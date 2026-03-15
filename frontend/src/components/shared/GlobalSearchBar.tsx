@@ -16,15 +16,18 @@ export function GlobalSearchBar() {
     const [isOpen, setIsOpen] = useState(false)
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
+    const searchVersionRef = useRef(0)
     const navigate = useNavigate()
 
     const performSearch = async (q: string) => {
+        const version = ++searchVersionRef.current
         setIsLoading(true)
         const [kbRes, quizRes, userRes] = await Promise.allSettled([
             plazaApi.list(q),
             quizPlazaApi.list(q),
             userApi.search(q, 5),
         ])
+        if (version !== searchVersionRef.current) return  // discard stale results
         setResults({
             kbs: kbRes.status === 'fulfilled' ? kbRes.value.slice(0, 4) : [],
             quizzes: quizRes.status === 'fulfilled' ? quizRes.value.slice(0, 4) : [],
@@ -40,6 +43,7 @@ export function GlobalSearchBar() {
         if (debounceRef.current) clearTimeout(debounceRef.current)
 
         if (q.trim().length < 2) {
+            searchVersionRef.current++  // invalidate any in-flight requests
             setResults(null)
             setIsOpen(false)
             return

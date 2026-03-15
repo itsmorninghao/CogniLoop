@@ -12,6 +12,13 @@ import {
 } from 'lucide-react'
 import { quizApi, type QuizSession } from '@/lib/api'
 import { MathText } from '@/components/shared/MathText'
+import { ConfirmDialog } from '@/components/shared/ConfirmDialog'
+
+function formatTime(s: number): string {
+    const m = Math.floor(s / 60)
+    const sec = s % 60
+    return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
+}
 
 export default function QuizSessionPage() {
     const { id } = useParams<{ id: string }>()
@@ -27,10 +34,14 @@ export default function QuizSessionPage() {
     const [elapsed, setElapsed] = useState(0)
     const [notFound, setNotFound] = useState(false)
     const gradingPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const gradingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const [confirmOpen, setConfirmOpen] = useState(false)
+    const [unansweredCount, setUnansweredCount] = useState(0)
 
-    // Clean up grading poll interval on unmount
+    // Clear grading timers on unmount
     useEffect(() => () => {
         if (gradingPollRef.current) clearInterval(gradingPollRef.current)
+        if (gradingTimeoutRef.current) clearTimeout(gradingTimeoutRef.current)
     }, [])
 
     // Load quiz session (with auto-poll when questions aren't ready yet)
@@ -72,9 +83,8 @@ export default function QuizSessionPage() {
             cancelled = true
             if (pollTimer) clearTimeout(pollTimer)
         }
-    }, [id, navigate])
+    }, [id, navigate, fromCircle])
 
-    // Timer
     useEffect(() => {
         if (!session || session.status !== 'ready' && session.status !== 'in_progress') return
         const timer = setInterval(() => setElapsed(e => e + 1), 1000)
@@ -91,18 +101,11 @@ export default function QuizSessionPage() {
 
     const answeredCount = questions.filter(q => answers[q.id]).length
 
-    const handleSubmitAll = useCallback(async () => {
+    const doSubmit = useCallback(async () => {
         if (!id) return
-
-        const unanswered = totalQuestions - answeredCount
-        if (unanswered > 0) {
-            const confirmed = confirm(`还有 ${unanswered} 道题未作答，确定提交吗？`)
-            if (!confirmed) return
-        }
-
+        setConfirmOpen(false)
         setSubmitting(true)
         try {
-            // Submit all answers
             const responses = questions
                 .filter(q => answers[q.id])
                 .map(q => ({
@@ -115,7 +118,6 @@ export default function QuizSessionPage() {
                 await quizApi.submitResponses(id, responses)
             }
 
-            // Submit quiz for grading
             await quizApi.submit(id)
             toast.success('已提交！AI 正在批改...')
 
@@ -130,8 +132,7 @@ export default function QuizSessionPage() {
                 } catch { /* keep polling */ }
             }, 2000)
 
-            // Timeout after 60s
-            setTimeout(() => {
+            gradingTimeoutRef.current = setTimeout(() => {
                 if (gradingPollRef.current) clearInterval(gradingPollRef.current)
                 navigate(`/quiz/${id}/result`, { state: { fromCircle } })
             }, 60000)
@@ -140,7 +141,17 @@ export default function QuizSessionPage() {
             toast.error(err instanceof Error ? err.message : '提交失败')
             setSubmitting(false)
         }
-    }, [id, answers, questions, totalQuestions, answeredCount, elapsed, navigate, fromCircle])
+    }, [id, answers, questions, totalQuestions, elapsed, navigate, fromCircle])
+
+    const handleSubmitAll = useCallback(() => {
+        const unanswered = totalQuestions - answeredCount
+        if (unanswered > 0) {
+            setUnansweredCount(unanswered)
+            setConfirmOpen(true)
+        } else {
+            doSubmit()
+        }
+    }, [totalQuestions, answeredCount, doSubmit])
 
     if (loading) {
         return (
@@ -203,13 +214,8 @@ export default function QuizSessionPage() {
         )
     }
 
-    const formatTime = (s: number) => {
-        const m = Math.floor(s / 60)
-        const sec = s % 60
-        return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`
-    }
-
     return (
+        <>
         <div className="flex h-full flex-col animate-fade-in">
             {/* Top bar */}
             <div className="flex items-center justify-between border-b border-border px-6 py-3">
@@ -390,5 +396,14 @@ export default function QuizSessionPage() {
                 </div>
             </div>
         </div>
+        <ConfirmDialog
+            open={confirmOpen}
+            title="确认交卷"
+            description={`还有 ${unansweredCount} 道题未作答，确定提交吗？`}
+            confirmLabel="确认交卷"
+            onConfirm={doSubmit}
+            onCancel={() => setConfirmOpen(false)}
+        />
+        </>
     )
 }

@@ -3,9 +3,10 @@
  * Document KBs: centered max-w-5xl layout.
  */
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router'
 import { toast } from 'sonner'
+import { useAsync } from '@/hooks/useAsync'
 import {
     ArrowLeft, Database, BookMarked, Upload, Trash2, Share2, Copy,
     Link2Off, FileText, Loader2, Globe,
@@ -21,10 +22,27 @@ export default function KnowledgeBaseDetailPage() {
     const navigate = useNavigate()
     const { user } = useAuthStore()
 
-    const [kb, setKb] = useState<KnowledgeBase | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [documents, setDocuments] = useState<KBDocument[]>([])
-    const [docsLoading, setDocsLoading] = useState(false)
+    const kbId = parseInt(id ?? '0')
+
+    const { data: kb, loading, refetch: refetchKb } = useAsync<KnowledgeBase | null>(
+        async () => {
+            if (!kbId) return null
+            try {
+                return await kbApi.get(kbId)
+            } catch {
+                toast.error('知识库不存在或无权限')
+                navigate('/knowledge')
+                return null
+            }
+        },
+        [kbId, navigate]
+    )
+    const { data: documents, loading: docsLoading, refetch: refetchDocs } = useAsync<KBDocument[]>(
+        () => kb ? kbApi.listDocs(kb.id) : Promise.resolve([]),
+        [kb?.id]
+    )
+    const docsArray = documents ?? []
+
     const [uploading, setUploading] = useState(false)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -33,37 +51,7 @@ export default function KnowledgeBaseDetailPage() {
     const [publishingPlaza, setPublishingPlaza] = useState(false)
     const [deletingKb, setDeletingKb] = useState(false)
 
-    const kbId = parseInt(id ?? '0')
     const isOwner = kb != null && user != null && kb.owner_id === user.id
-
-    const loadKb = useCallback(async () => {
-        if (!kbId) return
-        setLoading(true)
-        try {
-            const data = await kbApi.get(kbId)
-            setKb(data)
-        } catch {
-            toast.error('知识库不存在或无权限')
-            navigate('/knowledge')
-        } finally {
-            setLoading(false)
-        }
-    }, [kbId, navigate])
-
-    const loadDocs = useCallback(async (kbData: KnowledgeBase) => {
-        setDocsLoading(true)
-        try {
-            const docs = await kbApi.listDocs(kbData.id)
-            setDocuments(docs)
-        } catch {
-            toast.error('加载文档失败')
-        } finally {
-            setDocsLoading(false)
-        }
-    }, [])
-
-    useEffect(() => { loadKb() }, [loadKb])
-    useEffect(() => { if (kb) loadDocs(kb) }, [kb]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleUpload = async (files: FileList) => {
         if (!kb) return
@@ -78,7 +66,7 @@ export default function KnowledgeBaseDetailPage() {
                 toast.error(`上传 ${file.name} 失败: ${err instanceof Error ? err.message : '未知错误'}`)
             }
         }
-        if (success > 0) { await loadKb(); if (kb) loadDocs(kb) }
+        if (success > 0) { await refetchKb(); refetchDocs() }
         setUploading(false)
     }
 
@@ -87,8 +75,7 @@ export default function KnowledgeBaseDetailPage() {
         try {
             await kbApi.deleteDoc(kb.id, docId)
             toast.success('文档已删除')
-            loadDocs(kb)
-            loadKb()
+            refetchDocs(); refetchKb()
         } catch { toast.error('删除失败') }
     }
 
@@ -97,7 +84,7 @@ export default function KnowledgeBaseDetailPage() {
         setSharingCode(true)
         try {
             const updated = await kbApi.generateShareCode(kb.id)
-            setKb(updated)
+            refetchKb()
             if (updated.share_code) {
                 await navigator.clipboard.writeText(updated.share_code)
                 toast.success(`分享码已生成并复制: ${updated.share_code}`)
@@ -110,8 +97,8 @@ export default function KnowledgeBaseDetailPage() {
         if (!kb || !confirm('确定吊销分享码？已分享的链接将失效。')) return
         setRevokingCode(true)
         try {
-            const updated = await kbApi.revokeShareCode(kb.id)
-            setKb(updated)
+            await kbApi.revokeShareCode(kb.id)
+            refetchKb()
             toast.success('分享码已吊销')
         } catch { toast.error('吊销失败') }
         finally { setRevokingCode(false) }
@@ -121,8 +108,8 @@ export default function KnowledgeBaseDetailPage() {
         if (!kb) return
         setPublishingPlaza(true)
         try {
-            const updated = await kbApi.publishToPlaza(kb.id)
-            setKb(updated)
+            await kbApi.publishToPlaza(kb.id)
+            refetchKb()
             toast.success('已发布到知识广场')
         } catch { toast.error('发布失败') }
         finally { setPublishingPlaza(false) }
@@ -132,8 +119,8 @@ export default function KnowledgeBaseDetailPage() {
         if (!kb || !confirm('确定从广场撤下此知识库？')) return
         setPublishingPlaza(true)
         try {
-            const updated = await kbApi.unpublishFromPlaza(kb.id)
-            setKb(updated)
+            await kbApi.unpublishFromPlaza(kb.id)
+            refetchKb()
             toast.success('已从广场撤下')
         } catch { toast.error('撤下失败') }
         finally { setPublishingPlaza(false) }
@@ -294,7 +281,7 @@ export default function KnowledgeBaseDetailPage() {
 
                 {/* Content list */}
                 <div className="rounded-2xl border border-border bg-card overflow-hidden">
-                    {documents.length > 0 && (
+                    {docsArray.length > 0 && (
                         <div className="grid grid-cols-[auto_1fr_100px_80px_120px_40px] items-center gap-4 border-b border-border bg-muted/20 px-6 py-2 text-xs font-medium text-muted-foreground">
                             <span className="w-8" /><span>文件名</span><span>状态</span><span>分块</span><span>上传时间</span><span />
                         </div>
@@ -302,7 +289,7 @@ export default function KnowledgeBaseDetailPage() {
 
                     {docsLoading ? (
                         <div className="flex items-center justify-center py-16"><Loader2 className="size-6 animate-spin text-primary" /></div>
-                    ) : documents.length === 0 ? (
+                    ) : docsArray.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
                             <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted"><FileText className="size-7 text-muted-foreground" /></div>
                             <p className="text-sm font-medium text-foreground">暂无文档</p>
@@ -310,7 +297,7 @@ export default function KnowledgeBaseDetailPage() {
                         </div>
                     ) : (
                         <div className="divide-y divide-border">
-                            {documents.map(doc => (
+                            {docsArray.map(doc => (
                                 <div key={doc.id} className="grid grid-cols-[auto_1fr_100px_80px_120px_40px] items-center gap-4 px-6 py-3.5 hover:bg-muted/20 transition-colors">
                                     <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${fileTypeColor(doc.file_type)}`}><FileText className="size-4" /></div>
                                     <div className="min-w-0">

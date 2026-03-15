@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import { Bell, CheckCheck, Info, Zap, Users, Bot, Megaphone } from 'lucide-react'
 import { toast } from 'sonner'
 import { notificationApi, type Notification } from '@/lib/api'
+import { useAsync } from '@/hooks/useAsync'
 
 const TYPE_ICONS: Record<string, typeof Bell> = {
     system: Megaphone,
@@ -26,25 +27,11 @@ const TYPE_COLORS: Record<string, string> = {
 }
 
 export default function NotificationsPage() {
-    const [notifications, setNotifications] = useState<Notification[]>([])
-    const [loading, setLoading] = useState(true)
     const [filter, setFilter] = useState<'all' | 'unread'>('all')
+    const { data, loading } = useAsync(() => notificationApi.list(filter === 'unread'), [filter])
+    const [notifications, setNotifications] = useState<Notification[]>([])
 
-    useEffect(() => {
-        loadNotifications()
-    }, [filter])
-
-    const loadNotifications = async () => {
-        try {
-            setLoading(true)
-            const data = await notificationApi.list(filter === 'unread')
-            setNotifications(data)
-        } catch {
-            toast.error('加载通知失败')
-        } finally {
-            setLoading(false)
-        }
-    }
+    useEffect(() => { if (data) setNotifications(data) }, [data])
 
     const handleMarkRead = async (id: number) => {
         try {

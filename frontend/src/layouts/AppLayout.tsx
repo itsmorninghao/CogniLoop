@@ -2,8 +2,9 @@
  * AppLayout — sidebar navigation + top bar.
  */
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import {
     LayoutDashboard,
     BookOpen,
@@ -46,25 +47,34 @@ const ADMIN_ITEMS = [
 
 export default function AppLayout() {
     const [collapsed, setCollapsed] = useState(false)
-    const [dark, setDark] = useState(false)
+    const [dark, setDark] = useState(() => {
+        const saved = localStorage.getItem('dark')
+        if (saved !== null) return saved === 'true'
+        return window.matchMedia('(prefers-color-scheme: dark)').matches
+    })
     const [unreadCount, setUnreadCount] = useState(0)
     const location = useLocation()
-    const { user, logout } = useAuthStore()
+    const { user, logout, token } = useAuthStore()
+    const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    useEffect(() => {
+        document.documentElement.classList.toggle('dark', dark)
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     const toggleDark = () => {
-        setDark(!dark)
-        document.documentElement.classList.toggle('dark')
+        const next = !dark
+        setDark(next)
+        localStorage.setItem('dark', String(next))
+        document.documentElement.classList.toggle('dark', next)
     }
 
     // WebSocket for real-time notifications (with HTTP polling fallback)
     useEffect(() => {
-        const token = localStorage.getItem('token')
         if (!token) return
 
         notificationApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {})
         const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v2/notifications/ws?token=${encodeURIComponent(token)}`
         let ws: WebSocket | null = null
-        let reconnectTimer: ReturnType<typeof setTimeout> | null = null
         let unmounted = false
 
         const connect = () => {
@@ -78,26 +88,26 @@ export default function AppLayout() {
             }
             ws.onclose = () => {
                 if (!unmounted) {
-                    // Reconnect after 5s + fall back to polling
-                    reconnectTimer = setTimeout(connect, 5000)
+                    // Reconnect WS after 5s
+                    reconnectTimerRef.current = setTimeout(connect, 5000)
                 }
             }
         }
 
         connect()
 
-        // Polling fallback every 60s (much less frequent since WS handles real-time)
+        // HTTP polling fallback every 60s
         const interval = setInterval(() => {
             notificationApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {})
         }, 60000)
 
         return () => {
             unmounted = true
-            if (reconnectTimer) clearTimeout(reconnectTimer)
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
             ws?.close()
             clearInterval(interval)
         }
-    }, [])
+    }, [token])
 
     return (
         <div className="flex h-screen overflow-hidden">
@@ -257,7 +267,9 @@ export default function AppLayout() {
                 </header>
 
                 <main className="flex-1 overflow-auto bg-background">
-                    <Outlet />
+                    <ErrorBoundary>
+                        <Outlet />
+                    </ErrorBoundary>
                 </main>
             </div>
         </div>
