@@ -7,9 +7,12 @@ import { useNavigate, useParams, useLocation } from 'react-router'
 import { toast } from 'sonner'
 import {
     ArrowLeft, Plus, Trash2, Save, ChevronDown, ChevronUp,
-    Loader2, AlertTriangle
+    Loader2, AlertTriangle, ScanLine, X, Globe, GlobeLock
 } from 'lucide-react'
 import { examTemplateApi } from '@/lib/api'
+import type { SlotDraft, QuestionDraft } from '@/components/exam-template/types'
+import OcrScanner from '@/components/exam-template/OcrScanner'
+import { mergeSlots } from '@/components/exam-template/mergeSlots'
 
 const QUESTION_TYPE_OPTIONS = [
     { value: 'single_choice', label: '单选题' },
@@ -18,24 +21,6 @@ const QUESTION_TYPE_OPTIONS = [
     { value: 'fill_blank', label: '填空题' },
     { value: 'short_answer', label: '简答题' },
 ]
-
-interface SlotDraft {
-    position: number
-    question_type: string
-    label: string
-    difficulty_hint: string
-    questions: QuestionDraft[]
-}
-
-interface QuestionDraft {
-    id?: number
-    content: string
-    answer: string
-    analysis: string
-    difficulty: string
-    knowledge_points: string[]
-    source_label: string
-}
 
 function emptyQuestion(): QuestionDraft {
     return { content: '', answer: '', analysis: '', difficulty: 'medium', knowledge_points: [], source_label: '' }
@@ -54,6 +39,22 @@ export default function ExamTemplateEditorPage() {
     const [expandedSlots, setExpandedSlots] = useState<Set<number>>(new Set())
     const [loading, setLoading] = useState(!isNew)
     const [saving, setSaving] = useState(false)
+    const [showScanDialog, setShowScanDialog] = useState(false)
+    const [isPublic, setIsPublic] = useState(false)
+
+    const handleMergeScannedSlots = useCallback((incoming: SlotDraft[]) => {
+        setSlots(prev => {
+            const merged = mergeSlots(prev, incoming)
+            setExpandedSlots(es => {
+                const next = new Set(es)
+                merged.forEach((_, i) => next.add(i))
+                return next
+            })
+            return merged
+        })
+        setShowScanDialog(false)
+        toast.success(`已导入 ${incoming.reduce((n, s) => n + s.questions.length, 0)} 道题目`)
+    }, [])
 
     useEffect(() => {
         if (!isNew && id) {
@@ -76,6 +77,7 @@ export default function ExamTemplateEditorPage() {
             setName(tmpl.name)
             setDescription(tmpl.description || '')
             setSubject(tmpl.subject || '')
+            setIsPublic(tmpl.is_public)
             setSlots(
                 tmpl.slots
                     .sort((a, b) => a.position - b.position)
@@ -205,6 +207,34 @@ export default function ExamTemplateEditorPage() {
         }
     }, [name, description, subject, slots, isNew, id, navigate])
 
+    const handleTogglePublish = async () => {
+        const templateId = parseInt(id!)
+        try {
+            if (isPublic) {
+                await examTemplateApi.unpublish(templateId)
+                setIsPublic(false)
+                toast.success('已从广场下架')
+            } else {
+                await examTemplateApi.publish(templateId)
+                setIsPublic(true)
+                toast.success('已发布到广场')
+            }
+        } catch {
+            toast.error('操作失败')
+        }
+    }
+
+    const handleDelete = async () => {
+        if (!confirm('确定删除此模板？此操作不可撤销。')) return
+        try {
+            await examTemplateApi.delete(parseInt(id!))
+            toast.success('模板已删除')
+            navigate('/exam-templates')
+        } catch {
+            toast.error('删除失败')
+        }
+    }
+
     if (loading) {
         return (
             <div className="flex h-64 items-center justify-center">
@@ -213,7 +243,7 @@ export default function ExamTemplateEditorPage() {
         )
     }
 
-    // Group slots by question_type for display
+    // Group slots by question_type
     const typeGroups = new Map<string, { label: string; indices: number[] }>()
     slots.forEach((s, idx) => {
         const existing = typeGroups.get(s.question_type)
@@ -227,7 +257,6 @@ export default function ExamTemplateEditorPage() {
 
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
-            {/* Header */}
             <div className="flex items-center gap-3">
                 <button onClick={() => navigate('/exam-templates')} className="rounded-lg p-2 hover:bg-accent transition-colors">
                     <ArrowLeft className="size-5" />
@@ -235,6 +264,31 @@ export default function ExamTemplateEditorPage() {
                 <div className="flex-1">
                     <h1 className="text-xl font-bold text-foreground">{isNew ? '新建模板' : '编辑模板'}</h1>
                 </div>
+                <button
+                    onClick={() => setShowScanDialog(true)}
+                    className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                >
+                    <ScanLine className="size-4" />
+                    扫描导入
+                </button>
+                {!isNew && (
+                    <>
+                        <button
+                            onClick={handleTogglePublish}
+                            className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                        >
+                            {isPublic ? <Globe className="size-4 text-emerald-500" /> : <GlobeLock className="size-4" />}
+                            {isPublic ? '已发布' : '未发布'}
+                        </button>
+                        <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-2 rounded-lg border border-red-300 px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+                        >
+                            <Trash2 className="size-4" />
+                            删除
+                        </button>
+                    </>
+                )}
                 <button
                     onClick={handleSave}
                     disabled={saving}
@@ -245,7 +299,6 @@ export default function ExamTemplateEditorPage() {
                 </button>
             </div>
 
-            {/* Missing fields banner */}
             {missingCount > 0 && (
                 <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
                     <AlertTriangle className="size-4 shrink-0" />
@@ -253,7 +306,6 @@ export default function ExamTemplateEditorPage() {
                 </div>
             )}
 
-            {/* Basic info */}
             <div className="rounded-xl border border-border bg-card p-5 space-y-4">
                 <div className="grid gap-4 md:grid-cols-3">
                     <div>
@@ -286,7 +338,6 @@ export default function ExamTemplateEditorPage() {
                 </div>
             </div>
 
-            {/* Slots by type group */}
             {Array.from(typeGroups.entries()).map(([qtype, group]) => (
                 <div key={qtype} className="rounded-xl border border-border bg-card overflow-hidden">
                     <div className="flex items-center justify-between px-5 py-3 bg-muted/30 border-b border-border">
@@ -322,7 +373,6 @@ export default function ExamTemplateEditorPage() {
 
                                     {isExpanded && (
                                         <div className="px-5 pb-4 space-y-4 bg-muted/10">
-                                            {/* Slot config */}
                                             <div className="grid gap-3 md:grid-cols-4 pt-3">
                                                 <div>
                                                     <label className="text-xs text-muted-foreground">题号位置</label>
@@ -370,7 +420,6 @@ export default function ExamTemplateEditorPage() {
                                                 </div>
                                             </div>
 
-                                            {/* Questions */}
                                             <div className="space-y-3">
                                                 {slot.questions.map((q, qIdx) => (
                                                     <div
@@ -464,7 +513,6 @@ export default function ExamTemplateEditorPage() {
                 </div>
             ))}
 
-            {/* Add slot button */}
             <button
                 onClick={addSlot}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-4 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
@@ -472,6 +520,25 @@ export default function ExamTemplateEditorPage() {
                 <Plus className="size-4" />
                 添加题位
             </button>
+
+            {showScanDialog && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
+                    <div className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col">
+                        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+                            <h2 className="text-lg font-semibold text-foreground">扫描导入题目</h2>
+                            <button onClick={() => setShowScanDialog(false)} className="rounded-lg p-1.5 hover:bg-accent transition-colors">
+                                <X className="size-5 text-muted-foreground" />
+                            </button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            <OcrScanner
+                                onScanComplete={handleMergeScannedSlots}
+                                onCancel={() => setShowScanDialog(false)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
