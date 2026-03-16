@@ -161,8 +161,8 @@ export default function LoginPage() {
         const scheduleBlink = (set: (v: boolean) => void): ReturnType<typeof setTimeout> => {
             const t = setTimeout(() => {
                 set(true)
-                setTimeout(() => { set(false); scheduleBlink(set) }, 140)
-            }, Math.random() * 4000 + 2500)
+                setTimeout(() => { set(false); scheduleBlink(set) }, 150)
+            }, Math.random() * 4000 + 3000)
             return t
         }
         const t1 = scheduleBlink(setChar1Blink)
@@ -311,9 +311,6 @@ export default function LoginPage() {
             >
                 {/* Brand */}
                 <div className="relative z-10 flex items-center gap-2.5">
-                    <div className="flex size-9 items-center justify-center rounded-xl bg-indigo-500/10 backdrop-blur-sm ring-1 ring-indigo-500/20">
-                        <Sparkles className="size-4 text-indigo-600" />
-                    </div>
                     <span className="text-lg font-semibold tracking-tight">CogniLoop</span>
                 </div>
 
@@ -329,7 +326,7 @@ export default function LoginPage() {
                                 left: '55px',
                                 width: '155px',
                                 height: passwordHiding ? '430px' : '375px',
-                                backgroundColor: '#7c3aed', // violet-600
+                                backgroundColor: '#6C3FF5', // purple
                                 borderRadius: '10px 10px 0 0',
                                 zIndex: 1,
                                 transform: passwordRevealed
@@ -350,11 +347,11 @@ export default function LoginPage() {
                                 {[0, 1].map(i => (
                                     <EyeBall key={i}
                                         size={19} pupilSize={8} maxDistance={5}
-                                        eyeColor="white" pupilColor="#4c1d95"
+                                        eyeColor="white" pupilColor="#3b0764"
                                         isBlinking={char1Blink}
                                         mouseX={mouse.x} mouseY={mouse.y}
                                         forceLookX={passwordRevealed ? (isPurplePeeking ? 4 : -4) : isLookingAtEachOther ? 4 : undefined}
-                                        forceLookY={passwordRevealed ? (isPurplePeeking ? 5 : -4) : isLookingAtEachOther ? 3 : undefined}
+                                        forceLookY={passwordRevealed ? (isPurplePeeking ? -5 : -4) : isLookingAtEachOther ? 3 : undefined}
                                     />
                                 ))}
                             </div>
@@ -368,7 +365,7 @@ export default function LoginPage() {
                                 left: '205px',
                                 width: '110px',
                                 height: '295px',
-                                backgroundColor: '#1e1b4b', // indigo-950
+                                backgroundColor: '#2D2D2D', // dark gray
                                 borderRadius: '8px 8px 0 0',
                                 zIndex: 2,
                                 transform: passwordRevealed
@@ -389,7 +386,7 @@ export default function LoginPage() {
                                 {[0, 1].map(i => (
                                     <EyeBall key={i}
                                         size={15} pupilSize={6} maxDistance={4}
-                                        eyeColor="white" pupilColor="#1e1b4b"
+                                        eyeColor="white" pupilColor="#111111"
                                         isBlinking={char2Blink}
                                         mouseX={mouse.x} mouseY={mouse.y}
                                         forceLookX={passwordRevealed ? -4 : isLookingAtEachOther ? -2 : undefined}
@@ -407,7 +404,7 @@ export default function LoginPage() {
                                 left: '-5px',
                                 width: '215px',
                                 height: '188px',
-                                backgroundColor: '#6ee7b7', // emerald-300
+                                backgroundColor: '#FF9B6B', // orange/salmon
                                 borderRadius: '110px 110px 0 0',
                                 zIndex: 3,
                                 transform: passwordRevealed ? 'skewX(0deg)' : `skewX(${s3}deg)`,
@@ -423,8 +420,8 @@ export default function LoginPage() {
                             >
                                 {[0, 1].map(i => (
                                     <EyeBall key={i}
-                                        size={16} pupilSize={7} maxDistance={5}
-                                        eyeColor="white" pupilColor="#064e3b"
+                                        size={26} pupilSize={12} maxDistance={5}
+                                        eyeColor="transparent" pupilColor="#7c2d12"
                                         mouseX={mouse.x} mouseY={mouse.y}
                                         forceLookX={passwordRevealed ? -5 : undefined}
                                         forceLookY={passwordRevealed ? -4 : undefined}
@@ -441,7 +438,7 @@ export default function LoginPage() {
                                 left: '310px',
                                 width: '130px',
                                 height: '220px',
-                                backgroundColor: '#fcd34d', // amber-300
+                                backgroundColor: '#E8D754', // yellow
                                 borderRadius: '65px 65px 0 0',
                                 zIndex: 4,
                                 transform: passwordRevealed ? 'skewX(0deg)' : `skewX(${s4}deg)`,
@@ -451,14 +448,14 @@ export default function LoginPage() {
                             <div
                                 className="absolute flex gap-5 transition-all duration-200 ease-out"
                                 style={{
-                                    left: passwordRevealed ? '18px' : `${44 + f4.fx}px`,
+                                    left: passwordRevealed ? '18px' : `${29 + f4.fx * 0.4}px`,
                                     top: passwordRevealed ? '30px' : `${34 + f4.fy}px`,
                                 }}
                             >
                                 {[0, 1].map(i => (
                                     <EyeBall key={i}
-                                        size={15} pupilSize={6} maxDistance={5}
-                                        eyeColor="white" pupilColor="#78350f"
+                                        size={26} pupilSize={12} maxDistance={5}
+                                        eyeColor="transparent" pupilColor="#5a4700"
                                         mouseX={mouse.x} mouseY={mouse.y}
                                         forceLookX={passwordRevealed ? -5 : undefined}
                                         forceLookY={passwordRevealed ? -4 : undefined}
@@ -618,10 +615,10 @@ export default function LoginPage() {
 
                     {/* Register-only fields — always in DOM, grid-rows height animates open/closed */}
                                     <div className={`grid transition-all duration-300 ease-in-out ${
-                                        mode === 'register' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+                                        mode === 'register' ? 'grid-rows-[1fr]' : 'grid-rows-[0fr] -mt-4'
                                     }`}>
                                         <div className="min-h-0 overflow-hidden">
-                                            <div className="space-y-4 pt-4">
+                                            <div className="space-y-4">
                                                 <div>
                                                     <label className="mb-1.5 block text-sm font-medium text-foreground">邮箱</label>
                                                     <input
@@ -735,7 +732,9 @@ export default function LoginPage() {
                     </div>
 
                     <p className="mt-6 text-center text-xs text-muted-foreground">
-                        继续即表示您同意我们的服务条款和隐私政策
+                        如果你觉得这个项目不错，欢迎去{' '}
+                        <a href="https://github.com/itsmorninghao/CogniLoop" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-foreground transition-colors">GitHub</a>
+                        {' '}点个 Star
                     </p>
                 </div>
             </div>
