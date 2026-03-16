@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { Search, BookOpen, FileText, Loader2 } from 'lucide-react'
-import { plazaApi, quizPlazaApi, userApi, KnowledgeBase, QuizPlazaItem, UserPublicInfo } from '@/lib/api'
+import { api, type KnowledgeBase, type QuizPlazaItem, type UserPublicInfo } from '@/lib/api'
 
 interface SearchResults {
     kbs: KnowledgeBase[]
@@ -17,23 +17,34 @@ export function GlobalSearchBar() {
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const containerRef = useRef<HTMLDivElement>(null)
     const searchVersionRef = useRef(0)
+    const abortControllerRef = useRef<AbortController | null>(null)
     const navigate = useNavigate()
 
     const performSearch = async (q: string) => {
+        abortControllerRef.current?.abort()
+        const controller = new AbortController()
+        abortControllerRef.current = controller
+        const signal = controller.signal
+
         const version = ++searchVersionRef.current
         setIsLoading(true)
-        const [kbRes, quizRes, userRes] = await Promise.allSettled([
-            plazaApi.list(q),
-            quizPlazaApi.list(q),
-            userApi.search(q, 5),
-        ])
-        if (version !== searchVersionRef.current) return  // discard stale results
-        setResults({
-            kbs: kbRes.status === 'fulfilled' ? kbRes.value.slice(0, 4) : [],
-            quizzes: quizRes.status === 'fulfilled' ? quizRes.value.slice(0, 4) : [],
-            users: userRes.status === 'fulfilled' ? userRes.value.slice(0, 4) : [],
-        })
-        setIsLoading(false)
+        try {
+            const [kbRes, quizRes, userRes] = await Promise.allSettled([
+                api.get<KnowledgeBase[]>(`/kb-plaza/?q=${encodeURIComponent(q)}`, { signal }),
+                api.get<QuizPlazaItem[]>(`/quiz-plaza/?q=${encodeURIComponent(q)}`, { signal }),
+                api.get<UserPublicInfo[]>(`/users/search?q=${encodeURIComponent(q)}&limit=5`, { signal }),
+            ])
+            if (version !== searchVersionRef.current) return  // discard stale results
+            setResults({
+                kbs: kbRes.status === 'fulfilled' ? kbRes.value.slice(0, 4) : [],
+                quizzes: quizRes.status === 'fulfilled' ? quizRes.value.slice(0, 4) : [],
+                users: userRes.status === 'fulfilled' ? userRes.value.slice(0, 4) : [],
+            })
+        } catch (err) {
+            if ((err as Error).name === 'AbortError') return
+        } finally {
+            if (version === searchVersionRef.current) setIsLoading(false)
+        }
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -43,6 +54,7 @@ export function GlobalSearchBar() {
         if (debounceRef.current) clearTimeout(debounceRef.current)
 
         if (q.trim().length < 2) {
+            abortControllerRef.current?.abort()
             searchVersionRef.current++  // invalidate any in-flight requests
             setResults(null)
             setIsOpen(false)
@@ -79,6 +91,11 @@ export function GlobalSearchBar() {
         }
         document.addEventListener('mousedown', handler)
         return () => document.removeEventListener('mousedown', handler)
+    }, [])
+
+    // Abort in-flight requests on unmount
+    useEffect(() => {
+        return () => { abortControllerRef.current?.abort() }
     }, [])
 
     const hasResults = results && (results.kbs.length > 0 || results.quizzes.length > 0 || results.users.length > 0)

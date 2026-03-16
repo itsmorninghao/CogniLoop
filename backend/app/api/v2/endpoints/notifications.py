@@ -14,7 +14,6 @@ from sqlmodel import select
 
 from backend.app.core.database import async_session_factory, get_session
 from backend.app.core.deps import get_current_user
-from backend.app.core.security import decode_access_token
 from backend.app.core.ws_manager import ws_manager
 from backend.app.models.user import User
 from backend.app.services import notification_service
@@ -115,25 +114,22 @@ async def get_sse_ticket(current_user: User = Depends(get_current_user)):
 @router.websocket("/ws")
 async def notifications_ws(
     websocket: WebSocket,
-    token: str = Query(..., description="JWT access token"),
+    ticket: str = Query(..., description="One-time authentication ticket"),
 ):
     """WebSocket endpoint for real-time notification count updates.
-    Connect with: ws://host/api/v2/notifications/ws?token=<jwt>
+    Connect with: ws://host/api/v2/notifications/ws?ticket=<ticket>
     Messages: {"type": "unread_count", "count": N}
     """
-    payload = decode_access_token(token)
-    if payload is None:
-        await websocket.close(code=1008, reason="Invalid token")
-        return
+    from backend.app.core.sse_ticket import consume_ticket
 
-    user_id: int | None = payload.get("sub")
+    user_id = consume_ticket(ticket)
     if user_id is None:
-        await websocket.close(code=1008, reason="Invalid token")
+        await websocket.close(code=1008, reason="Invalid or expired ticket")
         return
 
     # Auth + initial unread count in a short-lived DB session
     async with async_session_factory() as session:
-        result = await session.execute(select(User).where(User.id == int(user_id)))
+        result = await session.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if user is None or not user.is_active:
             await websocket.close(code=1008, reason="User not found")

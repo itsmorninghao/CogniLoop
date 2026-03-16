@@ -12,25 +12,25 @@ import { TrajectoryBar } from '@/components/shared/TrajectoryBar'
 import { QuizStatusBadge } from '@/components/shared/QuizStatusBadge'
 import { useAsync } from '@/hooks/useAsync'
 
-/* ── Dashboard Page ───────────────────────── */
+function getGreeting(): string {
+    const h = new Date().getHours()
+    if (h < 12) return '早上好'
+    if (h < 18) return '下午好'
+    return '晚上好'
+}
+
+/* ── Dashboard Page ── */
 export default function DashboardPage() {
-    const { data: profile } = useAsync<UserProfile>(() => profileApi.getMyProfile(), [])
-    const { data: recentQuizzes } = useAsync<QuizSessionListItem[]>(() => quizApi.list(5), [])
-    const { data: kbs } = useAsync(() => kbApi.list(), [])
-    const { data: circles } = useAsync(() => circleApi.list(), [])
+    const { data: profile, loading: profileLoading } = useAsync<UserProfile>(() => profileApi.getMyProfile(), [])
+    const { data: recentQuizzes, loading: quizzesLoading } = useAsync<QuizSessionListItem[]>(() => quizApi.list(5), [])
+    const { data: kbs, loading: kbsLoading } = useAsync(() => kbApi.list(), [])
+    const { data: circles, loading: circlesLoading } = useAsync(() => circleApi.list(), [])
 
     const kbCount = kbs?.length ?? 0
     const circleCount = circles?.length ?? 0
     const totalAnswered = profile?.total_questions_answered ?? 0
     const accuracy = profile?.overall_accuracy ?? 0
     const trajectory = profile?.learning_trajectory ?? []
-
-    const getGreeting = () => {
-        const h = new Date().getHours()
-        if (h < 12) return '早上好'
-        if (h < 18) return '下午好'
-        return '晚上好'
-    }
 
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
@@ -65,10 +65,10 @@ export default function DashboardPage() {
 
             {/* Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
-                <StatCard icon={BookOpen} label="知识库" value={String(kbCount)} gradient="from-blue-500 to-cyan-500" />
-                <StatCard icon={PenTool} label="已做题目" value={String(totalAnswered)} gradient="from-purple-500 to-pink-500" />
-                <StatCard icon={Target} label="总体正确率" value={totalAnswered > 0 ? `${(accuracy * 100).toFixed(0)}%` : '—'} gradient="from-emerald-500 to-green-500" />
-                <StatCard icon={Users} label="学习圈" value={String(circleCount)} gradient="from-pink-500 to-rose-500" />
+                {kbsLoading ? <StatCardSkeleton /> : <StatCard icon={BookOpen} label="知识库" value={String(kbCount)} gradient="from-blue-500 to-cyan-500" />}
+                {profileLoading ? <StatCardSkeleton /> : <StatCard icon={PenTool} label="已做题目" value={String(totalAnswered)} gradient="from-purple-500 to-pink-500" />}
+                {profileLoading ? <StatCardSkeleton /> : <StatCard icon={Target} label="总体正确率" value={totalAnswered > 0 ? `${(accuracy * 100).toFixed(0)}%` : '—'} gradient="from-emerald-500 to-green-500" />}
+                {circlesLoading ? <StatCardSkeleton /> : <StatCard icon={Users} label="学习圈" value={String(circleCount)} gradient="from-pink-500 to-rose-500" />}
             </div>
 
             {/* Two-column */}
@@ -85,7 +85,19 @@ export default function DashboardPage() {
                         </Link>
                     </div>
                     <div className="p-4">
-                        {!recentQuizzes || recentQuizzes.length === 0 ? (
+                        {quizzesLoading ? (
+                            <div className="space-y-2">
+                                {[0, 1, 2].map((i) => (
+                                    <div key={i} className="flex items-center gap-3 rounded-lg border border-border p-3 animate-pulse">
+                                        <div className="size-9 rounded-lg bg-muted" />
+                                        <div className="flex-1 space-y-1.5">
+                                            <div className="h-3 w-40 rounded bg-muted" />
+                                            <div className="h-2.5 w-24 rounded bg-muted" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : !recentQuizzes || recentQuizzes.length === 0 ? (
                             <div className="flex flex-col items-center justify-center py-8 text-center">
                                 <div className="mb-3 flex size-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30">
                                     <Flame className="size-6 text-primary" />
@@ -153,7 +165,7 @@ export default function DashboardPage() {
     )
 }
 
-/* ── Sub Components ───────────────────────── */
+/* ── Sub Components ── */
 
 function StatCard({ icon: Icon, label, value, gradient }: { icon: React.ElementType; label: string; value: string; gradient: string }) {
     return (
@@ -166,6 +178,20 @@ function StatCard({ icon: Icon, label, value, gradient }: { icon: React.ElementT
                 <div className={`flex size-12 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} shadow-lg transition-transform duration-200 group-hover:scale-110`}>
                     <Icon className="size-6 text-white" />
                 </div>
+            </div>
+        </div>
+    )
+}
+
+function StatCardSkeleton() {
+    return (
+        <div className="rounded-xl border border-border bg-card p-6 animate-pulse">
+            <div className="flex items-center justify-between">
+                <div className="flex-1 space-y-2">
+                    <div className="h-3 w-16 rounded bg-muted" />
+                    <div className="h-8 w-20 rounded bg-muted" />
+                </div>
+                <div className="size-12 rounded-xl bg-muted" />
             </div>
         </div>
     )

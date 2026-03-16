@@ -59,13 +59,12 @@ export default function AppLayout() {
 
     useEffect(() => {
         document.documentElement.classList.toggle('dark', dark)
-    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [dark])
 
     const toggleDark = () => {
         const next = !dark
         setDark(next)
         localStorage.setItem('dark', String(next))
-        document.documentElement.classList.toggle('dark', next)
     }
 
     // WebSocket for real-time notifications (with HTTP polling fallback)
@@ -73,13 +72,20 @@ export default function AppLayout() {
         if (!token) return
 
         notificationApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {})
-        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v2/notifications/ws?token=${encodeURIComponent(token)}`
+        const wsBase = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/v2/notifications/ws`
         let ws: WebSocket | null = null
         let unmounted = false
 
-        const connect = () => {
+        const connect = async () => {
             if (unmounted) return
-            ws = new WebSocket(wsUrl)
+            try {
+                const { ticket } = await notificationApi.getSseTicket()
+                if (unmounted) return
+                ws = new WebSocket(`${wsBase}?ticket=${encodeURIComponent(ticket)}`)
+            } catch {
+                if (!unmounted) reconnectTimerRef.current = setTimeout(connect, 5000)
+                return
+            }
             ws.onmessage = (e) => {
                 try {
                     const data = JSON.parse(e.data)
@@ -87,16 +93,12 @@ export default function AppLayout() {
                 } catch { /* ignore */ }
             }
             ws.onclose = () => {
-                if (!unmounted) {
-                    // Reconnect WS after 5s
-                    reconnectTimerRef.current = setTimeout(connect, 5000)
-                }
+                if (!unmounted) reconnectTimerRef.current = setTimeout(connect, 5000)
             }
         }
 
         connect()
 
-        // HTTP polling fallback every 60s
         const interval = setInterval(() => {
             notificationApi.unreadCount().then((r) => setUnreadCount(r.count)).catch(() => {})
         }, 60000)

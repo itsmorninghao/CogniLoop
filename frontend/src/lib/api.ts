@@ -86,7 +86,7 @@ export class ApiError extends Error {
 }
 
 export const api = {
-    get: <T>(path: string) => request<T>(path),
+    get: <T>(path: string, options?: RequestInit) => request<T>(path, options),
     post: <T>(path: string, body?: unknown) =>
         request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
     patch: <T>(path: string, body?: unknown) =>
@@ -555,6 +555,7 @@ export const notificationApi = {
     unreadCount: () => api.get<{ count: number }>('/notifications/unread-count'),
     markRead: (id: number) => api.patch(`/notifications/${id}/read`),
     markAllRead: () => api.post('/notifications/read-all'),
+    getSseTicket: () => api.post<{ ticket: string }>('/notifications/sse-ticket'),
 }
 
 // Admin API
