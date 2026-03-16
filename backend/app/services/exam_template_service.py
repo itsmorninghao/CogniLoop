@@ -26,9 +26,11 @@ from backend.app.models.user import User
 from backend.app.schemas.exam_template import (
     ExamTemplateCreate,
     ExamTemplateUpdate,
+    PlazaTemplateItem,
     QuestionCreate,
     QuestionUpdate,
     SlotCreate,
+    TemplatePlazaPage,
 )
 
 logger = logging.getLogger(__name__)
@@ -420,7 +422,7 @@ async def unpublish_from_plaza(
 
 async def list_plaza_templates(
     limit: int, offset: int, session: AsyncSession
-) -> list[dict]:
+) -> TemplatePlazaPage:
     slot_count_sub = (
         select(func.count(ExamTemplateSlot.id))
         .where(ExamTemplateSlot.template_id == ExamTemplate.id)
@@ -435,6 +437,16 @@ async def list_plaza_templates(
         .scalar_subquery()
     )
 
+    conditions = [ExamTemplate.is_public == True]  # noqa: E712
+
+    # Total count — include User JOIN to match main query's INNER JOIN
+    count_stmt = (
+        select(func.count(ExamTemplate.id))
+        .join(User, ExamTemplate.user_id == User.id)
+        .where(*conditions)
+    )
+    total = (await session.execute(count_stmt)).scalar_one()
+
     stmt = (
         select(
             ExamTemplate,
@@ -442,9 +454,10 @@ async def list_plaza_templates(
             question_count_sub.label("question_count"),
             User.username.label("creator_username"),
             User.full_name.label("creator_full_name"),
+            User.avatar_url.label("creator_avatar_url"),
         )
         .join(User, ExamTemplate.user_id == User.id)
-        .where(ExamTemplate.is_public == True)  # noqa: E712
+        .where(*conditions)
         .order_by(ExamTemplate.created_at.desc())
         .offset(offset)
         .limit(limit)
@@ -453,20 +466,22 @@ async def list_plaza_templates(
     result = await session.execute(stmt)
     rows = result.all()
 
-    return [
-        {
-            "id": t.id,
-            "name": t.name,
-            "description": t.description,
-            "subject": t.subject,
-            "slot_count": sc or 0,
-            "question_count": qc or 0,
-            "creator_username": username or "",
-            "creator_full_name": full_name or "",
-            "created_at": t.created_at,
-        }
-        for t, sc, qc, username, full_name in rows
+    items = [
+        PlazaTemplateItem(
+            id=t.id,
+            name=t.name,
+            description=t.description,
+            subject=t.subject,
+            slot_count=sc or 0,
+            question_count=qc or 0,
+            creator_username=username or "",
+            creator_full_name=full_name or "",
+            creator_avatar_url=avatar_url,
+            created_at=t.created_at,
+        )
+        for t, sc, qc, username, full_name, avatar_url in rows
     ]
+    return TemplatePlazaPage(items=items, total=total)
 
 
 async def acquire_template(

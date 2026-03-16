@@ -64,5 +64,26 @@ class DocumentResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class KBPlazaItem(BaseModel):
+    id: int
+    name: str
+    description: str | None = None
+    tags: list[str] | None = None
+    kb_type: str
+    document_count: int
+    share_code: str | None = None
+    shared_to_plaza_at: datetime
+    acquire_count: int = 0
+    creator_full_name: str
+    creator_username: str
+    creator_avatar_url: str | None = None
+    created_at: datetime
+
+
+class KBPlazaPage(BaseModel):
+    items: list[KBPlazaItem]
+    total: int
+
+
 class AcquireByShareCodeRequest(BaseModel):
     share_code: str = Field(min_length=1, max_length=12)

@@ -33,6 +33,7 @@ from backend.app.schemas.quiz import (
     QuestionResponse,
     QuizCreateRequest,
     QuizPlazaItem,
+    QuizPlazaPage,
     QuizResponseResult,
     QuizResponseSubmit,
     QuizSessionListItem,
@@ -783,7 +784,25 @@ async def list_acquired(
     return items
 
 
-async def list_quiz_plaza(db: AsyncSession, *, q: str | None = None) -> list[QuizPlazaItem]:
+async def list_quiz_plaza(
+    db: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> QuizPlazaPage:
+    conditions = [QuizSession.shared_to_plaza_at.isnot(None)]
+    if q:
+        conditions.append(QuizSession.title.icontains(q))
+
+    # Total count — include User JOIN to match main query's INNER JOIN
+    count_stmt = (
+        select(func.count(QuizSession.id))
+        .join(User, QuizSession.creator_id == User.id)
+        .where(*conditions)
+    )
+    total = (await db.execute(count_stmt)).scalar_one()
+
     count_subq = _question_count_subq()
     acq_count_subq = (
         select(
@@ -798,19 +817,20 @@ async def list_quiz_plaza(db: AsyncSession, *, q: str | None = None) -> list[Qui
             QuizSession,
             User.full_name,
             User.username,
+            User.avatar_url,
             func.coalesce(count_subq.c.qcount, 0),
             func.coalesce(acq_count_subq.c.acquire_count, 0),
         )
         .join(User, QuizSession.creator_id == User.id)
         .outerjoin(count_subq, QuizSession.id == count_subq.c.session_id)
         .outerjoin(acq_count_subq, QuizSession.id == acq_count_subq.c.session_id)
-        .where(QuizSession.shared_to_plaza_at.isnot(None))
+        .where(*conditions)
+        .order_by(QuizSession.shared_to_plaza_at.desc())
+        .offset(offset)
+        .limit(limit)
     )
-    if q:
-        stmt = stmt.where(QuizSession.title.icontains(q))
-    stmt = stmt.order_by(QuizSession.shared_to_plaza_at.desc())
     result = await db.execute(stmt)
-    return [
+    items = [
         QuizPlazaItem(
             id=qs.id,
             title=qs.title,
@@ -819,9 +839,12 @@ async def list_quiz_plaza(db: AsyncSession, *, q: str | None = None) -> list[Qui
             accuracy=qs.accuracy,
             creator_full_name=full_name,
             creator_username=username,
+            creator_avatar_url=avatar_url,
             acquire_count=acquire_count,
             shared_to_plaza_at=qs.shared_to_plaza_at,
             share_code=qs.share_code,
         )
-        for qs, full_name, username, qcount, acquire_count in result.all()
+        for qs, full_name, username, avatar_url, qcount, acquire_count
+        in result.all()
     ]
+    return QuizPlazaPage(items=items, total=total)

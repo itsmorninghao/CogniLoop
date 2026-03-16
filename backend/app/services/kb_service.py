@@ -33,6 +33,8 @@ from backend.app.schemas.knowledge_base import (
     FolderCreateRequest,
     FolderResponse,
     KBCreateRequest,
+    KBPlazaItem,
+    KBPlazaPage,
     KBResponse,
     KBUpdateRequest,
 )
@@ -479,16 +481,74 @@ async def acquire_by_share_code(
     return KBResponse.model_validate(kb)
 
 
-async def list_plaza_kbs(session: AsyncSession, *, q: str | None = None) -> list[KBResponse]:
-    stmt = (
-        select(KnowledgeBase)
-        .where(KnowledgeBase.shared_to_plaza_at.isnot(None))
-    )
+async def list_plaza_kbs(
+    session: AsyncSession,
+    *,
+    q: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> KBPlazaPage:
+    conditions = [KnowledgeBase.shared_to_plaza_at.isnot(None)]
     if q:
-        stmt = stmt.where(KnowledgeBase.name.icontains(q))
-    stmt = stmt.order_by(KnowledgeBase.shared_to_plaza_at.desc())
+        conditions.append(KnowledgeBase.name.icontains(q))
+
+    # Acquire count subquery (built once, reused for count + main)
+    acq_count_sub = (
+        select(
+            KBAcquisition.knowledge_base_id,
+            func.count(KBAcquisition.id).label("acquire_count"),
+        )
+        .group_by(KBAcquisition.knowledge_base_id)
+        .subquery()
+    )
+
+    # Total count — include User JOIN to match main query's INNER JOIN
+    count_stmt = (
+        select(func.count(KnowledgeBase.id))
+        .join(User, KnowledgeBase.owner_id == User.id)
+        .where(*conditions)
+    )
+    total = (await session.execute(count_stmt)).scalar_one()
+
+    stmt = (
+        select(
+            KnowledgeBase,
+            User.full_name.label("creator_full_name"),
+            User.username.label("creator_username"),
+            User.avatar_url.label("creator_avatar_url"),
+            func.coalesce(acq_count_sub.c.acquire_count, 0).label("acquire_count"),
+        )
+        .join(User, KnowledgeBase.owner_id == User.id)
+        .outerjoin(
+            acq_count_sub,
+            KnowledgeBase.id == acq_count_sub.c.knowledge_base_id,
+        )
+        .where(*conditions)
+        .order_by(KnowledgeBase.shared_to_plaza_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
     result = await session.execute(stmt)
-    return [KBResponse.model_validate(kb) for kb in result.scalars().all()]
+    items = [
+        KBPlazaItem(
+            id=kb.id,
+            name=kb.name,
+            description=kb.description,
+            tags=kb.tags,
+            kb_type=kb.kb_type,
+            document_count=kb.document_count,
+            share_code=kb.share_code,
+            shared_to_plaza_at=kb.shared_to_plaza_at,
+            acquire_count=acquire_count,
+            creator_full_name=creator_full_name or "",
+            creator_username=creator_username or "",
+            creator_avatar_url=creator_avatar_url,
+            created_at=kb.created_at,
+        )
+        for kb, creator_full_name, creator_username, creator_avatar_url, acquire_count
+        in result.all()
+    ]
+    return KBPlazaPage(items=items, total=total)
 
 
 async def _get_kb_or_404(kb_id: int, session: AsyncSession) -> KnowledgeBase:

@@ -15,11 +15,11 @@ from backend.app.schemas.exam_template import (
     ExamTemplateListItem,
     ExamTemplateResponse,
     ExamTemplateUpdate,
-    PlazaTemplateItem,
     QuestionCreate,
     QuestionResponse,
     QuestionUpdate,
     SlotsReplaceRequest,
+    TemplatePlazaPage,
 )
 from backend.app.services import exam_template_service
 
@@ -49,13 +49,13 @@ async def list_templates(
     )
 
 
-@router.get("/plaza", response_model=list[PlazaTemplateItem])
+@router.get("/plaza", response_model=TemplatePlazaPage)
 async def list_plaza_templates(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-):
+) -> TemplatePlazaPage:
     return await exam_template_service.list_plaza_templates(limit, offset, session)
 
 

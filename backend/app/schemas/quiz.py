@@ -152,9 +152,15 @@ class QuizPlazaItem(BaseModel):
     accuracy: float | None = None
     creator_full_name: str
     creator_username: str
+    creator_avatar_url: str | None = None
     acquire_count: int
     shared_to_plaza_at: datetime
     share_code: str | None = None
+
+
+class QuizPlazaPage(BaseModel):
+    items: list[QuizPlazaItem]
+    total: int
 
 
 class AcquireQuizRequest(BaseModel):

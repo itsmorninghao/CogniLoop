@@ -318,6 +318,27 @@ export interface QuizSessionListItem {
     acquired_at: string | null
 }
 
+export interface KBPlazaItem {
+    id: number
+    name: string
+    description: string | null
+    tags: string[]
+    kb_type: string
+    document_count: number
+    share_code: string | null
+    shared_to_plaza_at: string
+    acquire_count: number
+    creator_full_name: string
+    creator_username: string
+    creator_avatar_url: string | null
+    created_at: string
+}
+
+export interface PaginatedResponse<T> {
+    items: T[]
+    total: number
+}
+
 export interface QuizPlazaItem {
     id: string
     title: string | null
@@ -326,6 +347,7 @@ export interface QuizPlazaItem {
     accuracy: number | null
     creator_full_name: string
     creator_username: string
+    creator_avatar_url: string | null
     acquire_count: number
     shared_to_plaza_at: string
     share_code: string | null
@@ -387,6 +409,7 @@ export interface PlazaTemplateItem {
     question_count: number
     creator_username: string
     creator_full_name: string
+    creator_avatar_url: string | null
     created_at: string
 }
 
@@ -418,7 +441,7 @@ export const examTemplateApi = {
     publish: (id: number) => api.post<ExamTemplate>(`/exam-templates/${id}/publish`),
     unpublish: (id: number) => api.delete<ExamTemplate>(`/exam-templates/${id}/publish`),
     listPlaza: (limit = 50, offset = 0) =>
-        api.get<PlazaTemplateItem[]>(`/exam-templates/plaza?limit=${limit}&offset=${offset}`),
+        api.get<PaginatedResponse<PlazaTemplateItem>>(`/exam-templates/plaza?limit=${limit}&offset=${offset}`),
     acquire: (id: number) => api.post<ExamTemplate>(`/exam-templates/${id}/acquire`),
 }
 
@@ -483,8 +506,13 @@ export const quizApi = {
 }
 
 export const quizPlazaApi = {
-    list: (q?: string) =>
-        api.get<QuizPlazaItem[]>(q ? `/quiz-plaza/?q=${encodeURIComponent(q)}` : '/quiz-plaza/'),
+    list: (q?: string, limit = 20, offset = 0) => {
+        const params = new URLSearchParams()
+        if (q) params.set('q', q)
+        params.set('limit', String(limit))
+        params.set('offset', String(offset))
+        return api.get<PaginatedResponse<QuizPlazaItem>>(`/quiz-plaza/?${params}`)
+    },
 }
 
 // Profile API
@@ -803,8 +831,13 @@ export const circleApi = {
 // Plaza API
 
 export const plazaApi = {
-    list: (q?: string) =>
-        api.get<KnowledgeBase[]>(q ? `/kb-plaza/?q=${encodeURIComponent(q)}` : '/kb-plaza/'),
+    list: (q?: string, limit = 20, offset = 0) => {
+        const params = new URLSearchParams()
+        if (q) params.set('q', q)
+        params.set('limit', String(limit))
+        params.set('offset', String(offset))
+        return api.get<PaginatedResponse<KBPlazaItem>>(`/kb-plaza/?${params}`)
+    },
 }
 
 // Challenge API

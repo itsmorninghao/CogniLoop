@@ -4,7 +4,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # Request schemas
 
 class QuestionCreate(BaseModel):
@@ -128,4 +127,10 @@ class PlazaTemplateItem(BaseModel):
     question_count: int = 0
     creator_username: str
     creator_full_name: str
+    creator_avatar_url: str | None = None
     created_at: datetime
+
+
+class TemplatePlazaPage(BaseModel):
+    items: list[PlazaTemplateItem]
+    total: int
