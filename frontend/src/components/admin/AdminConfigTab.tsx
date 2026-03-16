@@ -69,6 +69,7 @@ export function AdminConfigTab() {
     )
 
     const [allowRegistration, setAllowRegistration] = useState(true)
+    const [dailyAssistantEnabled, setDailyAssistantEnabled] = useState(true)
 
     const [rawConfirmInput, setRawConfirmInput] = useState('')
     const rawUnlocked = rawConfirmInput === '我明白我在做什么并且我确认我需要这么做'
@@ -172,6 +173,7 @@ export function AdminConfigTab() {
 
             const allowReg = data.find((c: SystemConfig) => c.key === 'ALLOW_REGISTRATION')?.value
             setAllowRegistration(allowReg !== 'false')
+            setDailyAssistantEnabled(get('DAILY_ASSISTANT_ENABLED') !== 'false')
         } catch {
             toast.error('加载系统配置失败')
         } finally {
@@ -236,6 +238,7 @@ export function AdminConfigTab() {
             if (ocrConfig.mode === 'ocr_plus_llm') {
                 await adminApi.setConfig('OCR_LLM_MODEL', ocrConfig.llmModel, 'OCR 结构化 LLM 模型')
             }
+            await adminApi.setConfig('DAILY_ASSISTANT_ENABLED', String(dailyAssistantEnabled), '每日 AI 助理定时任务开关')
             toast.success('AI 服务配置已保存')
             loadConfigs()
         } catch { toast.error('保存失败') } finally { setSaving(p => ({ ...p, aiServices: false })) }
@@ -553,6 +556,29 @@ export function AdminConfigTab() {
                                 {testing.ocr ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
                                 {testing.ocr ? '识别中...' : '测试识别'}
                             </button>
+                        </div>
+                    </div>
+
+                    {/* Daily Assistant Scheduler */}
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-0.5">每日 AI 助理</p>
+                            <p className="text-sm text-muted-foreground">每天 UTC 00:00 自动为所有活跃用户重新计算学习档案与推荐内容,每个用户约 2 次 LLM 调用。</p>
+                        </div>
+                        <div className="divide-y divide-border">
+                            <div className="flex items-center justify-between px-6 py-4">
+                                <div>
+                                    <label className="text-sm font-medium text-foreground">启用每日定时任务</label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">关闭后定时任务将在下次触发时跳过</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setDailyAssistantEnabled(v => !v)}
+                                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${dailyAssistantEnabled ? 'bg-primary' : 'bg-muted-foreground/30'}`}
+                                >
+                                    <span className={`inline-block size-4 rounded-full bg-white transition-transform ${dailyAssistantEnabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                                </button>
+                            </div>
                         </div>
                     </div>
 

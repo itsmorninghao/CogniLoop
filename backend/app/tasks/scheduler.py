@@ -21,6 +21,13 @@ async def _daily_assistant_run() -> None:
     from backend.app.core.database import async_session_factory
     from backend.app.graphs.assistant.graph import assistant_graph
     from backend.app.models.user import User
+    from backend.app.services import config_service
+
+    async with async_session_factory() as session:
+        enabled_val = await config_service.get_config("DAILY_ASSISTANT_ENABLED", session)
+    if enabled_val == "false":
+        logger.info("Daily assistant run: skipped (DAILY_ASSISTANT_ENABLED=false)")
+        return
 
     async with async_session_factory() as session:
         result = await session.execute(select(User.id).where(User.is_active.is_(True)))
