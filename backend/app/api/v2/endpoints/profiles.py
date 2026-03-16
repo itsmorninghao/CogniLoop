@@ -2,10 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.database import get_session
 from backend.app.core.deps import get_current_user
+from backend.app.models.circle import CircleMember
+from backend.app.models.quiz import QuizAcquisition, QuizSession
 from backend.app.models.user import User
 from backend.app.services import profile_service
 
@@ -14,12 +17,22 @@ router = APIRouter(prefix="/profiles", tags=["Profiles"])
 
 class ProfileResponse(BaseModel):
     user_id: int
+    username: str = ""
+    full_name: str | None = None
+    avatar_url: str | None = None
+    joined_at: str = ""
     overall_level: str
     total_questions_answered: int
+    total_quizzes_created: int = 0
+    circles_count: int = 0
     overall_accuracy: float
     question_type_profiles: dict
     domain_profiles: dict
     learning_trajectory: list
+    knowledge_point_profiles: dict = {}
+    weakness_analysis: dict = {}
+    insight_summary: str = ""
+    last_analysis_session_id: str | None = None
     profile_version: int
     last_calculated_at: str | None
 
@@ -37,16 +50,49 @@ class ProfileShareResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-def _build_profile_response(profile, user_id: int) -> ProfileResponse:
+async def _build_profile_response(
+    profile, user_id: int, session: AsyncSession
+) -> ProfileResponse:
     data = profile.profile_data or {}
+
+    target_user = await session.get(User, user_id)
+
+    created_count = (
+        await session.execute(
+            select(func.count()).where(QuizSession.creator_id == user_id)
+        )
+    ).scalar_one()
+
+    acquired_count = (
+        await session.execute(
+            select(func.count()).where(QuizAcquisition.user_id == user_id)
+        )
+    ).scalar_one()
+
+    circles_count = (
+        await session.execute(
+            select(func.count()).where(CircleMember.user_id == user_id)
+        )
+    ).scalar_one()
+
     return ProfileResponse(
         user_id=user_id,
+        username=target_user.username if target_user else "",
+        full_name=target_user.full_name if target_user else None,
+        avatar_url=target_user.avatar_url if target_user else None,
+        joined_at=str(target_user.created_at.date()) if target_user else "",
         overall_level=data.get("overall_level", "beginner"),
         total_questions_answered=data.get("total_questions_answered", 0),
+        total_quizzes_created=created_count + acquired_count,
+        circles_count=circles_count,
         overall_accuracy=data.get("overall_accuracy", 0.0),
         question_type_profiles=data.get("question_type_profiles", {}),
         domain_profiles=data.get("domain_profiles", {}),
         learning_trajectory=data.get("learning_trajectory", []),
+        knowledge_point_profiles=data.get("knowledge_point_profiles", {}),
+        weakness_analysis=data.get("weakness_analysis", {}),
+        insight_summary=data.get("insight_summary", ""),
+        last_analysis_session_id=data.get("last_analysis_session_id"),
         profile_version=profile.profile_version or 0,
         last_calculated_at=str(profile.last_calculated_at)
         if profile.last_calculated_at
@@ -61,7 +107,7 @@ async def get_my_profile(
 ):
     """Get current user's profile."""
     profile = await profile_service.get_or_create_profile(user.id, session)
-    return _build_profile_response(profile, user.id)
+    return await _build_profile_response(profile, user.id, session)
 
 
 @router.get("/me/share", response_model=ProfileShareResponse | None)
@@ -96,7 +142,7 @@ async def get_user_profile(
             raise HTTPException(status_code=403, detail="Profile is not shared")
         profile = await profile_service.get_or_create_profile(user_id, session)
 
-    return _build_profile_response(profile, user_id)
+    return await _build_profile_response(profile, user_id, session)
 
 
 @router.post("/me/recalculate", response_model=ProfileResponse)
@@ -106,7 +152,7 @@ async def recalculate_profile(
 ):
     """Trigger a full profile recalculation."""
     profile = await profile_service.full_recalculate(user.id, session)
-    return _build_profile_response(profile, user.id)
+    return await _build_profile_response(profile, user.id, session)
 
 
 @router.post("/me/share", response_model=ProfileShareResponse)

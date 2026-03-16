@@ -6,6 +6,7 @@ import { useParams, useNavigate } from 'react-router'
 import { Award, Target, BarChart3, Brain, Activity, BookOpen, ArrowLeft, Sparkles } from 'lucide-react'
 import { ApiError, profileApi, type UserProfile } from '@/lib/api'
 import { useAsync } from '@/hooks/useAsync'
+import { UserIdentityCard } from '@/components/profile/UserIdentityCard'
 
 const LEVEL_LABELS: Record<string, string> = {
     beginner: '入门',
@@ -92,6 +93,9 @@ export default function UserProfileViewPage() {
                     <p className="mt-1 text-sm text-muted-foreground">公开学习数据，仅供参考</p>
                 </div>
             </div>
+
+            {/* Identity card */}
+            <UserIdentityCard profile={profile} />
 
             {/* Stats row */}
             <div className="grid gap-4 md:grid-cols-4">

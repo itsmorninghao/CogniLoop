@@ -506,15 +506,20 @@ export interface ProfileShare {
 
 export interface UserProfile {
     user_id: number
+    username: string
+    full_name: string | null
+    avatar_url: string | null
+    joined_at: string
     overall_level: string
     total_questions_answered: number
+    total_quizzes_created: number
+    circles_count: number
     overall_accuracy: number
     question_type_profiles: Record<string, { accuracy: number; count: number; correct: number }>
     domain_profiles: Record<string, DomainProfile>
     learning_trajectory: { date: string; accuracy: number; question_count: number; session_id: string }[]
     profile_version: number
     last_calculated_at: string | null
-    // AI analysis fields
     knowledge_point_profiles: Record<string, { attempts: number; correct: number; accuracy: number }>
     weakness_analysis: Record<string, string>
     insight_summary: string

@@ -5,10 +5,11 @@
 import { useState } from 'react'
 import { TrendingUp, Award, Target, RefreshCcw, BarChart3, Activity, Link2, Copy, Trash2, BookOpen, Pencil, Brain, ChevronDown, ChevronUp, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { profileApi, userApi, type UserProfile, type ProfileShare } from '@/lib/api'
+import { profileApi, type UserProfile, type ProfileShare } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
 import { TrajectoryBar } from '@/components/shared/TrajectoryBar'
 import { EditProfileModal } from '@/components/profile/EditProfileModal'
+import { UserIdentityCard } from '@/components/profile/UserIdentityCard'
 import { useAsync } from '@/hooks/useAsync'
 
 const LEVEL_LABELS: Record<string, string> = {
@@ -75,13 +76,12 @@ function KnowledgePointCard({ name, stats, weaknessReason }: {
 export default function ProfilePage() {
     const { data: profile, loading } = useAsync(() => profileApi.getMyProfile(), [])
     const { data: share } = useAsync(() => profileApi.getMyShare().catch(() => null), [])
-    const { data: userInfo } = useAsync(() => userApi.me(), [])
     const [profileLocal, setProfileLocal] = useState<UserProfile | null>(null)
     const effectiveProfile = profileLocal ?? profile
     const [shareLocal, setShareLocal] = useState<ProfileShare | null | undefined>(undefined)
     const effectiveShare = shareLocal !== undefined ? shareLocal : share
     const [editOpen, setEditOpen] = useState(false)
-    const { setUser } = useAuthStore()
+    const { user, setUser } = useAuthStore()
 
     const handleRecalculate = async () => {
         try {
@@ -174,9 +174,9 @@ export default function ProfilePage() {
             </div>
 
             {/* Edit Modal */}
-            {editOpen && userInfo && (
+            {editOpen && user && (
                 <EditProfileModal
-                    userInfo={userInfo}
+                    userInfo={user}
                     onClose={() => setEditOpen(false)}
                     onAvatarUploaded={(avatarUrl) => {
                         setUser({ avatar_url: avatarUrl })
@@ -185,6 +185,14 @@ export default function ProfilePage() {
                         setUser({ full_name: updated.full_name, bio: updated.bio, avatar_url: updated.avatar_url })
                         setEditOpen(false)
                     }}
+                />
+            )}
+
+            {/* Identity card */}
+            {effectiveProfile && (
+                <UserIdentityCard
+                    profile={effectiveProfile}
+                    authUser={user}
                 />
             )}
 
