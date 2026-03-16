@@ -61,7 +61,7 @@ export function AdminBroadcastTab() {
                     <Megaphone className="size-5 text-white" />
                 </div>
                 <div>
-                    <h2 className="text-base font-semibold text-foreground">全站广播</h2>
+                    <h2 className="text-base font-medium text-foreground">全站广播</h2>
                     <p className="text-xs text-muted-foreground">向所有用户推送系统通告</p>
                 </div>
             </div>
@@ -105,7 +105,7 @@ export function AdminBroadcastTab() {
                         <button
                             type="submit"
                             disabled={sending || !title.trim()}
-                            className="flex items-center gap-2 bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center gap-2 bg-foreground text-background px-5 py-2 rounded-md text-sm font-medium transition-colors hover:bg-foreground/90 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {sending ? '正在推送...' : '发布通告'}
                             {!sending && <Send className="size-3.5" />}
@@ -145,7 +145,7 @@ export function AdminBroadcastTab() {
                             ) : (
                                 history.map(item => (
                                     <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                                        <td className="px-6 py-3.5 font-semibold text-foreground max-w-[200px] truncate">{item.title}</td>
+                                        <td className="px-6 py-3.5 font-medium text-foreground max-w-[200px] truncate">{item.title}</td>
                                         <td className="px-6 py-3.5 text-muted-foreground text-xs max-w-[260px] truncate hidden sm:table-cell">{item.content || '-'}</td>
                                         <td className="px-6 py-3.5">
                                             <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{item.recipient_count} 人</span>

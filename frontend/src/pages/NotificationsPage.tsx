@@ -18,7 +18,7 @@ const TYPE_ICONS: Record<string, typeof Bell> = {
 }
 
 const TYPE_COLORS: Record<string, string> = {
-    system: 'from-blue-500 to-indigo-500',
+    system: 'from-indigo-500 to-purple-500',
     challenge_received: 'from-orange-500 to-red-500',
     challenge_result: 'from-emerald-500 to-green-500',
     circle_quiz: 'from-violet-500 to-purple-500',

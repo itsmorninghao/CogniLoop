@@ -392,7 +392,7 @@ export function AdminConfigTab() {
                     <Settings2 className="size-5 text-white" />
                 </div>
                 <div className="flex-1">
-                    <h2 className="text-base font-semibold text-foreground">系统设置</h2>
+                    <h2 className="text-base font-medium text-foreground">系统设置</h2>
                     <p className="text-xs text-muted-foreground">配置 LLM 模型、向量模型及仿真组卷参数</p>
                 </div>
                 {user?.is_superadmin && (
@@ -453,7 +453,7 @@ export function AdminConfigTab() {
                             </div>
                         </div>
                         <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/20">
-                            <button onClick={saveLlmConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90">
+                            <button onClick={saveLlmConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-medium transition-colors hover:bg-foreground/90">
                                 保存
                             </button>
                             <button onClick={handleTestLlm} disabled={testing.llm} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
@@ -470,7 +470,7 @@ export function AdminConfigTab() {
                     {/* Embedding section */}
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="px-6 py-4 border-b border-border">
-                            <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-0.5">Embedding 向量</p>
+                            <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-0.5">Embedding 向量</p>
                             <p className="text-sm text-muted-foreground">负责将文档和题目转化为向量数组，用于知识库检索 (RAG)。</p>
                         </div>
                         <div className="grid lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
@@ -506,7 +506,7 @@ export function AdminConfigTab() {
                     {/* OCR section */}
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="px-6 py-4 border-b border-border">
-                            <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-0.5">OCR 识别</p>
+                            <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-0.5">OCR 识别</p>
                             <p className="text-sm text-muted-foreground">用于试卷模板 OCR 扫描识别的视觉模型。留空则自动使用全局 LLM 配置。</p>
                         </div>
                         <div className="grid lg:grid-cols-3 divide-y lg:divide-y-0 lg:divide-x divide-border">
@@ -558,7 +558,7 @@ export function AdminConfigTab() {
 
                     {/* Shared save button */}
                     <div>
-                        <button onClick={saveAiServicesConfig} disabled={saving.aiServices} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50">
+                        <button onClick={saveAiServicesConfig} disabled={saving.aiServices} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-medium transition-colors hover:bg-foreground/90 disabled:opacity-50">
                             {saving.aiServices ? '保存中...' : '保存'}
                         </button>
                     </div>
@@ -690,7 +690,7 @@ export function AdminConfigTab() {
                             <div className="space-y-2">
                                 {Array.from({ length: studentCount }, (_, i) => (
                                     <div key={i} className="rounded-lg border border-border bg-muted/20 px-4 py-3 space-y-2">
-                                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">学生 {i + 1}</p>
+                                        <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">学生 {i + 1}</p>
                                         <div className="grid grid-cols-3 gap-2">
                                             <div className="space-y-1">
                                                 <label className="text-[10px] text-muted-foreground">API Key</label>
@@ -748,7 +748,7 @@ export function AdminConfigTab() {
                         <button
                             onClick={saveProNodesConfig}
                             disabled={saving.proNodes}
-                            className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50"
+                            className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-medium transition-colors hover:bg-foreground/90 disabled:opacity-50"
                         >
                             {saving.proNodes ? '保存中...' : '保存所有节点配置'}
                         </button>
@@ -828,7 +828,7 @@ export function AdminConfigTab() {
                     </div>
 
                     <div>
-                        <button onClick={saveLoginAccessConfig} disabled={saving.ld} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-semibold transition-colors hover:bg-foreground/90 disabled:opacity-50">
+                        <button onClick={saveLoginAccessConfig} disabled={saving.ld} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-medium transition-colors hover:bg-foreground/90 disabled:opacity-50">
                             {saving.ld ? '保存中...' : '保存'}
                         </button>
                     </div>
@@ -843,7 +843,7 @@ export function AdminConfigTab() {
                                 <div className="flex gap-3">
                                     <ShieldAlert className="size-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
                                     <div className="space-y-1">
-                                        <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">高风险操作区域</p>
+                                        <p className="text-sm font-medium text-amber-700 dark:text-amber-400">高风险操作区域</p>
                                         <p className="text-xs text-amber-700/80 dark:text-amber-400/80 leading-relaxed">
                                             此功能允许直接向运行时注入任意环境变量。写入未知的 Key 可能导致服务崩溃、数据丢失或安全漏洞。<br />
                                             请不要在不了解后果的情况下修改任何变量。如需继续，请在下方输入确认语句。
@@ -885,7 +885,7 @@ export function AdminConfigTab() {
                                 <input name="desc" className={inputClass} placeholder="可选" />
                             </div>
                             <div className="col-span-2 px-4 py-3 flex items-end">
-                                <button type="submit" className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400 hover:text-amber-800 transition-colors py-2">
+                                <button type="submit" className="w-full flex items-center justify-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:text-amber-800 transition-colors py-2">
                                     <Plus className="size-3.5" /> 注入
                                 </button>
                             </div>
@@ -904,7 +904,7 @@ export function AdminConfigTab() {
                                 <tbody className="divide-y divide-border">
                                     {configs.map(c => (
                                         <tr key={c.key} className="hover:bg-muted/30 transition-colors">
-                                            <td className="px-6 py-3 font-mono text-xs font-bold text-foreground/90">{c.key}</td>
+                                            <td className="px-6 py-3 font-mono text-xs font-medium text-foreground/90">{c.key}</td>
                                             <td className="px-6 py-3 font-mono text-xs text-muted-foreground truncate max-w-[200px]">{c.value ? c.value.replace(/./g, '*') : '-'}</td>
                                             <td className="px-6 py-3 text-xs text-muted-foreground">{c.description || '-'}</td>
                                             <td className="px-6 py-3 text-right">
@@ -936,16 +936,16 @@ export function AdminConfigTab() {
 
             {exportState.showConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setExportState(p => ({ ...p, showConfirm: false }))}>
-                    <div className="w-full max-w-md rounded-2xl border border-border bg-card shadow-xl" onClick={e => e.stopPropagation()}>
+                    <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl" onClick={e => e.stopPropagation()}>
                         <div className="px-6 py-5 space-y-3">
                             <div className="flex items-start gap-3">
                                 <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
                                     <ShieldAlert className="size-5 text-amber-500" />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-semibold text-foreground">确认导出配置</h3>
+                                    <h3 className="text-base font-medium text-foreground">确认导出配置</h3>
                                     <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-                                        导出文件将包含所有系统配置的<span className="font-semibold text-amber-500">明文内容</span>，包括 API Key 等敏感信息。请妥善保管导出文件，避免泄露。
+                                        导出文件将包含所有系统配置的<span className="font-medium text-amber-500">明文内容</span>，包括 API Key 等敏感信息。请妥善保管导出文件，避免泄露。
                                     </p>
                                 </div>
                             </div>
@@ -971,16 +971,16 @@ export function AdminConfigTab() {
 
             {importState.showConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setImportState(p => ({ ...p, showConfirm: false }))}>
-                    <div className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-xl" onClick={e => e.stopPropagation()}>
+                    <div className="w-full max-w-lg rounded-xl border border-border bg-card shadow-xl" onClick={e => e.stopPropagation()}>
                         <div className="px-6 py-5 space-y-3">
                             <div className="flex items-start gap-3">
-                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-blue-500/10">
-                                    <Upload className="size-5 text-blue-500" />
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-indigo-500/10">
+                                    <Upload className="size-5 text-indigo-500" />
                                 </div>
                                 <div>
-                                    <h3 className="text-base font-semibold text-foreground">确认导入配置</h3>
+                                    <h3 className="text-base font-medium text-foreground">确认导入配置</h3>
                                     <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
-                                        将从 <span className="font-mono text-foreground">{importState.file?.name}</span> 导入 <span className="font-semibold text-foreground">{importState.preview.length}</span> 项配置。已存在的配置项将被覆盖。
+                                        将从 <span className="font-mono text-foreground">{importState.file?.name}</span> 导入 <span className="font-medium text-foreground">{importState.preview.length}</span> 项配置。已存在的配置项将被覆盖。
                                     </p>
                                 </div>
                             </div>
@@ -995,7 +995,7 @@ export function AdminConfigTab() {
                                     <tbody className="divide-y divide-border">
                                         {importState.preview.map(item => (
                                             <tr key={item.key}>
-                                                <td className="px-3 py-1.5 font-mono font-bold text-foreground/90">{item.key}</td>
+                                                <td className="px-3 py-1.5 font-mono font-medium text-foreground/90">{item.key}</td>
                                                 <td className="px-3 py-1.5 font-mono text-muted-foreground truncate max-w-[200px]">{item.value ? '••••' : '-'}</td>
                                             </tr>
                                         ))}

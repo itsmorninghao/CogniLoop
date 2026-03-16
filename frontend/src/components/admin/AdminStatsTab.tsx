@@ -50,8 +50,8 @@ export function AdminStatsTab() {
             title: '注册用户',
             value: stats.total_users,
             icon: Users,
-            gradient: 'from-blue-500 to-indigo-600',
-            shadow: 'shadow-blue-500/25',
+            gradient: 'from-indigo-500 to-purple-600',
+            shadow: 'shadow-indigo-500/25',
         },
         {
             title: '知识库',
@@ -90,7 +90,7 @@ export function AdminStatsTab() {
                             <div className={`flex size-11 items-center justify-center rounded-xl bg-gradient-to-br ${m.gradient} shadow-lg ${m.shadow} mb-4`}>
                                 <Icon className="size-5 text-white" />
                             </div>
-                            <p className="text-3xl font-black tracking-tight text-foreground">
+                            <p className="text-3xl font-medium tracking-tight text-foreground">
                                 {m.value.toLocaleString()}
                             </p>
                             <p className="text-sm text-muted-foreground mt-1">{m.title}</p>
@@ -107,15 +107,15 @@ export function AdminStatsTab() {
                         <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-green-600 shadow-lg shadow-emerald-500/25">
                             <TrendingUp className="size-4 text-white" />
                         </div>
-                        <p className="text-sm font-semibold text-foreground">测验完成率</p>
+                        <p className="text-sm font-medium text-foreground">测验完成率</p>
                     </div>
                     <div className="flex items-baseline gap-2 mb-3">
-                        <span className="text-4xl font-black tracking-tight text-foreground">{completionRate}%</span>
+                        <span className="text-4xl font-medium tracking-tight text-foreground">{completionRate}%</span>
                         <span className="text-sm text-muted-foreground">完成</span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                         <div
-                            className="bg-gradient-to-r from-emerald-500 to-green-400 h-1.5 rounded-full transition-all duration-700"
+                            className="bg-gradient-to-r from-emerald-500 to-green-400 h-1.5 rounded-full transition-all duration-300"
                             style={{ width: `${completionRate}%` }}
                         />
                     </div>
@@ -131,15 +131,15 @@ export function AdminStatsTab() {
                         <div className="flex size-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-500 shadow-lg shadow-amber-500/25">
                             <Zap className="size-4 text-white" />
                         </div>
-                        <p className="text-sm font-semibold text-foreground">近期活跃用户</p>
+                        <p className="text-sm font-medium text-foreground">近期活跃用户</p>
                     </div>
                     <div className="flex items-baseline gap-2 mb-3">
-                        <span className="text-4xl font-black tracking-tight text-foreground">{stats.active_users.toLocaleString()}</span>
+                        <span className="text-4xl font-medium tracking-tight text-foreground">{stats.active_users.toLocaleString()}</span>
                         <span className="text-sm text-muted-foreground">人</span>
                     </div>
                     <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
                         <div
-                            className="bg-gradient-to-r from-amber-500 to-orange-400 h-1.5 rounded-full transition-all duration-700"
+                            className="bg-gradient-to-r from-amber-500 to-orange-400 h-1.5 rounded-full transition-all duration-300"
                             style={{ width: `${activeRate}%` }}
                         />
                     </div>

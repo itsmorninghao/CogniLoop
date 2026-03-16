@@ -577,7 +577,7 @@ export default function QuizCreateProPage() {
                             <Brain className="size-5 text-primary" />
                         </div>
                         <div>
-                            <h2 className="font-semibold text-foreground">AI 出题追踪面板</h2>
+                            <h2 className="font-medium text-foreground">AI 出题追踪面板</h2>
                             <p className="text-xs text-muted-foreground">
                                 {isComplete ? '出题完成' : errorMessage ? '出题出错' : '正在生成中...'}
                             </p>
@@ -596,7 +596,7 @@ export default function QuizCreateProPage() {
                 {/* Progress bar */}
                 <div className="h-1 bg-muted">
                     <div
-                        className={`h-full transition-all duration-700 ease-out ${errorMessage ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-purple-600'}`}
+                        className={`h-full transition-all duration-300 ease-out ${errorMessage ? 'bg-red-500' : 'bg-gradient-to-r from-indigo-500 to-purple-600'}`}
                         style={{ width: `${Math.round(progress * 100)}%` }}
                     />
                 </div>
@@ -675,7 +675,7 @@ export default function QuizCreateProPage() {
                                 <div className="flex items-center gap-3">
                                     {(() => { const Icon = selectedPrep.icon; return <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10"><Icon className="size-4 text-primary" /></div> })()}
                                     <div className="flex-1">
-                                        <h3 className="font-semibold text-foreground text-sm">{selectedPrep.label}</h3>
+                                        <h3 className="font-medium text-foreground text-sm">{selectedPrep.label}</h3>
                                         <p className="text-xs text-muted-foreground">{selectedPrep.id}</p>
                                     </div>
                                     <StatusBadge status={selectedPrep.status} />
@@ -699,7 +699,7 @@ export default function QuizCreateProPage() {
                                 <div className="flex items-center gap-3">
                                     <div className="flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10"><FileText className="size-4 text-primary" /></div>
                                     <div className="flex-1">
-                                        <h3 className="font-semibold text-foreground text-sm">{selectedAssembly.label}</h3>
+                                        <h3 className="font-medium text-foreground text-sm">{selectedAssembly.label}</h3>
                                         <p className="text-xs text-muted-foreground">{selectedAssembly.id}</p>
                                     </div>
                                     <StatusBadge status={selectedAssembly.status} />
@@ -719,7 +719,7 @@ export default function QuizCreateProPage() {
                                         <PenTool className="size-4 text-primary" />
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="font-semibold text-foreground text-sm">出题流水线</h3>
+                                        <h3 className="font-medium text-foreground text-sm">出题流水线</h3>
                                         <p className="text-xs text-muted-foreground">
                                             提取真题 → 命题 → 质检 → 学情测算 → 难度调校
                                             {pipelineSummary.total > 0 && ` | ${pipelineSummary.done}/${pipelineSummary.total} 题完成`}
@@ -867,7 +867,7 @@ export default function QuizCreateProPage() {
                                 {isComplete && completedSessionId && (
                                     <button
                                         onClick={() => navigate(`/quiz/${completedSessionId}`)}
-                                        className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5"
+                                        className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95"
                                     >
                                         查看生成的题目
                                         <ArrowRight className="size-4" />
@@ -898,7 +898,7 @@ export default function QuizCreateProPage() {
                 {/* Left Column: Knowledge Base + Template Selection */}
                 <div className="space-y-6">
                     {/* Panel 1: Document Knowledge Bases */}
-                    <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="flex items-center gap-3 p-6 border-b border-border bg-accent/10">
                             <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/10 to-purple-500/10">
                                 <BookOpen className="size-5 text-primary" />
@@ -931,7 +931,7 @@ export default function QuizCreateProPage() {
                                                 {isPartiallySelected && <div className="size-2.5 rounded-sm bg-primary" />}
                                             </button>
                                             <div className="flex-1 min-w-0">
-                                                <p className="truncate text-sm font-semibold text-foreground">{kb.name}</p>
+                                                <p className="truncate text-sm font-medium text-foreground">{kb.name}</p>
                                                 <p className="text-xs text-muted-foreground">{kb.document_count} 个文档</p>
                                             </div>
                                             <div className="p-1 rounded text-muted-foreground">
@@ -1065,7 +1065,7 @@ export default function QuizCreateProPage() {
 
                 {/* Right Column: Quiz Config */}
                 <div className="space-y-6">
-                    <div className="rounded-2xl border border-border bg-card p-6 space-y-6">
+                    <div className="rounded-xl border border-border bg-card p-6 space-y-6">
                         <div className="flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                                 <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500/10 to-orange-500/10">
@@ -1192,8 +1192,8 @@ export default function QuizCreateProPage() {
                         </div>
 
                         <div className="pt-2">
-                            <button onClick={handleGenerate} disabled={selectedTemplateIds.length === 0 || selectedSlotPositions.length === 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
-                                <Sparkles className="size-4" />
+                            <button onClick={handleGenerate} disabled={selectedTemplateIds.length === 0 || selectedSlotPositions.length === 0} className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 py-3.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                                <Sparkles className="size-4 animate-pulse" />
                                 开始 AI 出题（{selectedSlotPositions.length} 个题位）
                             </button>
                         </div>

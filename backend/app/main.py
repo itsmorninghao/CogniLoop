@@ -25,7 +25,6 @@ FRONTEND_DIST = Path(__file__).resolve().parent.parent.parent / "frontend" / "di
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan — startup / shutdown hooks."""
     logger.info("CogniLoop v2 starting up...")
     settings.upload_path  # triggers mkdir
     if FRONTEND_DIST.exists():
@@ -122,7 +121,7 @@ app.add_middleware(
 
 app.include_router(api_v2_router)
 
-_UPLOAD_PATH = settings.upload_path  # also triggers mkdir via property
+_UPLOAD_PATH = settings.upload_path  # triggers mkdir via property
 app.mount("/uploads", StaticFiles(directory=str(_UPLOAD_PATH)), name="uploads")
 
 
@@ -139,9 +138,12 @@ if FRONTEND_DIST.exists():
         name="static-assets",
     )
 
-    # SPA fallback: any non-API, non-static route → index.html
+    # SPA fallback: real static files take priority, unknown paths fall through to index.html
     @app.get("/{full_path:path}")
     async def spa_fallback(request: Request, full_path: str):  # noqa: ARG001
+        candidate = (FRONTEND_DIST / full_path).resolve()
+        if candidate.is_file() and str(candidate).startswith(str(FRONTEND_DIST.resolve())):
+            return FileResponse(str(candidate))
         index = FRONTEND_DIST / "index.html"
         if index.exists():
             return FileResponse(str(index))

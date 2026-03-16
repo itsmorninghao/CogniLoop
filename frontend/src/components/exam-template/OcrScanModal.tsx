@@ -26,10 +26,10 @@ export default function OcrScanModal({ open, onClose }: OcrScanModalProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-            <div className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col">
+            <div className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-xl border border-border bg-card shadow-2xl flex flex-col">
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                    <h2 className="text-lg font-semibold text-foreground">扫描试卷导入</h2>
+                    <h2 className="text-lg font-medium text-foreground">扫描试卷导入</h2>
                     <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-accent transition-colors">
                         <X className="size-5 text-muted-foreground" />
                     </button>

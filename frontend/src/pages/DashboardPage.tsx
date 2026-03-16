@@ -19,7 +19,6 @@ function getGreeting(): string {
     return '晚上好'
 }
 
-/* ── Dashboard Page ── */
 export default function DashboardPage() {
     const { data: profile, loading: profileLoading } = useAsync<UserProfile>(() => profileApi.getMyProfile(), [])
     const { data: recentQuizzes, loading: quizzesLoading } = useAsync<QuizSessionListItem[]>(() => quizApi.list(5), [])
@@ -35,10 +34,10 @@ export default function DashboardPage() {
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
             {/* AI Greeting Banner */}
-            <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6 shadow-sm dark:from-indigo-950/30 dark:via-purple-950/20 dark:to-pink-950/10">
+            <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-6 shadow-sm dark:from-indigo-950/30 dark:via-purple-950/20 dark:to-pink-950/10">
                 <div className="relative z-10 flex items-start gap-4">
                     <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
-                        <Sparkles className="size-6 text-white" />
+                        <Sparkles className="size-6 text-white animate-pulse" />
                     </div>
                     <div className="flex-1">
                         <h2 className="mb-2 text-foreground">{getGreeting()}</h2>
@@ -65,7 +64,7 @@ export default function DashboardPage() {
 
             {/* Stats Grid */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 stagger-children">
-                {kbsLoading ? <StatCardSkeleton /> : <StatCard icon={BookOpen} label="知识库" value={String(kbCount)} gradient="from-blue-500 to-cyan-500" />}
+                {kbsLoading ? <StatCardSkeleton /> : <StatCard icon={BookOpen} label="知识库" value={String(kbCount)} gradient="from-indigo-500 to-purple-500" />}
                 {profileLoading ? <StatCardSkeleton /> : <StatCard icon={PenTool} label="已做题目" value={String(totalAnswered)} gradient="from-purple-500 to-pink-500" />}
                 {profileLoading ? <StatCardSkeleton /> : <StatCard icon={Target} label="总体正确率" value={totalAnswered > 0 ? `${(accuracy * 100).toFixed(0)}%` : '—'} gradient="from-emerald-500 to-green-500" />}
                 {circlesLoading ? <StatCardSkeleton /> : <StatCard icon={Users} label="学习圈" value={String(circleCount)} gradient="from-pink-500 to-rose-500" />}
@@ -77,7 +76,7 @@ export default function DashboardPage() {
                 <div className="rounded-xl border border-border bg-card">
                     <div className="flex items-center justify-between border-b border-border p-6">
                         <div>
-                            <h3 className="text-foreground font-semibold">近期测验</h3>
+                            <h3 className="text-foreground font-medium">近期测验</h3>
                             <p className="mt-1 text-sm text-muted-foreground">最近的学习记录</p>
                         </div>
                         <Link to="/quiz" className="flex items-center gap-1 text-sm text-primary hover:underline">
@@ -115,7 +114,7 @@ export default function DashboardPage() {
                                     >
                                         <div className={`flex size-9 items-center justify-center rounded-lg ${q.status === 'graded' ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400'
                                             : q.status === 'error' ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                                                : 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                                                : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400'
                                             }`}>
                                             <PenTool className="size-4" />
                                         </div>
@@ -137,7 +136,7 @@ export default function DashboardPage() {
                 {/* Learning trajectory */}
                 <div className="rounded-xl border border-border bg-card">
                     <div className="border-b border-border p-6">
-                        <h3 className="text-foreground font-semibold">学习趋势</h3>
+                        <h3 className="text-foreground font-medium">学习趋势</h3>
                         <p className="mt-1 text-sm text-muted-foreground">最近测验正确率变化</p>
                     </div>
                     <div className="p-6">
@@ -165,7 +164,7 @@ export default function DashboardPage() {
     )
 }
 
-/* ── Sub Components ── */
+/* Sub Components */
 
 function StatCard({ icon: Icon, label, value, gradient }: { icon: React.ElementType; label: string; value: string; gradient: string }) {
     return (
@@ -173,7 +172,7 @@ function StatCard({ icon: Icon, label, value, gradient }: { icon: React.ElementT
             <div className="flex items-center justify-between">
                 <div className="flex-1">
                     <p className="text-sm text-muted-foreground">{label}</p>
-                    <p className="mt-2 text-3xl font-semibold text-foreground">{value}</p>
+                    <p className="mt-2 text-3xl font-medium text-foreground">{value}</p>
                 </div>
                 <div className={`flex size-12 items-center justify-center rounded-xl bg-gradient-to-br ${gradient} shadow-lg transition-transform duration-200 group-hover:scale-110`}>
                     <Icon className="size-6 text-white" />

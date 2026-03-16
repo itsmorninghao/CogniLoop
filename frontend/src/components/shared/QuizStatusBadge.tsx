@@ -2,7 +2,7 @@ import { Loader2 } from 'lucide-react'
 
 const CONFIG: Record<string, { label: string; cls: string; spin?: boolean }> = {
     generating:  { label: '生成中', cls: 'bg-amber-500/10 text-amber-600',   spin: true },
-    ready:       { label: '待作答', cls: 'bg-blue-500/10 text-blue-600' },
+    ready:       { label: '待作答', cls: 'bg-indigo-500/10 text-indigo-600' },
     in_progress: { label: '进行中', cls: 'bg-indigo-500/10 text-indigo-600' },
     grading:     { label: '批改中', cls: 'bg-purple-500/10 text-purple-600', spin: true },
     graded:      { label: '已完成', cls: 'bg-emerald-500/10 text-emerald-600' },

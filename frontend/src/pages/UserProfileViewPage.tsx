@@ -15,7 +15,7 @@ const LEVEL_LABELS: Record<string, string> = {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-    beginner: 'from-blue-400 to-cyan-400',
+    beginner: 'from-indigo-400 to-purple-400',
     intermediate: 'from-violet-500 to-purple-500',
     advanced: 'from-amber-500 to-orange-500',
 }
@@ -105,7 +105,7 @@ export default function UserProfileViewPage() {
                             <Award className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{LEVEL_LABELS[level]}</p>
+                            <p className="text-2xl font-medium text-foreground">{LEVEL_LABELS[level]}</p>
                             <p className="text-sm text-muted-foreground">总体水平</p>
                         </div>
                     </div>
@@ -116,7 +116,7 @@ export default function UserProfileViewPage() {
                             <Target className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{totalAnswered}</p>
+                            <p className="text-2xl font-medium text-foreground">{totalAnswered}</p>
                             <p className="text-sm text-muted-foreground">已做题目</p>
                         </div>
                     </div>
@@ -127,7 +127,7 @@ export default function UserProfileViewPage() {
                             <BarChart3 className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">
+                            <p className="text-2xl font-medium text-foreground">
                                 {totalAnswered > 0 ? `${(accuracy * 100).toFixed(0)}%` : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground">总体正确率</p>
@@ -140,7 +140,7 @@ export default function UserProfileViewPage() {
                             <Brain className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{kpCoverageCount}</p>
+                            <p className="text-2xl font-medium text-foreground">{kpCoverageCount}</p>
                             <p className="text-sm text-muted-foreground">知识点覆盖</p>
                         </div>
                     </div>
@@ -151,8 +151,8 @@ export default function UserProfileViewPage() {
             {insightSummary && (
                 <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="size-4 text-primary" />
-                        <span className="text-sm font-semibold text-foreground">AI 学习洞察</span>
+                        <Sparkles className="size-4 text-primary animate-pulse" />
+                        <span className="text-sm font-medium text-foreground">AI 学习洞察</span>
                     </div>
                     <p className="text-sm text-foreground leading-relaxed">{insightSummary}</p>
                 </div>
@@ -162,7 +162,7 @@ export default function UserProfileViewPage() {
             {kpEntries.length > 0 && (
                 <div className="rounded-xl border border-border bg-card">
                     <div className="border-b border-border p-6">
-                        <h3 className="text-foreground font-semibold">知识点掌握情况</h3>
+                        <h3 className="text-foreground font-medium">知识点掌握情况</h3>
                         <p className="mt-1 text-sm text-muted-foreground">正确率排名（从低到高）</p>
                     </div>
                     <div className="p-6 space-y-3">
@@ -176,7 +176,7 @@ export default function UserProfileViewPage() {
                                     </div>
                                     <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                                         <div
-                                            className={`h-full rounded-full transition-all duration-500 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
+                                            className={`h-full rounded-full transition-all duration-300 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
                                             style={{ width: `${Math.max(acc, 3)}%` }}
                                         />
                                     </div>
@@ -193,7 +193,7 @@ export default function UserProfileViewPage() {
                     <div className="border-b border-border p-6">
                         <div className="flex items-center gap-2">
                             <BookOpen className="size-5 text-primary" />
-                            <h3 className="text-foreground font-semibold">科目能力分布</h3>
+                            <h3 className="text-foreground font-medium">科目能力分布</h3>
                         </div>
                     </div>
                     <div className="p-6 space-y-4">
@@ -212,7 +212,7 @@ export default function UserProfileViewPage() {
                                     </div>
                                     <div className="h-2 rounded-full bg-muted overflow-hidden">
                                         <div
-                                            className={`h-full rounded-full transition-all duration-500 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
+                                            className={`h-full rounded-full transition-all duration-300 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
                                             style={{ width: `${Math.max(acc, 3)}%` }}
                                         />
                                     </div>
@@ -228,7 +228,7 @@ export default function UserProfileViewPage() {
                 <div className="border-b border-border p-6">
                     <div className="flex items-center gap-2">
                         <Activity className="size-5 text-primary" />
-                        <h3 className="text-foreground font-semibold">学习轨迹</h3>
+                        <h3 className="text-foreground font-medium">学习轨迹</h3>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">最近 30 次测验的正确率趋势</p>
                 </div>
@@ -267,9 +267,9 @@ export default function UserProfileViewPage() {
             <div className="sticky bottom-6 flex justify-center">
                 <button
                     onClick={() => navigate(`/quiz/create-smart?target=${userId}`)}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/30 transition-all hover:shadow-xl hover:-translate-y-0.5"
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-3 text-sm font-medium text-white shadow-lg shadow-indigo-500/30 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95"
                 >
-                    <Sparkles className="size-4" />
+                    <Sparkles className="size-4 animate-pulse" />
                     为 TA 出题
                 </button>
             </div>

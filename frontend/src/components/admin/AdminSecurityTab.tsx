@@ -123,7 +123,7 @@ export function AdminSecurityTab() {
             {/* Section A — Login history */}
             <section>
                 <div className="mb-4 flex items-center justify-between">
-                    <h2 className="text-base font-semibold text-foreground">最近登录记录</h2>
+                    <h2 className="text-base font-medium text-foreground">最近登录记录</h2>
                     <button
                         onClick={loadAll}
                         disabled={loading}
@@ -193,7 +193,7 @@ export function AdminSecurityTab() {
 
             {/* Section B — Currently blocked IPs */}
             <section>
-                <h2 className="mb-4 text-base font-semibold text-foreground">当前封禁 IP</h2>
+                <h2 className="mb-4 text-base font-medium text-foreground">当前封禁 IP</h2>
 
                 <div className="overflow-x-auto rounded-xl border border-border">
                     <table className="w-full text-sm">

@@ -52,13 +52,13 @@ export default function OAuthCallbackPage() {
     if (error) {
         return (
             <div className="flex min-h-screen items-center justify-center bg-background p-4">
-                <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 text-center shadow-xl">
+                <div className="w-full max-w-sm rounded-xl border border-border bg-card p-8 text-center shadow-xl">
                     <XCircle className="mx-auto mb-4 size-12 text-destructive" />
-                    <h2 className="mb-2 text-lg font-semibold text-foreground">登录失败</h2>
+                    <h2 className="mb-2 text-lg font-medium text-foreground">登录失败</h2>
                     <p className="mb-6 text-sm text-muted-foreground">{error}</p>
                     <button
                         onClick={() => navigate('/login', { replace: true })}
-                        className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white hover:opacity-90 transition"
+                        className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white hover:opacity-90 hover:scale-105 active:scale-95 transition"
                     >
                         返回登录
                     </button>

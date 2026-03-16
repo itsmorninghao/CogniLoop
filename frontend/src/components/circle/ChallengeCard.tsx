@@ -32,14 +32,14 @@ export function ChallengeCard({ session, circleId, onViewRanking }: Props) {
                 <div className="flex gap-2 shrink-0">
                     <button
                         onClick={() => onViewRanking(session.id)}
-                        className="flex items-center gap-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition"
+                        className="flex items-center gap-1 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30 px-3 py-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition"
                     >
                         <Trophy className="size-3" /> 查看排名
                     </button>
                     <Link
                         to={`/quiz/${session.id}`}
                         state={{ fromCircle: circleId }}
-                        className="flex items-center gap-1 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-accent transition"
+                        className="flex items-center gap-1 rounded-lg border border-border bg-muted px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition"
                     >
                         查看试卷 <ChevronRight className="size-3" />
                     </Link>
@@ -48,7 +48,7 @@ export function ChallengeCard({ session, circleId, onViewRanking }: Props) {
                 <Link
                     to={`/quiz/${session.id}`}
                     state={{ fromCircle: circleId }}
-                    className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90 transition shrink-0"
+                    className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-white hover:scale-105 active:scale-95 transition shrink-0"
                 >
                     参加 <ChevronRight className="size-3" />
                 </Link>

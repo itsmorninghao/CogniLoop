@@ -261,7 +261,7 @@ export default function ExamTemplateEditorPage() {
                     <ArrowLeft className="size-5" />
                 </button>
                 <div className="flex-1">
-                    <h1 className="text-xl font-bold text-foreground">{isNew ? '新建模板' : '编辑模板'}</h1>
+                    <h1 className="text-xl font-medium text-foreground">{isNew ? '新建模板' : '编辑模板'}</h1>
                 </div>
                 <button
                     onClick={() => setShowScanDialog(true)}
@@ -522,9 +522,9 @@ export default function ExamTemplateEditorPage() {
 
             {showScanDialog && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-                    <div className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-2xl border border-border bg-card shadow-2xl flex flex-col">
+                    <div className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-xl border border-border bg-card shadow-2xl flex flex-col">
                         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                            <h2 className="text-lg font-semibold text-foreground">扫描导入题目</h2>
+                            <h2 className="text-lg font-medium text-foreground">扫描导入题目</h2>
                             <button onClick={() => setShowScanDialog(false)} className="rounded-lg p-1.5 hover:bg-accent transition-colors">
                                 <X className="size-5 text-muted-foreground" />
                             </button>

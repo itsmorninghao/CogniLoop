@@ -105,7 +105,7 @@ export default function KnowledgeBasePage() {
                         <KeyRound className="size-4" />
                         输入分享码
                     </button>
-                    <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5">
+                    <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95">
                         <Plus className="size-4" />
                         创建知识库
                     </button>
@@ -138,8 +138,8 @@ export default function KnowledgeBasePage() {
                         <Loader2 className="size-6 animate-spin text-primary" />
                     </div>
                 ) : displayList.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-24 transition-colors hover:border-primary/30">
-                        <div className={`mb-6 flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br ${activeTab === 'mine' ? 'from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30' : 'from-cyan-100 to-blue-100 dark:from-cyan-900/30 dark:to-blue-900/30'}`}>
+                    <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-24 transition-colors hover:border-primary/30">
+                        <div className={`mb-6 flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br ${activeTab === 'mine' ? 'from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30' : 'from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30'}`}>
                             {activeTab === 'mine'
                                 ? <Database className="size-10 text-primary" />
                                 : <BookMarked className="size-10 text-cyan-600" />
@@ -149,7 +149,7 @@ export default function KnowledgeBasePage() {
                             <>
                                 <h3 className="text-lg font-medium text-foreground">还没有知识库</h3>
                                 <p className="mt-2 max-w-sm text-center text-sm text-muted-foreground">创建知识库并上传文档，系统将自动完成解析和向量化</p>
-                                <button onClick={() => setShowCreate(true)} className="mt-6 flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25">
+                                <button onClick={() => setShowCreate(true)} className="mt-6 flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 hover:scale-105 active:scale-95 transition-all">
                                     <Plus className="size-4" />创建知识库
                                 </button>
                             </>
@@ -180,7 +180,7 @@ export default function KnowledgeBasePage() {
                                         <Trash2 className="size-3.5" />
                                     </button>
                                 )}
-                                <div className={`mb-4 flex size-12 items-center justify-center rounded-xl bg-gradient-to-br ${activeTab === 'acquired' ? 'from-cyan-500/10 to-blue-500/10' : 'from-indigo-500/10 to-purple-500/10'}`}>
+                                <div className={`mb-4 flex size-12 items-center justify-center rounded-xl bg-gradient-to-br ${activeTab === 'acquired' ? 'from-indigo-500/10 to-purple-500/10' : 'from-indigo-500/10 to-purple-500/10'}`}>
                                     {activeTab === 'acquired'
                                         ? <BookMarked className="size-6 text-cyan-600" />
                                         : <Database className="size-6 text-primary" />
@@ -224,7 +224,7 @@ export default function KnowledgeBasePage() {
                                 onClick={() => navigate(`/knowledge/${kb.id}`)}
                                 className="group grid w-full grid-cols-[auto_1fr_120px_100px_80px] items-center gap-4 border-b border-border px-5 py-4 text-left last:border-0 hover:bg-muted/30 transition-colors"
                             >
-                                <div className={`flex size-10 items-center justify-center rounded-lg bg-gradient-to-br ${activeTab === 'acquired' ? 'from-cyan-500/10 to-blue-500/10' : 'from-indigo-500/10 to-purple-500/10'}`}>
+                                <div className={`flex size-10 items-center justify-center rounded-lg bg-gradient-to-br ${activeTab === 'acquired' ? 'from-indigo-500/10 to-purple-500/10' : 'from-indigo-500/10 to-purple-500/10'}`}>
                                     {activeTab === 'acquired'
                                         ? <BookMarked className="size-5 text-cyan-600" />
                                         : <Database className="size-5 text-primary" />
@@ -270,7 +270,7 @@ export default function KnowledgeBasePage() {
             {/* Create KB modal */}
             {showCreate && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-                    <div className="w-full max-w-md rounded-2xl bg-card p-6 shadow-2xl">
+                    <div className="w-full max-w-md rounded-xl bg-card p-6 shadow-2xl">
                         <h3 className="text-lg font-medium text-foreground">创建知识库</h3>
                         <div className="mt-4 space-y-3">
                             <div>
@@ -320,9 +320,9 @@ export default function KnowledgeBasePage() {
             {/* Acquire by share code modal */}
             {showAcquire && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-                    <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl">
+                    <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20">
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20">
                                 <KeyRound className="size-5 text-cyan-600" />
                             </div>
                             <div>

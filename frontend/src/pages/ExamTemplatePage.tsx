@@ -181,7 +181,7 @@ export default function ExamTemplatePage() {
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-foreground">试卷模板</h1>
+                    <h1 className="text-2xl font-medium text-foreground">试卷模板</h1>
                     <p className="mt-1 text-sm text-muted-foreground">管理您的试卷结构模板，用于 Pro 模式出题</p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -353,8 +353,8 @@ export default function ExamTemplatePage() {
 
             {showCreateChoice && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-                    <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-2xl">
-                        <h3 className="text-lg font-semibold text-foreground mb-4">新建模板</h3>
+                    <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-2xl">
+                        <h3 className="text-lg font-medium text-foreground mb-4">新建模板</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <button
                                 onClick={() => { setShowCreateChoice(false); navigate('/exam-templates/new') }}

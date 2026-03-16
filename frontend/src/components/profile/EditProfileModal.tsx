@@ -57,9 +57,9 @@ export function EditProfileModal({ userInfo, onClose, onSaved, onAvatarUploaded 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl">
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl">
                 <div className="mb-5 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold text-foreground">编辑个人资料</h2>
+                    <h2 className="text-lg font-medium text-foreground">编辑个人资料</h2>
                     <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition">
                         <X className="size-5" />
                     </button>
@@ -67,7 +67,7 @@ export function EditProfileModal({ userInfo, onClose, onSaved, onAvatarUploaded 
 
                 <div className="mb-5 flex flex-col items-center gap-3">
                     <div className="relative">
-                        <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-bold text-white">
+                        <div className="flex size-20 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-2xl font-medium text-white">
                             {avatarUrl ? (
                                 <img src={avatarUrl} alt="avatar" className="size-full object-cover" />
                             ) : (
@@ -194,7 +194,7 @@ export function EditProfileModal({ userInfo, onClose, onSaved, onAvatarUploaded 
                     <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 hover:scale-105 active:scale-95 transition disabled:opacity-50"
                     >
                         {saving ? (
                             <div className="size-4 animate-spin rounded-full border-2 border-white border-t-transparent" />

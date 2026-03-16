@@ -27,7 +27,7 @@ export function AdminModerationTab() {
                     <ShieldAlert className="size-5 text-white" />
                 </div>
                 <div>
-                    <h2 className="text-base font-semibold text-foreground">内容审核</h2>
+                    <h2 className="text-base font-medium text-foreground">内容审核</h2>
                     <p className="text-xs text-muted-foreground">管理广场内容，维护平台安全</p>
                 </div>
             </div>

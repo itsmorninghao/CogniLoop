@@ -162,15 +162,15 @@ export default function MyQuizzesPage() {
             {activeTab === 'created' && (
                 <div className="mt-5 grid gap-4 sm:grid-cols-3">
                     <div className="rounded-xl border border-border bg-card p-4">
-                        <p className="text-2xl font-bold text-foreground">{myQuizzes.length}</p>
+                        <p className="text-2xl font-medium text-foreground">{myQuizzes.length}</p>
                         <p className="text-sm text-muted-foreground mt-0.5">全部试卷</p>
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
-                        <p className="text-2xl font-bold text-emerald-600">{gradedCount}</p>
+                        <p className="text-2xl font-medium text-emerald-600">{gradedCount}</p>
                         <p className="text-sm text-muted-foreground mt-0.5">已批改</p>
                     </div>
                     <div className="rounded-xl border border-border bg-card p-4">
-                        <p className="text-2xl font-bold text-primary">
+                        <p className="text-2xl font-medium text-primary">
                             {avgAccuracy !== null ? `${avgAccuracy}%` : '—'}
                         </p>
                         <p className="text-sm text-muted-foreground mt-0.5">平均正确率</p>
@@ -209,7 +209,7 @@ export default function MyQuizzesPage() {
                             <Loader2 className="size-6 animate-spin text-primary" />
                         </div>
                     ) : myQuizzes.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-24">
+                        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-24">
                             <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30">
                                 <FileText className="size-10 text-primary" />
                             </div>
@@ -219,7 +219,7 @@ export default function MyQuizzesPage() {
                             </p>
                             <button
                                 onClick={() => navigate('/quiz')}
-                                className="mt-6 flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25"
+                                className="mt-6 flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 hover:scale-105 active:scale-95 transition-all"
                             >
                                 去出题
                             </button>
@@ -258,8 +258,8 @@ export default function MyQuizzesPage() {
                             <Loader2 className="size-6 animate-spin text-primary" />
                         </div>
                     ) : acquiredQuizzes.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-24">
-                            <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-100 to-blue-100 dark:from-cyan-900/30 dark:to-blue-900/30">
+                        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-24">
+                            <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30">
                                 <BookMarked className="size-10 text-cyan-600" />
                             </div>
                             <h3 className="text-lg font-medium text-foreground">还没有获取的试卷</h3>
@@ -290,9 +290,9 @@ export default function MyQuizzesPage() {
             {/* Acquire by share code modal */}
             {showAcquire && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fade-in">
-                    <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-2xl">
+                    <div className="w-full max-w-sm rounded-xl bg-card p-6 shadow-2xl">
                         <div className="flex items-center gap-3 mb-4">
-                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-500/20">
+                            <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20">
                                 <KeyRound className="size-5 text-cyan-600" />
                             </div>
                             <div>

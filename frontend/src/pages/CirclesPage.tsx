@@ -29,7 +29,7 @@ export default function CirclesPage() {
                     <button onClick={() => setShowJoin(true)} className="flex items-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent">
                         <UserPlus className="size-4" /> 加入学习圈
                     </button>
-                    <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5">
+                    <button onClick={() => setShowCreate(true)} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95">
                         <Plus className="size-4" /> 创建学习圈
                     </button>
                 </div>
@@ -72,10 +72,10 @@ export default function CirclesPage() {
     )
 }
 
-/* ── Empty State ──────────────────────────────────────────── */
+/* Empty State */
 function EmptyState({ onCreateClick, onJoinClick }: { onCreateClick: () => void; onJoinClick: () => void }) {
     return (
-        <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border py-20 transition-colors hover:border-primary/30">
+        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-border py-20 transition-colors hover:border-primary/30">
             <div className="mb-6 flex size-20 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30">
                 <Users className="size-10 text-purple-600 dark:text-purple-400" />
             </div>
@@ -84,7 +84,7 @@ function EmptyState({ onCreateClick, onJoinClick }: { onCreateClick: () => void;
                 创建学习圈或使用邀请码加入，和伙伴一起出题互测，共同进步
             </p>
             <div className="mt-6 flex gap-3">
-                <button onClick={onCreateClick} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5">
+                <button onClick={onCreateClick} className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95">
                     <Plus className="size-4" /> 创建学习圈
                 </button>
                 <button onClick={onJoinClick} className="flex items-center gap-2 rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-accent">
@@ -95,7 +95,7 @@ function EmptyState({ onCreateClick, onJoinClick }: { onCreateClick: () => void;
     )
 }
 
-/* ── Create Modal ─────────────────────────────────────────── */
+/* Create Modal */
 function CreateCircleModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
@@ -114,9 +114,9 @@ function CreateCircleModal({ onClose, onCreated }: { onClose: () => void; onCrea
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-foreground">创建学习圈</h3>
+                    <h3 className="font-medium text-foreground">创建学习圈</h3>
                     <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="size-5" /></button>
                 </div>
                 <div className="space-y-4">
@@ -141,7 +141,7 @@ function CreateCircleModal({ onClose, onCreated }: { onClose: () => void; onCrea
     )
 }
 
-/* ── Join Modal ───────────────────────────────────────────── */
+/* Join Modal */
 function JoinCircleModal({ onClose, onJoined }: { onClose: () => void; onJoined: () => void }) {
     const [code, setCode] = useState('')
     const [loading, setLoading] = useState(false)
@@ -158,9 +158,9 @@ function JoinCircleModal({ onClose, onJoined }: { onClose: () => void; onJoined:
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-foreground">加入学习圈</h3>
+                    <h3 className="font-medium text-foreground">加入学习圈</h3>
                     <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="size-5" /></button>
                 </div>
                 <div className="space-y-4">

@@ -163,7 +163,7 @@ export default function KnowledgeBaseDetailPage() {
 
             <div className="mx-auto max-w-5xl px-6 py-8 space-y-6">
                 {/* KB Header Card */}
-                <div className="rounded-2xl border border-border bg-card p-6">
+                <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-start gap-5">
                         <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500/15 to-purple-500/15">
                             {isOwner
@@ -173,7 +173,7 @@ export default function KnowledgeBaseDetailPage() {
                         </div>
                         <div className="flex-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                                <h1 className="text-xl font-semibold text-foreground">{kb.name}</h1>
+                                <h1 className="text-xl font-medium text-foreground">{kb.name}</h1>
                                 {!isOwner && <span className="rounded-md bg-cyan-500/10 px-2 py-0.5 text-xs font-medium text-cyan-600 border border-cyan-500/20">已获取</span>}
                             </div>
                             {kb.description && <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{kb.description}</p>}
@@ -201,7 +201,7 @@ export default function KnowledgeBaseDetailPage() {
                                     <div className="flex items-center gap-2">
                                         <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-3 py-2">
                                             <Hash className="size-3.5 text-muted-foreground" />
-                                            <span className="font-mono text-sm font-semibold text-foreground tracking-widest">{kb.share_code}</span>
+                                            <span className="font-mono text-sm font-medium text-foreground tracking-widest">{kb.share_code}</span>
                                         </div>
                                         <button onClick={async () => { await navigator.clipboard.writeText(kb.share_code!); toast.success('分享码已复制') }} className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent">
                                             <Copy className="size-3.5" />复制
@@ -256,7 +256,7 @@ export default function KnowledgeBaseDetailPage() {
 
                 {/* Upload zone — owner only */}
                 {isOwner && (
-                    <div className="rounded-2xl border border-border bg-card p-5">
+                    <div className="rounded-xl border border-border bg-card p-5">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-sm font-medium text-foreground">上传文档</h2>
                         </div>
@@ -280,7 +280,7 @@ export default function KnowledgeBaseDetailPage() {
                 )}
 
                 {/* Content list */}
-                <div className="rounded-2xl border border-border bg-card overflow-hidden">
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
                     {docsArray.length > 0 && (
                         <div className="grid grid-cols-[auto_1fr_100px_80px_120px_40px] items-center gap-4 border-b border-border bg-muted/20 px-6 py-2 text-xs font-medium text-muted-foreground">
                             <span className="w-8" /><span>文件名</span><span>状态</span><span>分块</span><span>上传时间</span><span />

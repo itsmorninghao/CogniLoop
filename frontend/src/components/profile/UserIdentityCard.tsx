@@ -14,7 +14,7 @@ export function UserIdentityCard({ profile, authUser }: Props) {
     const learningDays = profile.learning_trajectory?.length ?? 0
 
     return (
-        <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="rounded-xl border border-border bg-card p-6">
             <div className="flex items-start gap-5">
                 {/* Avatar */}
                 <div className="shrink-0">
@@ -26,7 +26,7 @@ export function UserIdentityCard({ profile, authUser }: Props) {
                         />
                     ) : (
                         <div className="flex size-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 ring-2 ring-border">
-                            <span className="text-2xl font-bold text-primary">
+                            <span className="text-2xl font-medium text-primary">
                                 {displayName.charAt(0).toUpperCase()}
                             </span>
                         </div>
@@ -37,7 +37,7 @@ export function UserIdentityCard({ profile, authUser }: Props) {
                 <div className="min-w-0 flex-1 space-y-3">
                     {/* Name & username */}
                     <div>
-                        <h2 className="text-lg font-semibold leading-tight text-foreground">
+                        <h2 className="text-lg font-medium leading-tight text-foreground">
                             {displayName}
                         </h2>
                         <p className="mt-0.5 text-sm text-muted-foreground">@{displayUsername}</p>
@@ -73,7 +73,7 @@ function Stat({ value, label, icon }: { value: number; label: string; icon: Reac
     return (
         <div className="flex items-center gap-1.5">
             {icon}
-            <span className="text-sm font-semibold text-foreground">{value.toLocaleString()}</span>
+            <span className="text-sm font-medium text-foreground">{value.toLocaleString()}</span>
             <span className="text-xs text-muted-foreground">{label}</span>
         </div>
     )

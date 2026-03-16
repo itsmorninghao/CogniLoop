@@ -127,7 +127,7 @@ export default function AppLayout() {
                         </div>
                         {!collapsed && (
                             <div className="flex flex-col">
-                                <span className="text-lg font-semibold tracking-tight text-foreground">CogniLoop</span>
+                                <span className="text-lg font-medium tracking-tight text-foreground">CogniLoop</span>
                                 <span className="text-[11px] text-muted-foreground">v2.0</span>
                             </div>
                         )}
@@ -204,7 +204,7 @@ export default function AppLayout() {
 
                 <div className="border-t border-sidebar-border p-3 space-y-1">
                     <div className="flex items-center gap-3 rounded-lg px-2 py-2">
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-medium text-white shadow-md overflow-hidden">
+                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-muted-foreground ring-1 ring-border overflow-hidden">
                             {user?.avatar_url ? (
                                 <img src={user.avatar_url} alt="avatar" className="size-full object-cover" />
                             ) : (

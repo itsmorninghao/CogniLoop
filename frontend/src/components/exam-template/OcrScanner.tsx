@@ -229,7 +229,7 @@ export default function OcrScanner({ onScanComplete, onCancel }: OcrScannerProps
                         </div>
                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                             <div
-                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-500"
+                                className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 transition-all duration-300"
                                 style={{
                                     width: scanning
                                         ? `${Math.round(((currentFileIdx - 1 + pageProgress) / totalFiles) * 100)}%`

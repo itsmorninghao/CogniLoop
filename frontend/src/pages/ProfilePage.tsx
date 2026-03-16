@@ -19,7 +19,7 @@ const LEVEL_LABELS: Record<string, string> = {
 }
 
 const LEVEL_COLORS: Record<string, string> = {
-    beginner: 'from-blue-400 to-cyan-400',
+    beginner: 'from-indigo-400 to-purple-400',
     intermediate: 'from-violet-500 to-purple-500',
     advanced: 'from-amber-500 to-orange-500',
 }
@@ -60,7 +60,7 @@ function KnowledgePointCard({ name, stats, weaknessReason }: {
             </div>
             <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
-                    className={`h-full rounded-full transition-all duration-500 ${acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
+                    className={`h-full rounded-full transition-all duration-300 ${acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
                     style={{ width: `${Math.max(acc, 3)}%` }}
                 />
             </div>
@@ -196,7 +196,7 @@ export default function ProfilePage() {
                 />
             )}
 
-            {/* ① 顶部统计行（4格） */}
+            {/* 统计行 */}
             <div className="grid gap-4 md:grid-cols-4 stagger-children">
                 <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-center gap-3">
@@ -204,7 +204,7 @@ export default function ProfilePage() {
                             <Award className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{LEVEL_LABELS[level]}</p>
+                            <p className="text-2xl font-medium text-foreground">{LEVEL_LABELS[level]}</p>
                             <p className="text-sm text-muted-foreground">总体水平</p>
                         </div>
                     </div>
@@ -215,7 +215,7 @@ export default function ProfilePage() {
                             <Target className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{totalAnswered}</p>
+                            <p className="text-2xl font-medium text-foreground">{totalAnswered}</p>
                             <p className="text-sm text-muted-foreground">已做题目</p>
                         </div>
                     </div>
@@ -226,7 +226,7 @@ export default function ProfilePage() {
                             <BarChart3 className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">
+                            <p className="text-2xl font-medium text-foreground">
                                 {totalAnswered > 0 ? `${(accuracy * 100).toFixed(0)}%` : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground">总体正确率</p>
@@ -239,19 +239,19 @@ export default function ProfilePage() {
                             <Brain className="size-5 text-white" />
                         </div>
                         <div>
-                            <p className="text-2xl font-bold text-foreground">{kpCoverageCount}</p>
+                            <p className="text-2xl font-medium text-foreground">{kpCoverageCount}</p>
                             <p className="text-sm text-muted-foreground">知识点覆盖</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* ② AI 学习洞察（全宽，最显眼） */}
+            {/* AI 学习洞察 */}
             <div className="rounded-xl border border-border bg-card">
                 <div className="border-b border-border p-6">
                     <div className="flex items-center gap-2">
-                        <Sparkles className="size-5 text-primary" />
-                        <h3 className="text-foreground font-semibold">AI 学习洞察</h3>
+                        <Sparkles className="size-5 text-primary animate-pulse" />
+                        <h3 className="text-foreground font-medium">AI 学习洞察</h3>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">基于你的答题记录生成的深度分析</p>
                 </div>
@@ -270,12 +270,12 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            {/* ③ 两列布局：薄弱知识点 + 科目能力分布 */}
+            {/* 薄弱知识点 + 科目能力分布 */}
             <div className="grid gap-6 lg:grid-cols-2">
                 {/* 薄弱知识点 */}
                 <div className="rounded-xl border border-border bg-card">
                     <div className="border-b border-border p-6">
-                        <h3 className="text-foreground font-semibold">薄弱知识点</h3>
+                        <h3 className="text-foreground font-medium">薄弱知识点</h3>
                         <p className="mt-1 text-sm text-muted-foreground">
                             正确率低于 75% 的知识点，点击「AI 分析」查看原因
                         </p>
@@ -304,7 +304,7 @@ export default function ProfilePage() {
                     <div className="border-b border-border p-6">
                         <div className="flex items-center gap-2">
                             <BookOpen className="size-5 text-primary" />
-                            <h3 className="text-foreground font-semibold">科目能力分布</h3>
+                            <h3 className="text-foreground font-medium">科目能力分布</h3>
                         </div>
                         <p className="mt-1 text-sm text-muted-foreground">按科目 / 主题分组的学习统计</p>
                     </div>
@@ -332,7 +332,7 @@ export default function ProfilePage() {
                                         </div>
                                         <div className="h-2 rounded-full bg-muted overflow-hidden">
                                             <div
-                                                className={`h-full rounded-full transition-all duration-500 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
+                                                className={`h-full rounded-full transition-all duration-300 ${acc >= 80 ? 'bg-emerald-500' : acc >= 60 ? 'bg-amber-500' : 'bg-red-400'}`}
                                                 style={{ width: `${Math.max(acc, 3)}%` }}
                                             />
                                         </div>
@@ -344,12 +344,12 @@ export default function ProfilePage() {
                 </div>
             </div>
 
-            {/* ④ 学习轨迹（全宽） */}
+            {/* 学习轨迹 */}
             <div className="rounded-xl border border-border bg-card">
                 <div className="border-b border-border p-6">
                     <div className="flex items-center gap-2">
                         <Activity className="size-5 text-primary" />
-                        <h3 className="text-foreground font-semibold">学习轨迹</h3>
+                        <h3 className="text-foreground font-medium">学习轨迹</h3>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">最近 30 次测验的正确率趋势</p>
                 </div>
@@ -373,7 +373,7 @@ export default function ProfilePage() {
                 <div className="border-b border-border p-6">
                     <div className="flex items-center gap-2">
                         <Link2 className="size-5 text-primary" />
-                        <h3 className="text-foreground font-semibold">画像分享</h3>
+                        <h3 className="text-foreground font-medium">画像分享</h3>
                     </div>
                     <p className="mt-1 text-sm text-muted-foreground">生成分享链接，让他人查看你的学习画像并为你出题</p>
                 </div>

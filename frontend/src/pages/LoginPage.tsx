@@ -303,25 +303,24 @@ export default function LoginPage() {
             </div>
 
             {/* Floating card */}
-            <div className="w-full max-w-[1300px] overflow-hidden rounded-2xl border border-border shadow-2xl shadow-black/8 dark:shadow-black/25 lg:grid" style={{ gridTemplateColumns: '58fr 42fr' }}>
+            <div className="w-full max-w-[1300px] overflow-hidden rounded-xl border border-border shadow-2xl shadow-black/8 dark:shadow-black/25 lg:grid grid-cols-[58fr_42fr]">
 
             {/* Left panel */}
-            <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 text-slate-800"
-                style={{ background: 'linear-gradient(135deg, #eef2ff 0%, #f5f3ff 60%, #faf5ff 100%)' }}
+            <div className="relative hidden lg:flex flex-col justify-between overflow-hidden p-10 text-slate-800 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50"
             >
                 {/* Brand */}
                 <div className="relative z-10 flex items-center gap-2.5">
-                    <span className="text-lg font-semibold tracking-tight">CogniLoop</span>
+                    <span className="text-lg font-medium tracking-tight">CogniLoop</span>
                 </div>
 
                 {/* Characters stage */}
-                <div className="relative z-10 flex items-end justify-center" style={{ height: '460px' }}>
-                    <div className="relative" style={{ width: '480px', height: '400px', transform: 'scale(1.15)', transformOrigin: 'bottom center' }}>
+                <div className="relative z-10 flex items-end justify-center h-[460px]">
+                    <div className="relative w-[480px] h-[400px] scale-[1.15] origin-bottom">
 
                         {/* Char 1 — violet rectangle (main hero) */}
                         <div
                             ref={char1Ref}
-                            className="absolute bottom-0 transition-all duration-700 ease-in-out"
+                            className="absolute bottom-0 transition-all duration-300 ease-in-out"
                             style={{
                                 left: '55px',
                                 width: '155px',
@@ -338,7 +337,7 @@ export default function LoginPage() {
                             }}
                         >
                             <div
-                                className="absolute flex gap-7 transition-all duration-700 ease-in-out"
+                                className="absolute flex gap-7 transition-all duration-300 ease-in-out"
                                 style={{
                                     left: passwordRevealed ? '18px' : isLookingAtEachOther ? '48px' : `${38 + f1.fx}px`,
                                     top: passwordRevealed ? '28px' : isLookingAtEachOther ? '58px' : `${34 + f1.fy}px`,
@@ -360,7 +359,7 @@ export default function LoginPage() {
                         {/* Char 2 — dark navy rectangle */}
                         <div
                             ref={char2Ref}
-                            className="absolute bottom-0 transition-all duration-700 ease-in-out"
+                            className="absolute bottom-0 transition-all duration-300 ease-in-out"
                             style={{
                                 left: '205px',
                                 width: '110px',
@@ -377,7 +376,7 @@ export default function LoginPage() {
                             }}
                         >
                             <div
-                                className="absolute flex gap-5 transition-all duration-700 ease-in-out"
+                                className="absolute flex gap-5 transition-all duration-300 ease-in-out"
                                 style={{
                                     left: passwordRevealed ? '9px' : isLookingAtEachOther ? '26px' : `${20 + f2.fx}px`,
                                     top: passwordRevealed ? '24px' : isLookingAtEachOther ? '10px' : `${26 + f2.fy}px`,
@@ -399,7 +398,7 @@ export default function LoginPage() {
                         {/* Char 3 — emerald semi-circle */}
                         <div
                             ref={char3Ref}
-                            className="absolute bottom-0 transition-all duration-700 ease-in-out"
+                            className="absolute bottom-0 transition-all duration-300 ease-in-out"
                             style={{
                                 left: '-5px',
                                 width: '215px',
@@ -433,7 +432,7 @@ export default function LoginPage() {
                         {/* Char 4 — amber rounded rectangle */}
                         <div
                             ref={char4Ref}
-                            className="absolute bottom-0 transition-all duration-700 ease-in-out"
+                            className="absolute bottom-0 transition-all duration-300 ease-in-out"
                             style={{
                                 left: '310px',
                                 width: '130px',
@@ -481,8 +480,7 @@ export default function LoginPage() {
                 </div>
 
                 {/* Decorative overlays */}
-                <div className="pointer-events-none absolute inset-0"
-                    style={{ backgroundImage: 'radial-gradient(circle, rgba(99,102,241,0.06) 1px, transparent 1px)', backgroundSize: '22px 22px' }}
+                <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle,rgba(99,102,241,0.06)_1px,transparent_1px)] bg-[length:22px_22px]"
                 />
                 <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.07),transparent_55%)]" />
                 <div className="pointer-events-none absolute bottom-1/3 left-1/3 size-80 rounded-full bg-indigo-200/30 blur-3xl" />
@@ -498,9 +496,9 @@ export default function LoginPage() {
                                 ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/25'
                                 : 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/25'
                         }`}>
-                            {mode === 'setup' ? <Shield className="size-8 text-white" /> : <Sparkles className="size-8 text-white" />}
+                            {mode === 'setup' ? <Shield className="size-8 text-white" /> : <Sparkles className="size-8 text-white animate-pulse" />}
                         </div>
-                        <h1 className="text-2xl font-bold tracking-tight text-foreground">CogniLoop</h1>
+                        <h1 className="text-2xl font-medium tracking-tight text-foreground">CogniLoop</h1>
                         <p className="mt-1.5 text-sm text-muted-foreground">
                             {mode === 'setup' ? '首次启动 — 创建管理员账户' : 'AI 驱动的去中心化知识学习社区'}
                         </p>
@@ -508,7 +506,7 @@ export default function LoginPage() {
 
                     {/* Desktop heading */}
                     <div className="mb-8 hidden lg:block">
-                        <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                        <h2 className="text-2xl font-medium tracking-tight text-foreground">
                             {mode === 'setup' ? '初始化系统' : mode === 'login' ? '欢迎回来 👋' : '创建账户'}
                         </h2>
                         <p className="mt-1.5 text-sm text-muted-foreground">
@@ -534,7 +532,7 @@ export default function LoginPage() {
                         </div>
                     )}
 
-                    <div className="rounded-2xl border border-border bg-card/80 p-8 shadow-xl backdrop-blur-sm">
+                    <div className="rounded-xl border border-border bg-card/80 p-8 shadow-xl backdrop-blur-sm">
                         {mode === 'setup' ? (
                             <>
                                 <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
@@ -567,7 +565,7 @@ export default function LoginPage() {
                                             {passwordToggleBtn}
                                         </div>
                                     </div>
-                                    <button type="submit" disabled={loading || setupDone} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 text-sm font-medium text-white shadow-lg shadow-amber-500/25 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    <button type="submit" disabled={loading || setupDone} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 text-sm font-medium text-white shadow-lg shadow-amber-500/25 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
                                         {loading && <Loader2 className="size-4 animate-spin" />}
                                         <Shield className="size-4" />
                                         创建管理员账户
@@ -689,7 +687,7 @@ export default function LoginPage() {
                                     <button
                                         type="submit"
                                         disabled={loading}
-                                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/30 hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                                        className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all duration-200 hover:shadow-xl hover:shadow-indigo-500/30 hover:-translate-y-0.5 hover:scale-105 active:scale-95 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
                                     >
                                         {loading && <Loader2 className="size-4 animate-spin" />}
                                         {mode === 'login' ? '登录' : '注册'}

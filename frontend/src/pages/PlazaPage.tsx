@@ -111,7 +111,7 @@ export default function PlazaPage() {
     return (
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
             {/* Hero */}
-            <div className="relative overflow-hidden rounded-2xl border border-primary/20 bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-50 p-8 dark:from-cyan-950/20 dark:via-blue-950/20 dark:to-indigo-950/20">
+            <div className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 p-8 dark:from-indigo-950/20 dark:via-purple-950/20 dark:to-pink-950/20">
                 <div className="relative z-10 max-w-xl">
                     <h1 className="text-foreground">知识广场</h1>
                     <p className="mt-2 text-muted-foreground leading-relaxed">
@@ -130,7 +130,7 @@ export default function PlazaPage() {
                         </div>
                     )}
                 </div>
-                <div className="absolute -right-20 -top-20 size-72 rounded-full bg-gradient-to-br from-cyan-400/15 to-blue-400/15 blur-3xl" />
+                <div className="absolute -right-20 -top-20 size-72 rounded-full bg-gradient-to-br from-indigo-400/15 to-purple-400/15 blur-3xl" />
             </div>
 
             {/* Tab switcher */}
@@ -165,7 +165,7 @@ export default function PlazaPage() {
                 <>
                     {/* Stats row */}
                     <div className="grid gap-4 md:grid-cols-2">
-                        <StatCard icon={Database} label="公开知识库" value={kbs.length} color="from-blue-500 to-cyan-500" />
+                        <StatCard icon={Database} label="公开知识库" value={kbs.length} color="from-indigo-500 to-purple-500" />
                         <StatCard icon={Star} label="试卷模板" value={plazaTemplates.length} color="from-amber-500 to-orange-500" />
                     </div>
 
@@ -188,7 +188,7 @@ export default function PlazaPage() {
                             {filtered.map((kb) => (
                                 <div key={kb.id} className="group rounded-xl border border-border bg-card p-5 transition-all hover:shadow-lg hover:-translate-y-0.5">
                                     <div className="flex items-start gap-3 mb-3">
-                                        <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500">
+                                        <div className="flex size-10 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500">
                                             <BookOpen className="size-5 text-white" />
                                         </div>
                                         <div className="flex-1 min-w-0">
@@ -387,7 +387,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: typeof Database; 
                     <Icon className="size-5 text-white" />
                 </div>
                 <div>
-                    <p className="text-2xl font-bold text-foreground">{value}</p>
+                    <p className="text-2xl font-medium text-foreground">{value}</p>
                     <p className="text-sm text-muted-foreground">{label}</p>
                 </div>
             </div>

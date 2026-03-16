@@ -83,7 +83,7 @@ export default function CircleDetailPage() {
         return (
             <div className="container mx-auto space-y-6 p-6 animate-pulse">
                 <div className="h-4 w-20 rounded bg-muted" />
-                <div className="rounded-2xl border border-border bg-card p-6">
+                <div className="rounded-xl border border-border bg-card p-6">
                     <div className="flex items-start gap-4">
                         <div className="size-14 rounded-2xl bg-muted shrink-0" />
                         <div className="flex-1 space-y-2">
@@ -128,13 +128,13 @@ export default function CircleDetailPage() {
                 <ArrowLeft className="size-4" /> 返回学习圈
             </button>
 
-            <div className="rounded-2xl border border-border bg-card p-6">
+            <div className="rounded-xl border border-border bg-card p-6">
                 <div className="flex flex-col sm:flex-row items-start gap-4">
                     <div className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-violet-500/10 text-xl font-bold text-violet-600 dark:text-violet-400">
                         {circle.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h1 className="text-xl font-semibold text-foreground">{circle.name}</h1>
+                        <h1 className="text-xl font-medium text-foreground">{circle.name}</h1>
                         {circle.description && (
                             <p className="mt-1 text-sm text-muted-foreground leading-relaxed line-clamp-2">{circle.description}</p>
                         )}
@@ -288,19 +288,19 @@ export default function CircleDetailPage() {
                                     {/* Overall stats */}
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="rounded-lg bg-muted/30 p-4 text-center">
-                                            <p className="text-2xl font-bold text-foreground">
+                                            <p className="text-2xl font-medium text-foreground">
                                                 {(circleProfile.overall_accuracy * 100).toFixed(1)}%
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-1">整体正确率</p>
                                         </div>
                                         <div className="rounded-lg bg-muted/30 p-4 text-center">
-                                            <p className="text-2xl font-bold text-foreground">
+                                            <p className="text-2xl font-medium text-foreground">
                                                 {circleProfile.total_questions}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-1">总做题数</p>
                                         </div>
                                         <div className="rounded-lg bg-muted/30 p-4 text-center">
-                                            <p className="text-2xl font-bold text-foreground">
+                                            <p className="text-2xl font-medium text-foreground">
                                                 {circleProfile.member_count}
                                             </p>
                                             <p className="text-xs text-muted-foreground mt-1">参与成员</p>
@@ -310,7 +310,7 @@ export default function CircleDetailPage() {
                                     {/* Knowledge point mastery (sorted by accuracy ascending = weakest first) */}
                                     {Object.keys(circleProfile.knowledge_point_profiles).length > 0 && (
                                         <div>
-                                            <h4 className="text-sm font-semibold text-foreground mb-3">知识点掌握度</h4>
+                                            <h4 className="text-sm font-medium text-foreground mb-3">知识点掌握度</h4>
                                             <div className="space-y-3">
                                                 {Object.entries(circleProfile.knowledge_point_profiles)
                                                     .sort(([, a], [, b]) => a.avg_accuracy - b.avg_accuracy)
@@ -334,7 +334,7 @@ export default function CircleDetailPage() {
                                                             </div>
                                                             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                                                                 <div
-                                                                    className={`h-full rounded-full transition-all duration-700 ${
+                                                                    className={`h-full rounded-full transition-all duration-300 ${
                                                                         stats.avg_accuracy >= 0.8
                                                                             ? 'bg-emerald-500'
                                                                             : stats.avg_accuracy >= 0.6
@@ -353,7 +353,7 @@ export default function CircleDetailPage() {
                                     {/* Domain accuracy bars */}
                                     {Object.keys(circleProfile.domain_profiles).length > 0 && (
                                         <div>
-                                            <h4 className="text-sm font-semibold text-foreground mb-3">学科正确率</h4>
+                                            <h4 className="text-sm font-medium text-foreground mb-3">学科正确率</h4>
                                             <div className="space-y-3">
                                                 {Object.entries(circleProfile.domain_profiles)
                                                     .sort(([, a], [, b]) => b.avg_accuracy - a.avg_accuracy)
@@ -376,7 +376,7 @@ export default function CircleDetailPage() {
                                                             </div>
                                                             <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                                                                 <div
-                                                                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
+                                                                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
                                                                     style={{ width: `${Math.round(stats.avg_accuracy * 100)}%` }}
                                                                 />
                                                             </div>
@@ -401,7 +401,7 @@ export default function CircleDetailPage() {
                     <div className="rounded-xl border border-border bg-card overflow-hidden">
                         <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
                             <Users className="size-4 text-muted-foreground" />
-                            <h3 className="text-sm font-semibold text-foreground">成员列表</h3>
+                            <h3 className="text-sm font-medium text-foreground">成员列表</h3>
                             <span className="ml-auto text-xs text-muted-foreground">
                                 {circle.member_count}/{circle.max_members}
                             </span>
@@ -429,7 +429,7 @@ export default function CircleDetailPage() {
                         <div className="rounded-xl border border-border bg-card overflow-hidden">
                             <div className="flex items-center gap-2 px-5 py-4 border-b border-border">
                                 <BarChart2 className="size-4 text-muted-foreground" />
-                                <h3 className="text-sm font-semibold text-foreground">圈子能力分布</h3>
+                                <h3 className="text-sm font-medium text-foreground">圈子能力分布</h3>
                             </div>
                             <div className="p-5 space-y-4">
                                 {stats.domain_stats.slice(0, 6).map((d) => (
@@ -448,7 +448,7 @@ export default function CircleDetailPage() {
                                         </div>
                                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                                             <div
-                                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
+                                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-300"
                                                 style={{ width: `${Math.round(d.avg_accuracy * 100)}%` }}
                                             />
                                         </div>
@@ -467,11 +467,11 @@ export default function CircleDetailPage() {
                     onClick={closeRanking}
                 >
                     <div
-                        className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
+                        className="w-full max-w-lg rounded-xl border border-border bg-card shadow-2xl overflow-hidden"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                            <h2 className="text-base font-medium text-foreground flex items-center gap-2">
                                 <Trophy className="size-4 text-amber-500" />
                                 本场排名
                             </h2>
@@ -500,7 +500,7 @@ export default function CircleDetailPage() {
     )
 }
 
-/* ── Sub-components ── */
+/* Sub-components */
 
 function EmptyTabState({ message, icon: Icon }: { message: string; icon: LucideIcon }) {
     return (

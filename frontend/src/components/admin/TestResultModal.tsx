@@ -24,10 +24,10 @@ export function TestResultModal({ open, onClose, type, loading, result, error }:
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={onClose}>
-            <div className={`w-full ${maxW} rounded-2xl border border-border bg-card shadow-xl`} onClick={e => e.stopPropagation()}>
+            <div className={`w-full ${maxW} rounded-xl border border-border bg-card shadow-xl`} onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="flex items-center justify-between border-b border-border px-6 py-4">
-                    <h2 className="text-lg font-semibold text-foreground">{TITLES[type]}</h2>
+                    <h2 className="text-lg font-medium text-foreground">{TITLES[type]}</h2>
                     <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted transition">
                         <X className="size-5" />
                     </button>
@@ -106,7 +106,7 @@ function EmbeddingResult({ result }: { result: any }) {
             <div>
                 <p className="mb-1.5 text-sm font-medium text-muted-foreground">返回维度</p>
                 <div className="flex items-center gap-3 rounded-lg bg-muted p-4">
-                    <span className="text-3xl font-bold text-primary">{result.dimensions_returned}</span>
+                    <span className="text-3xl font-medium text-primary">{result.dimensions_returned}</span>
                     <span className="text-sm text-muted-foreground">dimensions</span>
                 </div>
             </div>

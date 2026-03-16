@@ -128,7 +128,7 @@ export default function QuizResultPage() {
                         <button onClick={() => fromCircle ? navigate(`/circles/${fromCircle}?tab=challenges`) : navigate('/quiz')} className="flex size-8 items-center justify-center rounded-md border border-border bg-background transition-colors hover:bg-accent text-muted-foreground hover:text-foreground">
                             <ArrowLeft className="size-4" />
                         </button>
-                        <h1 className="text-lg font-bold text-foreground line-clamp-1 max-w-[200px] lg:max-w-[400px]">{session.title || '测验结果'}</h1>
+                        <h1 className="text-lg font-medium text-foreground line-clamp-1 max-w-[200px] lg:max-w-[400px]">{session.title || '测验结果'}</h1>
                     </div>
 
                     <div className="h-6 w-px bg-border"></div>
@@ -136,12 +136,12 @@ export default function QuizResultPage() {
                     <div className="flex items-center gap-6">
                         <div className="flex items-baseline gap-2">
                             <span className="text-sm font-medium text-muted-foreground">总分</span>
-                            <span className="text-2xl font-bold tracking-tight text-foreground">{totalScore.toFixed(1)}</span>
+                            <span className="text-2xl font-medium tracking-tight text-foreground">{totalScore.toFixed(1)}</span>
                             <span className="text-xs text-muted-foreground font-medium">/ {maxScore}</span>
                         </div>
                         <div className="flex items-baseline gap-2">
                             <span className="text-sm font-medium text-muted-foreground">正确率</span>
-                            <span className={`text-lg font-bold tracking-tight ${accuracy >= 0.8 ? 'text-emerald-600 dark:text-emerald-500' : accuracy >= 0.6 ? 'text-amber-600 dark:text-amber-500' : 'text-rose-600 dark:text-rose-500'}`}>
+                            <span className={`text-lg font-medium tracking-tight ${accuracy >= 0.8 ? 'text-emerald-600 dark:text-emerald-500' : accuracy >= 0.6 ? 'text-amber-600 dark:text-amber-500' : 'text-rose-600 dark:text-rose-500'}`}>
                                 {(accuracy * 100).toFixed(0)}%
                             </span>
                         </div>
@@ -152,7 +152,7 @@ export default function QuizResultPage() {
                     {session.circle_id && participants && participants.length > 0 && (
                         <button
                             onClick={() => setShowLeaderboard(true)}
-                            className="flex items-center gap-1.5 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs font-semibold text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/60"
+                            className="flex items-center gap-1.5 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400 transition-colors hover:bg-amber-100 dark:hover:bg-amber-950/60"
                         >
                             <Trophy className="size-3.5" />
                             查看排名
@@ -173,7 +173,7 @@ export default function QuizResultPage() {
                 {/* Left Sidebar: Navigation Grid (答题卡) */}
                 <aside className="w-[300px] flex-none border-r border-border bg-muted/20 flex flex-col hidden md:flex">
                     <div className="p-4 border-b border-border/50 bg-card">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
                             <Target className="size-4 text-muted-foreground" />
                             答题卡
                         </h3>
@@ -200,7 +200,7 @@ export default function QuizResultPage() {
                                     <button
                                         key={q.id}
                                         onClick={() => setActiveQIndex(i)}
-                                        className={`relative flex aspect-square items-center justify-center rounded-md border text-sm font-semibold transition-all ${bgColor} ${activeStyles}`}
+                                        className={`relative flex aspect-square items-center justify-center rounded-md border text-sm font-medium transition-all ${bgColor} ${activeStyles}`}
                                     >
                                         {i + 1}
                                     </button>
@@ -226,7 +226,7 @@ export default function QuizResultPage() {
                             <button
                                 key={q.id}
                                 onClick={() => setActiveQIndex(i)}
-                                className={`shrink-0 flex size-9 items-center justify-center rounded-md border text-sm font-semibold ${bgColor} ${activeStyles}`}
+                                className={`shrink-0 flex size-9 items-center justify-center rounded-md border text-sm font-medium ${bgColor} ${activeStyles}`}
                             >
                                 {i + 1}
                             </button>
@@ -242,10 +242,10 @@ export default function QuizResultPage() {
                             {/* Question Content */}
                             <div className="space-y-4">
                                 <div className="flex items-center gap-3">
-                                    <span className="flex items-center justify-center rounded bg-muted/60 px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                                    <span className="flex items-center justify-center rounded bg-muted/60 px-2.5 py-1 text-xs font-medium text-muted-foreground">
                                         {typeLabel(activeQ.question_type)}
                                     </span>
-                                    <h2 className="text-xl font-bold text-foreground">第 {activeQIndex + 1} 题</h2>
+                                    <h2 className="text-xl font-medium text-foreground">第 {activeQIndex + 1} 题</h2>
                                     <span className="text-sm font-medium text-muted-foreground ml-auto border border-border px-3 py-1 rounded-full bg-card">
                                         分值：{activeQ.score} 分
                                     </span>
@@ -258,7 +258,7 @@ export default function QuizResultPage() {
                             {/* Options Grid (if choices) */}
                             {activeQ.options && (
                                 <div className="space-y-4">
-                                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider pl-1">选项</h4>
+                                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider pl-1">选项</h4>
                                     <div className="grid gap-3">
                                         {Object.entries(activeQ.options).map(([key, value]) => {
                                             const isUserAnswer = key === activeResp?.user_answer
@@ -277,7 +277,7 @@ export default function QuizResultPage() {
 
                                             return (
                                                 <div key={key} className={`flex items-start rounded-xl border p-4 transition-colors ${containerClass}`}>
-                                                    <div className="flex shrink-0 size-7 bg-background rounded-md items-center justify-center font-bold text-sm border border-border mr-4 shadow-sm">
+                                                    <div className="flex shrink-0 size-7 bg-background rounded-md items-center justify-center font-medium text-sm border border-border mr-4 shadow-sm">
                                                         {key}
                                                     </div>
                                                     <div className={`flex-1 mt-0.5 leading-snug ${textClass}`}>
@@ -298,7 +298,7 @@ export default function QuizResultPage() {
                                     <div className="rounded-xl border border-border bg-card p-5 shadow-sm">
                                         <div className="flex items-center gap-2 mb-3">
                                             <div className="size-2 rounded-full bg-muted-foreground/30" />
-                                            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">你的答案</p>
+                                            <p className="text-xs font-medium text-muted-foreground uppercase tracking-widest">你的答案</p>
                                         </div>
                                         <p className={`text-base font-medium ${isActiveCorrect === false ? 'text-rose-600 dark:text-rose-400' : 'text-foreground'}`}>
                                             {activeResp?.user_answer || '（未作答）'}
@@ -307,7 +307,7 @@ export default function QuizResultPage() {
                                     <div className="rounded-xl border border-emerald-500/20 bg-emerald-50/50 dark:bg-emerald-950/20 p-5 shadow-sm">
                                         <div className="flex items-center gap-2 mb-3">
                                             <div className="size-2 rounded-full bg-emerald-500/80" />
-                                            <p className="text-xs font-bold text-emerald-700/80 dark:text-emerald-400/80 uppercase tracking-widest">参考答案</p>
+                                            <p className="text-xs font-medium text-emerald-700/80 dark:text-emerald-400/80 uppercase tracking-widest">参考答案</p>
                                         </div>
                                         <p className="text-base font-medium text-emerald-700 dark:text-emerald-400">
                                             <MathText inline>{activeQ.correct_answer || '-'}</MathText>
@@ -319,7 +319,7 @@ export default function QuizResultPage() {
                             {/* Official Analysis */}
                             {activeQ.analysis && (
                                 <div className="space-y-3">
-                                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider pl-1 flex items-center gap-1.5">
+                                    <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider pl-1 flex items-center gap-1.5">
                                         <AlertCircle className="size-3.5" /> 考点解析
                                     </h4>
                                     <div className="rounded-xl border border-border/80 bg-muted/20 p-6">
@@ -331,8 +331,8 @@ export default function QuizResultPage() {
                             {/* AI Tutor Feedback */}
                             {activeResp?.ai_feedback && (
                                 <div className="space-y-3">
-                                    <h4 className="text-xs font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wider pl-1 flex items-center gap-2">
-                                        <span className="size-4 flex items-center justify-center text-[9px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800 font-extrabold pb-[1px]">AI</span>
+                                    <h4 className="text-xs font-medium text-indigo-600 dark:text-indigo-400 uppercase tracking-wider pl-1 flex items-center gap-2">
+                                        <span className="size-4 flex items-center justify-center text-[9px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300 rounded border border-indigo-200 dark:border-indigo-800 font-medium pb-[1px]">AI</span>
                                         智能导师评语
                                     </h4>
                                     <div className="rounded-xl border border-indigo-500/15 bg-indigo-50/50 dark:bg-indigo-950/30 p-6 shadow-sm">
@@ -358,11 +358,11 @@ export default function QuizResultPage() {
                     onClick={() => setShowLeaderboard(false)}
                 >
                     <div
-                        className="w-full max-w-lg rounded-2xl border border-border bg-card shadow-2xl overflow-hidden"
+                        className="w-full max-w-lg rounded-xl border border-border bg-card shadow-2xl overflow-hidden"
                         onClick={e => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-                            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                            <h2 className="text-base font-medium text-foreground flex items-center gap-2">
                                 <Trophy className="size-4 text-amber-500" />
                                 本场圈子排名
                             </h2>
@@ -383,7 +383,7 @@ export default function QuizResultPage() {
     )
 }
 
-/* ── Circle Leaderboard ── */
+/* Circle Leaderboard */
 
 function CircleLeaderboard({
     participants,
@@ -397,7 +397,7 @@ function CircleLeaderboard({
     return (
         <div className="space-y-3">
             {!hideTitle && (
-                <h4 className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
+                <h4 className="text-xs font-medium text-amber-600 dark:text-amber-400 uppercase tracking-wider pl-1 flex items-center gap-1.5">
                     <Trophy className="size-3.5" /> 本场圈子排名
                 </h4>
             )}
@@ -425,7 +425,7 @@ function CircleLeaderboard({
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center gap-2">
-                                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-xs font-bold text-white">
+                                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-xs font-medium text-white">
                                                 {p.full_name.charAt(0)}
                                             </div>
                                             <div>
@@ -438,7 +438,7 @@ function CircleLeaderboard({
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {completed && p.accuracy != null ? (
-                                            <span className={`font-mono font-semibold text-sm ${
+                                            <span className={`font-mono font-medium text-sm ${
                                                 p.accuracy >= 0.8 ? 'text-emerald-600' : p.accuracy >= 0.6 ? 'text-amber-600' : 'text-rose-500'
                                             }`}>
                                                 {(p.accuracy * 100).toFixed(0)}%
@@ -449,7 +449,7 @@ function CircleLeaderboard({
                                     </td>
                                     <td className="px-4 py-3 text-right">
                                         {completed && p.total_score != null ? (
-                                            <span className="font-mono font-bold text-sm text-foreground">{p.total_score.toFixed(1)}</span>
+                                            <span className="font-mono font-medium text-sm text-foreground">{p.total_score.toFixed(1)}</span>
                                         ) : (
                                             <span className="text-xs text-muted-foreground">—</span>
                                         )}
@@ -466,13 +466,13 @@ function CircleLeaderboard({
 
 function CircleRankBadge({ rank }: { rank: number }) {
     if (rank === 1) return (
-        <span className="inline-flex size-6 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">1</span>
+        <span className="inline-flex size-6 items-center justify-center rounded-full bg-amber-100 text-xs font-medium text-amber-600 dark:bg-amber-900/30 dark:text-amber-400">1</span>
     )
     if (rank === 2) return (
-        <span className="inline-flex size-6 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">2</span>
+        <span className="inline-flex size-6 items-center justify-center rounded-full bg-slate-100 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-400">2</span>
     )
     if (rank === 3) return (
-        <span className="inline-flex size-6 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">3</span>
+        <span className="inline-flex size-6 items-center justify-center rounded-full bg-orange-100 text-xs font-medium text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">3</span>
     )
     return <span className="text-sm text-muted-foreground font-mono">{rank}</span>
 }

@@ -34,12 +34,12 @@ export default function QuizPage() {
             {/* Mode selection cards */}
             <div className="grid gap-6 md:grid-cols-2 items-stretch">
                 {/* AI Smart Quiz */}
-                <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/30">
+                <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/30">
                     <div className="relative z-10 flex h-full flex-col">
                         <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
-                            <Sparkles className="size-7 text-white" />
+                            <Sparkles className="size-7 text-white animate-pulse" />
                         </div>
-                        <h3 className="text-xl font-semibold text-foreground">智能出题</h3>
+                        <h3 className="text-xl font-medium text-foreground">智能出题</h3>
                         <p className="mt-2 flex-1 text-sm text-muted-foreground leading-relaxed">
                             AI 根据你的学习画像，从知识库中智能抽取内容并生成测验题目。题目难度会根据你的掌握程度自动调整。
                         </p>
@@ -53,7 +53,7 @@ export default function QuizPage() {
                         </div>
                         <button
                             onClick={() => navigate('/quiz/create-smart')}
-                            className="mt-5 inline-flex w-fit items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5"
+                            className="mt-5 inline-flex w-fit items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95"
                         >
                             开始出题
                             <ArrowRight className="size-4" />
@@ -63,17 +63,17 @@ export default function QuizPage() {
                 </div>
 
                 {/* Exam Paper Mode */}
-                <div className="group relative overflow-hidden rounded-2xl border border-border bg-card p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/30">
+                <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-8 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:border-primary/30">
                     <div className="relative z-10 flex h-full flex-col">
-                        <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 shadow-lg shadow-blue-500/25">
+                        <div className="mb-4 flex size-14 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 shadow-lg shadow-indigo-500/25">
                             <FileText className="size-7 text-white" />
                         </div>
-                        <h3 className="text-xl font-semibold text-foreground">仿真组卷</h3>
+                        <h3 className="text-xl font-medium text-foreground">仿真组卷</h3>
                         <p className="mt-2 flex-1 text-sm text-muted-foreground leading-relaxed">
                             模拟真实考试场景，按照标准化卷面结构组卷。支持选择题、填空题、简答题等多种题型混合。
                         </p>
                         <div className="mt-5 flex flex-wrap gap-2">
-                            <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-600">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-600">
                                 <FileText className="size-3" /> 标准卷面
                             </span>
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-600">
@@ -88,7 +88,7 @@ export default function QuizPage() {
                             <ArrowRight className="size-4" />
                         </button>
                     </div>
-                    <div className="absolute -right-12 -top-12 size-40 rounded-full bg-gradient-to-br from-blue-500/10 to-cyan-500/10 blur-2xl transition-all group-hover:scale-150" />
+                    <div className="absolute -right-12 -top-12 size-40 rounded-full bg-gradient-to-br from-indigo-500/10 to-purple-500/10 blur-2xl transition-all group-hover:scale-150" />
                 </div>
             </div>
 

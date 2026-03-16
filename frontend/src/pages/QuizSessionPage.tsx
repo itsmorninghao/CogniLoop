@@ -264,7 +264,7 @@ export default function QuizSessionPage() {
                     <div className="mx-auto max-w-2xl">
                         {/* Question header */}
                         <div className="mb-6 flex items-center gap-3">
-                            <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                            <span className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-sm font-medium text-primary">
                                 {currentIndex + 1}
                             </span>
                             <span className="rounded-full border border-border px-2.5 py-0.5 text-xs text-muted-foreground">
@@ -385,7 +385,7 @@ export default function QuizSessionPage() {
                             ) : (
                                 <button
                                     onClick={handleSubmitAll}
-                                    className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl"
+                                    className="flex items-center gap-2 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-indigo-500/25 transition-all hover:shadow-xl hover:scale-105 active:scale-95"
                                 >
                                     <Send className="size-4" />
                                     交卷

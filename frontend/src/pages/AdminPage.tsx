@@ -30,7 +30,7 @@ export default function AdminPage() {
                     <Settings className="size-8 text-rose-500" />
                 </div>
                 <div className="text-center">
-                    <h2 className="text-xl font-bold text-foreground">访问被拒绝</h2>
+                    <h2 className="text-xl font-medium text-foreground">访问被拒绝</h2>
                     <p className="text-muted-foreground mt-1">您需要管理员权限才能访问此页面</p>
                 </div>
             </div>

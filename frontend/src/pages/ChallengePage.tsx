@@ -11,10 +11,10 @@ import { challengeApi, type QuizSessionListItem } from '@/lib/api'
 type TabType = 'received' | 'sent'
 
 const STATUS_CONFIG: Record<string, { label: string; icon: typeof Clock; color: string }> = {
-    generating: { label: '生成中', icon: Loader, color: 'text-blue-500' },
+    generating: { label: '生成中', icon: Loader, color: 'text-indigo-500' },
     ready: { label: '待答题', icon: AlertCircle, color: 'text-amber-500' },
     in_progress: { label: '答题中', icon: Clock, color: 'text-orange-500' },
-    grading: { label: '批改中', icon: Loader, color: 'text-blue-500' },
+    grading: { label: '批改中', icon: Loader, color: 'text-indigo-500' },
     graded: { label: '已完成', icon: CheckCircle, color: 'text-emerald-500' },
     error: { label: '出错', icon: XCircle, color: 'text-red-500' },
 }
@@ -69,7 +69,7 @@ function ChallengeCard({
                 {role === 'solver' && (session.status === 'ready' || session.status === 'in_progress') && (
                     <button
                         onClick={() => onAction(session.id, session.status)}
-                        className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                        className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 hover:scale-105 active:scale-95"
                     >
                         {session.status === 'ready' ? '开始答题' : '继续答题'}
                     </button>
@@ -103,7 +103,7 @@ function EmptyState({ tab }: { tab: TabType }) {
             {tab === 'sent' && (
                 <button
                     onClick={() => navigate('/quiz/create-smart')}
-                    className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                    className="mt-4 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 hover:scale-105 active:scale-95"
                 >
                     去出题挑战
                 </button>
@@ -171,7 +171,7 @@ export default function ChallengePage() {
                 </div>
                 <button
                     onClick={() => navigate('/quiz/create-smart')}
-                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                    className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 hover:scale-105 active:scale-95"
                 >
                     <Sword className="size-4" />
                     发起挑战

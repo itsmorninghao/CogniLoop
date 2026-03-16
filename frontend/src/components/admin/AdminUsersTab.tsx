@@ -89,11 +89,11 @@ export function AdminUsersTab() {
             {/* Header */}
             <div className="flex items-center justify-between gap-4 flex-wrap">
                 <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 shadow-lg shadow-blue-500/25">
+                    <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/25">
                         <Users className="size-5 text-white" />
                     </div>
                     <div>
-                        <h2 className="text-base font-semibold text-foreground">用户管理</h2>
+                        <h2 className="text-base font-medium text-foreground">用户管理</h2>
                         <p className="text-xs text-muted-foreground">
                             共 {total} 位用户 · 管理账号状态与权限分配
                         </p>
@@ -142,7 +142,7 @@ export function AdminUsersTab() {
                                 users.map(u => (
                                     <tr key={u.id} className="hover:bg-muted/30 transition-colors">
                                         <td className="px-6 py-3.5">
-                                            <div className="font-semibold text-foreground flex items-center gap-1.5">
+                                            <div className="font-medium text-foreground flex items-center gap-1.5">
                                                 {u.username}
                                                 {u.is_superadmin && <Crown className="size-3 text-amber-500" />}
                                             </div>
