@@ -2,28 +2,29 @@
 
 import base64
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import Response
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from pydantic import BaseModel
 from sqlalchemy import func
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
-
-from backend.app.services.exam_template_service import OCR_STRUCTURING_SYSTEM_PROMPT
 
 from backend.app.core.database import get_session
 from backend.app.core.deps import get_admin_user
 from backend.app.models.circle import StudyCircle
-from backend.app.models.knowledge_base import KnowledgeBase
+from backend.app.models.knowledge_base import KBDocument, KnowledgeBase
 from backend.app.models.notification import Notification
 from backend.app.models.quiz import QuizQuestion, QuizSession
 from backend.app.models.user import User
 from backend.app.services import config_service, notification_service
+from backend.app.services.exam_template_service import OCR_STRUCTURING_SYSTEM_PROMPT
 
 router = APIRouter(
     prefix="/admin", tags=["Admin"], dependencies=[Depends(get_admin_user)]
@@ -113,7 +114,9 @@ async def import_configs(
     count = 0
     for item in items:
         if item.key and item.value is not None:
-            await config_service.set_config(item.key, item.value, item.description, session)
+            await config_service.set_config(
+                item.key, item.value, item.description, session
+            )
             count += 1
     await session.commit()
     return {"imported": count}
@@ -155,7 +158,6 @@ async def get_platform_stats(
         )
     ).scalar_one()
 
-    # total questions: count quiz_questions via sessions
     total_questions = (
         await session.execute(select(func.count()).select_from(QuizQuestion))
     ).scalar_one()
@@ -209,8 +211,12 @@ async def list_users(
             | User.email.icontains(search)
             | User.full_name.icontains(search)
         )
-    total = (await session.execute(select(func.count()).select_from(base.subquery()))).scalar_one()
-    items_result = await session.execute(base.order_by(User.created_at.desc()).offset(offset).limit(limit))
+    total = (
+        await session.execute(select(func.count()).select_from(base.subquery()))
+    ).scalar_one()
+    items_result = await session.execute(
+        base.order_by(User.created_at.desc()).offset(offset).limit(limit)
+    )
     return PaginatedUsers(
         items=[UserListItem.model_validate(u) for u in items_result.scalars().all()],
         total=total,
@@ -230,13 +236,11 @@ async def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Admin role changes require super admin
     if req.is_admin is not None or req.is_superadmin is not None:
         if not current_admin.is_superadmin:
             raise HTTPException(
                 status_code=403, detail="Only super admins can change admin roles"
             )
-        # Cannot remove own admin status
         if user_id == current_admin.id and req.is_admin is False:
             raise HTTPException(
                 status_code=400, detail="Cannot remove your own admin status"
@@ -252,7 +256,6 @@ async def update_user(
         user.is_admin = req.is_admin
     if req.is_superadmin is not None:
         user.is_superadmin = req.is_superadmin
-        # Super admin implies admin
         if req.is_superadmin:
             user.is_admin = True
     session.add(user)
@@ -386,7 +389,11 @@ async def test_llm_config(
         res = await chat.ainvoke(
             [HumanMessage(content="Hello world! Reply with 'OK'.")]
         )
-        return {"ok": True, "message": str(res.content), "prompt": "Hello world! Reply with 'OK'."}
+        return {
+            "ok": True,
+            "message": str(res.content),
+            "prompt": "Hello world! Reply with 'OK'.",
+        }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -419,7 +426,9 @@ async def test_embedding_config(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-_OCR_TEST_IMAGE = Path(__file__).parent.parent.parent.parent / "assets" / "ocr_test_sample.png"
+_OCR_TEST_IMAGE = (
+    Path(__file__).parent.parent.parent.parent / "assets" / "ocr_test_sample.png"
+)
 
 
 @router.post("/system-configs/test-ocr")
@@ -429,12 +438,18 @@ async def test_ocr_config(
     """Test OCR connection using the built-in test sample image."""
     from openai import AsyncOpenAI
 
-    api_key = await config_service.get_config("OCR_API_KEY", session) or await config_service.get_config("OPENAI_API_KEY", session)
-    base_url = await config_service.get_config("OCR_API_URL", session) or await config_service.get_config("OPENAI_BASE_URL", session)
+    api_key = await config_service.get_config(
+        "OCR_API_KEY", session
+    ) or await config_service.get_config("OPENAI_API_KEY", session)
+    base_url = await config_service.get_config(
+        "OCR_API_URL", session
+    ) or await config_service.get_config("OPENAI_BASE_URL", session)
     model = await config_service.get_config("OCR_MODEL", session) or "gpt-4o"
 
     ocr_mode = await config_service.get_config("OCR_MODE", session) or "multimodal"
-    ocr_llm_model = await config_service.get_config("OCR_LLM_MODEL", session) or await config_service.get_config("OPENAI_MODEL", session)
+    ocr_llm_model = await config_service.get_config(
+        "OCR_LLM_MODEL", session
+    ) or await config_service.get_config("OPENAI_MODEL", session)
     llm_key = await config_service.get_config("OPENAI_API_KEY", session)
     llm_base_url = await config_service.get_config("OPENAI_BASE_URL", session)
 
@@ -452,47 +467,69 @@ async def test_ocr_config(
 
         if ocr_mode == "ocr_plus_llm":
             if not llm_key:
-                raise HTTPException(status_code=400, detail="未配置全局 LLM API Key（OCR+LLM 模式需要）")
+                raise HTTPException(
+                    status_code=400, detail="未配置全局 LLM API Key（OCR+LLM 模式需要）"
+                )
 
-            # Step 1: extract raw text
             step1_res = await client.chat.completions.create(
                 model=model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": "请识别并提取图片中的所有文字内容，保持原始格式输出。"},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                    ],
-                }],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "text",
+                                "text": "请识别并提取图片中的所有文字内容，保持原始格式输出。",
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{b64}"},
+                            },
+                        ],
+                    }
+                ],
                 temperature=0.0,
                 max_tokens=512,
                 timeout=20,
             )
             raw_ocr_text = step1_res.choices[0].message.content or ""
 
-            # Step 2: structure into JSON
             llm_client = AsyncOpenAI(api_key=llm_key, base_url=llm_base_url or None)
             step2_res = await llm_client.chat.completions.create(
                 model=ocr_llm_model,
                 messages=[
                     {"role": "system", "content": OCR_STRUCTURING_SYSTEM_PROMPT},
-                    {"role": "user", "content": f"以下是 OCR 识别文字，请提取所有题目并以 JSON 数组输出：\n\n{raw_ocr_text}"},
+                    {
+                        "role": "user",
+                        "content": f"以下是 OCR 识别文字，请提取所有题目并以 JSON 数组输出：\n\n{raw_ocr_text}",
+                    },
                 ],
                 temperature=0.1,
                 max_tokens=512,
                 timeout=20,
             )
             structured = step2_res.choices[0].message.content or ""
-            return {"ok": True, "message": structured, "image_base64": b64, "raw_ocr_text": raw_ocr_text, "mode": "ocr_plus_llm"}
+            return {
+                "ok": True,
+                "message": structured,
+                "image_base64": b64,
+                "raw_ocr_text": raw_ocr_text,
+                "mode": "ocr_plus_llm",
+            }
         else:
             res = await client.chat.completions.create(
                 model=model,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64}"}},
-                    ],
-                }],
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": f"data:image/png;base64,{b64}"},
+                            },
+                        ],
+                    }
+                ],
                 max_tokens=512,
                 timeout=20,
             )
@@ -650,7 +687,188 @@ async def admin_delete_circle(
     await session.commit()
 
 
-# IP Blocking
+class ReindexResponse(BaseModel):
+    queued: int
+    kb_id: int | None = None
+
+
+@router.post("/reindex/knowledge-base/{kb_id}", response_model=ReindexResponse)
+async def reindex_knowledge_base(
+    kb_id: int,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Re-run the full document processing pipeline (parse→chunk→embed→outline)
+    for all ready documents in a knowledge base.
+    """
+    from backend.app.services.kb_service import reprocess_document
+
+    stmt = select(KBDocument).where(
+        KBDocument.knowledge_base_id == kb_id,
+        KBDocument.status == "ready",
+    )
+    docs = (await session.execute(stmt)).scalars().all()
+    for doc in docs:
+        background_tasks.add_task(reprocess_document, doc.id)
+    return ReindexResponse(queued=len(docs), kb_id=kb_id)
+
+
+@router.post("/reindex/all", response_model=ReindexResponse)
+async def reindex_all(
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
+):
+    """Re-run processing for all ready documents across all knowledge bases."""
+    from backend.app.services.kb_service import reprocess_document
+
+    await session.execute(sa_text("DROP INDEX IF EXISTS ix_kb_chunks_embedding_hnsw"))
+    await session.execute(
+        sa_text("ALTER TABLE kb_chunks ALTER COLUMN embedding TYPE vector")
+    )
+    await session.commit()
+
+    stmt = select(KBDocument).where(KBDocument.status == "ready")
+    docs = (await session.execute(stmt)).scalars().all()
+    for doc in docs:
+        background_tasks.add_task(reprocess_document, doc.id)
+    return ReindexResponse(queued=len(docs))
+
+
+logger = logging.getLogger(__name__)
+
+
+class VectorIndexResponse(BaseModel):
+    dimension: int
+    previous_dimension: int | None
+    model: str
+    previous_model: str | None
+    dimension_changed: bool
+    model_changed: bool
+    index_created: bool
+    needs_reindex: bool
+
+
+@router.post("/vector-index", response_model=VectorIndexResponse)
+async def create_or_rebuild_vector_index(
+    confirm: bool = Query(False),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Auto-detect embedding dimension, create/rebuild HNSW vector index.
+
+    Call this after saving embedding config in Admin UI.
+    If dimension or model changed, returns a warning unless confirm=true.
+    """
+    from backend.app.core.llm import get_embeddings_model
+
+    try:
+        embeddings = await get_embeddings_model(session)
+    except RuntimeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        test_vec = await embeddings.aembed_query("维度检测")
+        new_dim = len(test_vec)
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Embedding 测试调用失败: {e}"
+        )
+
+    if new_dim <= 0:
+        raise HTTPException(status_code=400, detail="Embedding 返回空向量")
+
+    current_model = (
+        await config_service.get_config("EMBEDDING_MODEL", session)
+        or "unknown"
+    )
+
+    prev_dim_str = await config_service.get_config("EMBEDDING_DIMENSIONS", session)
+    prev_dim = int(prev_dim_str) if prev_dim_str else None
+    prev_model = await config_service.get_config(
+        "EMBEDDING_ACTIVE_MODEL", session
+    )
+
+    dimension_changed = prev_dim is not None and prev_dim != new_dim
+    model_changed = prev_model is not None and prev_model != current_model
+    needs_reindex = dimension_changed or model_changed
+
+    base_response = {
+        "dimension": new_dim,
+        "previous_dimension": prev_dim,
+        "model": current_model,
+        "previous_model": prev_model,
+        "dimension_changed": dimension_changed,
+        "model_changed": model_changed,
+    }
+
+    if needs_reindex and not confirm:
+        return VectorIndexResponse(
+            **base_response, index_created=False, needs_reindex=True
+        )
+
+    if needs_reindex:
+        logger.warning(
+            "Embedding config changed (model: %s→%s, dim: %s→%d), "
+            "clearing old embeddings",
+            prev_model,
+            current_model,
+            prev_dim,
+            new_dim,
+        )
+        await session.execute(
+            sa_text(
+                "UPDATE kb_chunks SET embedding = NULL WHERE embedding IS NOT NULL"
+            )
+        )
+        await config_service.set_config(
+            "EMBEDDING_DIMENSIONS",
+            str(new_dim),
+            "Auto-detected embedding dimension",
+            session,
+        )
+        await config_service.set_config(
+            "EMBEDDING_ACTIVE_MODEL",
+            current_model,
+            "Last indexed embedding model",
+            session,
+        )
+        await session.commit()
+        return VectorIndexResponse(
+            **base_response, index_created=False, needs_reindex=True
+        )
+
+    await session.execute(sa_text("DROP INDEX IF EXISTS ix_kb_chunks_embedding_hnsw"))
+    await session.execute(
+        sa_text(f"ALTER TABLE kb_chunks ALTER COLUMN embedding TYPE vector({new_dim})")
+    )
+    await session.execute(
+        sa_text(
+            "CREATE INDEX ix_kb_chunks_embedding_hnsw "
+            "ON kb_chunks USING hnsw (embedding vector_cosine_ops) "
+            "WITH (m = 16, ef_construction = 64)"
+        )
+    )
+    await config_service.set_config(
+        "EMBEDDING_DIMENSIONS",
+        str(new_dim),
+        "Auto-detected embedding dimension",
+        session,
+    )
+    await config_service.set_config(
+        "EMBEDDING_ACTIVE_MODEL",
+        current_model,
+        "Last indexed embedding model",
+        session,
+    )
+    await session.commit()
+
+    logger.info("Vector index built: dim=%d, model=%s", new_dim, current_model)
+
+    return VectorIndexResponse(
+        **base_response, index_created=True, needs_reindex=False
+    )
+
 
 from backend.app.core.ip_block import (
     block_ip_manually,

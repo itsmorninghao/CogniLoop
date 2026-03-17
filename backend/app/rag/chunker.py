@@ -1,11 +1,10 @@
 """
-Intelligent text chunker — inspired by RAGFlow parent-child chunking.
+ParentChildChunker — two-layer chunking strategy for RAG.
 
-Key features:
-1. Heading-aware splitting — respects document structure
-2. Parent context injection — each chunk carries its section path context
-3. Configurable chunk sizing with sentence-level boundaries
-4. Overlap between chunks for context continuity
+Design:
+- Parent chunk (~1000 chars): complete paragraph context, stored but NOT embedded
+- Child chunk (~300 chars): fine-grained, embedded for vector retrieval
+- Retrieval: child chunks locate relevant passages → parent chunks provide LLM context
 """
 
 from __future__ import annotations
@@ -14,280 +13,212 @@ import logging
 import re
 from dataclasses import dataclass, field
 
+from backend.app.rag.parser import ParsedSection, ParseResult
+
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class Chunk:
-    """A text chunk enriched with structural metadata."""
+    """A text chunk with structural metadata, supporting parent-child hierarchy."""
 
-    index: int
     content: str
-    context_prefix: str = ""  # "Chapter 1 > Section 2.1:\n" prepended for embedding
-    page_number: int | None = None
+    content_for_embedding: str  # section_path-prefixed text for embedding quality
+    chunk_level: str  # "parent" | "child"
+    parent_chunk_index: int | None  # index into the full chunk list for the parent
     section_path: str = ""
-    heading: str | None = None
+    heading: str = ""
+    document_title: str = ""
     metadata: dict = field(default_factory=dict)
 
+    # Legacy compat
     @property
-    def content_for_embedding(self) -> str:
-        """Content with section context injected for better embedding quality."""
-        if self.context_prefix:
-            return f"{self.context_prefix}\n{self.content}"
-        return self.content
+    def index(self) -> int:
+        return self.metadata.get("chunk_index", 0)
+
+    # Legacy compat
+    @property
+    def context_prefix(self) -> str:
+        return self.section_path
+
+    @property
+    def page_number(self) -> int | None:
+        return self.metadata.get("page_number")
 
 
-class ChunkingStrategy:
-    """Base class for chunking strategies — extensible."""
+class ParentChildChunker:
+    """Two-layer chunker producing parent (context) and child (retrieval) chunks."""
 
-    def chunk(
+    def __init__(
         self,
-        sections: list[dict],
-        *,
-        chunk_size: int = 800,
-        chunk_overlap: int = 150,
-    ) -> list[Chunk]:
-        raise NotImplementedError
+        parent_size: int = 1000,
+        child_size: int = 300,
+        overlap: int = 50,
+    ):
+        self.parent_size = parent_size
+        self.child_size = child_size
+        self.overlap = overlap
 
-
-class SemanticSectionChunker(ChunkingStrategy):
-    """
-    Primary chunking strategy:
-    1. Group body sections under their nearest heading
-    2. Merge small consecutive sections to form coherent chunks
-    3. Split large sections at sentence boundaries
-    4. Inject section path as context prefix
-    """
-
-    def chunk(
-        self,
-        sections: list[dict],
-        *,
-        chunk_size: int = 800,
-        chunk_overlap: int = 150,
-    ) -> list[Chunk]:
-        # Group sections by heading context
-        groups = self._group_by_heading(sections)
-
+    def chunk(self, parse_result: ParseResult) -> list[Chunk]:
+        document_title = parse_result.title
         chunks: list[Chunk] = []
-        for group in groups:
-            heading = group["heading"]
-            section_path = group["section_path"]
-            body_sections = group["body"]
 
-            # Concatenate all body text in this group
-            full_text = "\n\n".join(
-                s["content"] for s in body_sections if s["content"].strip()
+        parent_groups = self._build_parent_groups(parse_result.sections)
+
+        for parent_text, section_path, heading in parent_groups:
+            parent_idx = len(chunks)
+
+            parent_ctx = (
+                f"{section_path}\n{parent_text}" if section_path else parent_text
             )
-            if not full_text.strip():
-                continue
-
-            # Get representative page number
-            page = None
-            for s in body_sections:
-                if s.get("page_number"):
-                    page = s["page_number"]
-                    break
-
-            # Build context prefix for embedding quality
-            context_prefix = section_path if section_path else ""
-
-            # Split into sized chunks with sentence awareness
-            text_chunks = self._split_with_overlap(
-                full_text,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
+            chunks.append(
+                Chunk(
+                    content=parent_text,
+                    content_for_embedding=parent_ctx,
+                    chunk_level="parent",
+                    parent_chunk_index=None,
+                    section_path=section_path,
+                    heading=heading,
+                    document_title=document_title,
+                    metadata={"chunk_index": parent_idx},
+                )
             )
 
-            for text in text_chunks:
+            for child_text in self._split_children(parent_text):
+                child_ctx = (
+                    f"{section_path}\n{child_text}" if section_path else child_text
+                )
+                child_idx = len(chunks)
                 chunks.append(
                     Chunk(
-                        index=len(chunks),
-                        content=text,
-                        context_prefix=context_prefix,
-                        page_number=page,
+                        content=child_text,
+                        content_for_embedding=child_ctx,
+                        chunk_level="child",
+                        parent_chunk_index=parent_idx,
                         section_path=section_path,
                         heading=heading,
-                        metadata={
-                            "char_count": len(text),
-                            **({"page": page} if page else {}),
-                        },
+                        document_title=document_title,
+                        metadata={"chunk_index": child_idx},
                     )
                 )
 
-        logger.info("Chunked %d sections into %d chunks", len(sections), len(chunks))
+        logger.info(
+            "ParentChildChunker: %d sections → %d chunks (%d parents, %d children)",
+            len(parse_result.sections),
+            len(chunks),
+            sum(1 for c in chunks if c.chunk_level == "parent"),
+            sum(1 for c in chunks if c.chunk_level == "child"),
+        )
         return chunks
 
-    @staticmethod
-    def _group_by_heading(sections: list[dict]) -> list[dict]:
-        """Group body paragraphs under their nearest heading."""
-        groups: list[dict] = []
-        current_group: dict = {
-            "heading": "",
-            "section_path": "",
-            "body": [],
-        }
+    def _build_parent_groups(
+        self, sections: list[ParsedSection]
+    ) -> list[tuple[str, str, str]]:
+        """
+        Group body sections under their nearest heading, merge into parent_size blocks.
+        Returns list of (text, section_path, heading).
+        """
+        groups: list[tuple[str, str, str]] = []
+        buffer = ""
+        current_path = ""
+        current_heading = ""
 
-        for s in sections:
-            if s.get("heading_level", 0) > 0:
-                # Flush previous group
-                if current_group["body"]:
-                    groups.append(current_group)
-                current_group = {
-                    "heading": s["content"],
-                    "section_path": s.get("section_path", ""),
-                    "body": [],
-                }
+        def flush() -> None:
+            if buffer.strip():
+                for i in range(0, len(buffer), self.parent_size):
+                    piece = buffer[i : i + self.parent_size].strip()
+                    if piece:
+                        groups.append((piece, current_path, current_heading))
+
+        for sec in sections:
+            if sec.heading_level > 0:
+                flush()
+                buffer = sec.content + "\n"
+                current_path = sec.section_path
+                current_heading = sec.content
             else:
-                current_group["body"].append(s)
+                buffer += sec.content + "\n"
+                if not current_path and sec.section_path:
+                    current_path = sec.section_path
+                if not current_heading and sec.heading:
+                    current_heading = sec.heading
 
-        # Flush last group
-        if current_group["body"]:
-            groups.append(current_group)
-
+        flush()
         return groups
 
-    @staticmethod
-    def _split_with_overlap(
-        text: str,
-        *,
-        chunk_size: int = 800,
-        chunk_overlap: int = 150,
-    ) -> list[str]:
+    def _split_children(self, text: str) -> list[str]:
         """
-        Split text into chunks at sentence boundaries.
-        Sentences are preferred split points to avoid breaking mid-thought.
+        Split into child chunks at sentence boundaries (Chinese + English + semicolons).
+        Target child_size chars with overlap.
         """
-        if len(text) <= chunk_size:
-            return [text]
-
-        # Split into sentences (Chinese + English)
-        sentences = re.split(r"(?<=[。！？.!?\n])\s*", text)
+        sentences = re.split(r"(?<=[。！？；.!?\n])\s*", text)
         sentences = [s.strip() for s in sentences if s.strip()]
 
-        chunks: list[str] = []
-        current_chunk: list[str] = []
-        current_len = 0
+        children: list[str] = []
+        current = ""
 
-        for sentence in sentences:
-            if current_len + len(sentence) > chunk_size and current_chunk:
-                # Save current chunk
-                chunks.append(" ".join(current_chunk))
+        for sent in sentences:
+            if len(current) + len(sent) <= self.child_size:
+                current += sent
+            else:
+                if current:
+                    children.append(current)
+                    current = current[-self.overlap :] + sent if self.overlap else sent
+                else:
+                    for i in range(0, len(sent), self.child_size):
+                        children.append(sent[i : i + self.child_size])
+                    current = ""
 
-                # Calculate overlap: keep last N chars worth of sentences
-                overlap_text = ""
-                overlap_sentences = []
-                for s in reversed(current_chunk):
-                    if len(overlap_text) + len(s) > chunk_overlap:
-                        break
-                    overlap_sentences.insert(0, s)
-                    overlap_text = " ".join(overlap_sentences)
+        if current.strip():
+            children.append(current)
 
-                current_chunk = overlap_sentences
-                current_len = len(overlap_text)
-
-            current_chunk.append(sentence)
-            current_len += len(sentence)
-
-        if current_chunk:
-            chunks.append(" ".join(current_chunk))
-
-        return chunks
+        return children
 
 
-class FixedSizeChunker(ChunkingStrategy):
+def chunk_document(parse_result: ParseResult) -> list[Chunk]:
     """
-    Fallback chunker — fixed character-count splitting.
-    Used when document structure is unknown or flat.
+    Chunk a parsed document using the ParentChildChunker strategy.
+    Returns all chunks (parents + children) in order.
     """
-
-    def chunk(
-        self,
-        sections: list[dict],
-        *,
-        chunk_size: int = 800,
-        chunk_overlap: int = 150,
-    ) -> list[Chunk]:
-        full_text = "\n\n".join(s["content"] for s in sections if s.get("content"))
-        if not full_text.strip():
-            return []
-
-        chunks: list[Chunk] = []
-        start = 0
-        while start < len(full_text):
-            end = start + chunk_size
-
-            # Try to break at a sentence boundary
-            if end < len(full_text):
-                boundary = max(
-                    full_text.rfind("。", start, end),
-                    full_text.rfind(".", start, end),
-                    full_text.rfind("\n", start, end),
-                )
-                if boundary > start + chunk_size // 2:
-                    end = boundary + 1
-
-            content = full_text[start:end].strip()
-            if content:
-                chunks.append(
-                    Chunk(
-                        index=len(chunks),
-                        content=content,
-                        metadata={"char_start": start, "char_end": end},
-                    )
-                )
-
-            start = end - chunk_overlap
-
-        return chunks
+    return ParentChildChunker().chunk(parse_result)
 
 
 def chunk_sections(
-    sections: list[dict],
+    sections: list,
     *,
-    strategy: str = "semantic",
-    chunk_size: int = 800,
-    chunk_overlap: int = 150,
+    strategy: str = "semantic",  # noqa: ARG001 — ignored, always ParentChild now
+    chunk_size: int = 800,  # noqa: ARG001 — ignored
+    chunk_overlap: int = 150,  # noqa: ARG001 — ignored
 ) -> list[Chunk]:
     """
-    Chunk parsed document sections into retrievable chunks.
-
-    Args:
-        sections: List of section dicts from ParseResult.sections.
-        strategy: "semantic" (heading-aware) or "fixed" (size-based).
-        chunk_size: Target characters per chunk.
-        chunk_overlap: Overlap between chunks.
-
-    Returns:
-        List of Chunk objects with metadata.
+    Deprecated — use chunk_document(parse_result) instead.
     """
-    section_dicts = [
-        {
-            "content": s.content if hasattr(s, "content") else s.get("content", ""),
-            "heading_level": s.heading_level
-            if hasattr(s, "heading_level")
-            else s.get("heading_level", 0),
-            "heading": s.heading if hasattr(s, "heading") else s.get("heading"),
-            "section_path": s.section_path
-            if hasattr(s, "section_path")
-            else s.get("section_path", ""),
-            "page_number": s.page_number
-            if hasattr(s, "page_number")
-            else s.get("page_number"),
-        }
-        for s in sections
-    ]
+    from backend.app.rag.parser import ParsedSection, ParseResult
 
-    strategies = {
-        "semantic": SemanticSectionChunker,
-        "fixed": FixedSizeChunker,
-    }
+    parsed_sections: list[ParsedSection] = []
+    for s in sections:
+        if isinstance(s, ParsedSection):
+            parsed_sections.append(s)
+        else:
+            parsed_sections.append(
+                ParsedSection(
+                    content=s.get("content", "")
+                    if isinstance(s, dict)
+                    else getattr(s, "content", ""),
+                    heading_level=s.get("heading_level", 0)
+                    if isinstance(s, dict)
+                    else getattr(s, "heading_level", 0),
+                    heading=s.get("heading")
+                    if isinstance(s, dict)
+                    else getattr(s, "heading", None),
+                    section_path=s.get("section_path", "")
+                    if isinstance(s, dict)
+                    else getattr(s, "section_path", ""),
+                    page_number=s.get("page_number")
+                    if isinstance(s, dict)
+                    else getattr(s, "page_number", None),
+                )
+            )
 
-    chunker_cls = strategies.get(strategy, SemanticSectionChunker)
-    chunker = chunker_cls()
-
-    return chunker.chunk(
-        section_dicts,
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-    )
+    fake_result = ParseResult(sections=parsed_sections)
+    return ParentChildChunker().chunk(fake_result)

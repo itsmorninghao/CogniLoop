@@ -23,7 +23,6 @@ _DEFAULTS = {
     "OPENAI_BASE_URL": "https://api.openai.com/v1",
     "OPENAI_TEMPERATURE": "0.7",
     "EMBEDDING_MODEL": "text-embedding-3-small",
-    "EMBEDDING_DIMS": "1536",
 }
 
 # Pro graph nodes that support per-node LLM configuration
@@ -79,7 +78,6 @@ async def get_embeddings_model(session: AsyncSession) -> OpenAIEmbeddings:
         api_key=api_key,
         model=await _get("EMBEDDING_MODEL", session),
         base_url=await _get("EMBEDDING_BASE_URL", session),
-        dimensions=int(await _get("EMBEDDING_DIMS", session)),
         check_embedding_ctx_length=False,
     )
 

@@ -224,7 +224,6 @@ export async function subscribeSSE(
         }, delay)
     }
 
-    // Initial connection — errors propagate to caller's try/catch
     await connect()
 
     return cleanup
@@ -710,6 +709,15 @@ export const adminApi = {
     getIpBlockConfig: () => api.get<{ enabled: boolean }>('/admin/ip-block-config'),
     setIpBlockConfig: (enabled: boolean) =>
         api.post<{ enabled: boolean }>('/admin/ip-block-config', { enabled }),
+    buildVectorIndex: (confirm = false) =>
+        api.post<{
+            dimension: number; previous_dimension: number | null
+            model: string; previous_model: string | null
+            dimension_changed: boolean; model_changed: boolean
+            index_created: boolean; needs_reindex: boolean
+        }>(`/admin/vector-index${confirm ? '?confirm=true' : ''}`),
+    reindexAll: () =>
+        api.post<{ queued: number }>('/admin/reindex/all'),
 }
 
 // Circle API

@@ -23,11 +23,21 @@ WORKDIR /app
 # System deps
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Python dependencies — install from pyproject.toml
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+
+# Pre-download Docling AI model weights (~500MB) for offline operation.
+ENV DOCLING_MODELS_PATH=/app/docling_models
+RUN uv run python -c "\
+import os; os.makedirs('/app/docling_models', exist_ok=True); \
+from docling.document_converter import DocumentConverter; \
+DocumentConverter(); \
+print('Docling models pre-downloaded.')"
 
 # Copy backend source
 COPY backend/ backend/

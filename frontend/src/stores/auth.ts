@@ -43,12 +43,12 @@ export const useAuthStore = create<AuthState>((set) => ({
             captcha_id: captchaId,
             captcha_answer: captchaAnswer,
         })
-        localStorage.setItem('token', res.access_token)  // needed for getAuthHeaders() in next call
+        localStorage.setItem('token', res.access_token)
         try {
             const user = await api.get<User>('/auth/me')
-            set({ token: res.access_token, user })        // both succeed → update store
+            set({ token: res.access_token, user })
         } catch (err) {
-            localStorage.removeItem('token')              // rollback on /auth/me failure
+            localStorage.removeItem('token')
             throw err
         }
     },
@@ -69,7 +69,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     fetchUser: async () => {
         try {
             const user = await api.get<User>('/auth/me')
-            set({ user })
+            set({ user, token: localStorage.getItem('token') })
         } catch {
             localStorage.removeItem('token')
             set({ token: null, user: null })

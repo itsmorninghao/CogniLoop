@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { adminApi, type SystemConfig } from '@/lib/api'
 import { toast } from 'sonner'
-import { Play, Database, Server, Key, Plus, Trash2, Tag, ShieldAlert, ChevronDown, ChevronUp, RefreshCw, Zap, Settings2, Download, Upload } from 'lucide-react'
+import { Play, Database, Server, Key, Plus, Trash2, Tag, ShieldAlert, ChevronDown, ChevronUp, RefreshCw, Zap, Settings2, Download, Upload, AlertTriangle, ArrowRight } from 'lucide-react'
 import { TestResultModal } from './TestResultModal'
 import { useAuthStore } from '@/stores/auth'
 
@@ -22,7 +22,7 @@ interface NodeConfig {
 
 interface StudentModel { apiKey: string; baseUrl: string; model: string; promptDegradation: boolean }
 interface LlmConfig  { key: string; baseUrl: string; model: string }
-interface EmbConfig  { key: string; baseUrl: string; model: string; dims: string }
+interface EmbConfig  { key: string; baseUrl: string; model: string }
 interface OcrConfig  { key: string; baseUrl: string; model: string; mode: 'multimodal'|'ocr_plus_llm'; llmModel: string }
 interface LdConfig   { enabled: boolean; clientId: string; clientSecret: string; redirectUri: string; minTrust: string }
 interface TestingState { llm: boolean; emb: boolean; ocr: boolean }
@@ -37,15 +37,21 @@ export function AdminConfigTab() {
     const [activeTab, setActiveTab] = useState<'llm' | 'ai_services' | 'pro_nodes' | 'linux_do' | 'raw'>('llm')
 
     const [llmConfig,   setLlmConfig]   = useState<LlmConfig>({ key: '', baseUrl: '', model: '' })
-    const [embConfig,   setEmbConfig]   = useState<EmbConfig>({ key: '', baseUrl: '', model: '', dims: '' })
+    const [embConfig,   setEmbConfig]   = useState<EmbConfig>({ key: '', baseUrl: '', model: '' })
     const [ocrConfig,   setOcrConfig]   = useState<OcrConfig>({ key: '', baseUrl: '', model: '', mode: 'multimodal', llmModel: '' })
     const [ldConfig,    setLdConfig]    = useState<LdConfig>({ enabled: false, clientId: '', clientSecret: '', redirectUri: '', minTrust: '1' })
     const [testing,     setTesting]     = useState<TestingState>({ llm: false, emb: false, ocr: false })
     const [saving,      setSaving]      = useState<SavingState>({ aiServices: false, proNodes: false, ld: false })
     const [exportState, setExportState] = useState<ExportState>({ showConfirm: false, isExporting: false })
     const [importState, setImportState] = useState<ImportState>({ isImporting: false, showConfirm: false, file: null, preview: [] })
+    const [reindexing, setReindexing] = useState(false)
+    const [vectorConfirm, setVectorConfirm] = useState<{
+        open: boolean
+        loading: boolean
+        res: { dimension: number; previous_dimension: number | null; model: string; previous_model: string | null; dimension_changed: boolean; model_changed: boolean } | null
+    }>({ open: false, loading: false, res: null })
+    const [reindexConfirm, setReindexConfirm] = useState(false)
 
-    // Test result modal state
     const [testModal, setTestModal] = useState<{
         open: boolean
         type: 'llm' | 'embedding' | 'ocr'
@@ -54,7 +60,6 @@ export function AdminConfigTab() {
         error: string | null
     }>({ open: false, type: 'llm', loading: false, result: null, error: null })
 
-    // Pro node config state
     const [nodeConfigs, setNodeConfigs] = useState<Record<ProNodeKey, NodeConfig>>({
         HOTSPOT_SEARCHER: { apiKey: '', baseUrl: '', model: '' },
         QUESTION_GENERATOR: { apiKey: '', baseUrl: '', model: '' },
@@ -121,12 +126,38 @@ export function AdminConfigTab() {
         reader.readAsText(file)
     }
 
+    const EMBEDDING_CONFIG_KEYS = ['EMBEDDING_API_KEY', 'EMBEDDING_MODEL', 'EMBEDDING_BASE_URL']
+
+    const checkVectorIndexAfterConfigChange = async () => {
+        try {
+            toast.loading('正在探测向量维度...', { id: 'vector-index' })
+            const res = await adminApi.buildVectorIndex()
+            if (res.needs_reindex && !res.index_created) {
+                toast.dismiss('vector-index')
+                setVectorConfirm({ open: true, loading: false, res })
+            } else {
+                toast.success(
+                    `向量索引已就绪 — 维度 ${res.dimension}（${res.model}），HNSW 索引${res.previous_dimension ? '已重建' : '已创建'}`,
+                    { id: 'vector-index', duration: 5000 },
+                )
+            }
+        } catch (err: any) {
+            const detail = err?.message || '向量索引构建失败'
+            toast.error(`向量索引：${detail}`, { id: 'vector-index', duration: 8000 })
+        }
+    }
+
     const handleImport = async () => {
         setImportState(p => ({ ...p, showConfirm: false, isImporting: true }))
         try {
+            const importedKeys = importState.preview.map(item => item.key)
             const res = await adminApi.importConfigs(importState.preview)
             toast.success(`已导入 ${res.imported} 项配置`)
             await loadConfigs()
+
+            if (importedKeys.some(k => EMBEDDING_CONFIG_KEYS.includes(k))) {
+                await checkVectorIndexAfterConfigChange()
+            }
         } catch (err: any) {
             toast.error(err.message || '导入失败')
         } finally {
@@ -140,7 +171,7 @@ export function AdminConfigTab() {
             setConfigs(data)
             const get = (k: string) => data.find((c: SystemConfig) => c.key === k)?.value || ''
             setLlmConfig({ key: get('OPENAI_API_KEY'), baseUrl: get('OPENAI_BASE_URL'), model: get('OPENAI_MODEL') })
-            setEmbConfig({ key: get('EMBEDDING_API_KEY'), baseUrl: get('EMBEDDING_BASE_URL'), model: get('EMBEDDING_MODEL'), dims: get('EMBEDDING_DIMS') })
+            setEmbConfig({ key: get('EMBEDDING_API_KEY'), baseUrl: get('EMBEDDING_BASE_URL'), model: get('EMBEDDING_MODEL') })
             setOcrConfig({ key: get('OCR_API_KEY'), baseUrl: get('OCR_API_URL'), model: get('OCR_MODEL'), mode: (get('OCR_MODE') as 'multimodal' | 'ocr_plus_llm') || 'multimodal', llmModel: get('OCR_LLM_MODEL') || '' })
             setLdConfig({ enabled: get('LINUX_DO_ENABLED') === 'true', clientId: get('LINUX_DO_CLIENT_ID'), clientSecret: get('LINUX_DO_CLIENT_SECRET'), redirectUri: get('LINUX_DO_REDIRECT_URI'), minTrust: get('LINUX_DO_MIN_TRUST_LEVEL') || '1' })
 
@@ -215,7 +246,6 @@ export function AdminConfigTab() {
             api_key: isMasked ? undefined : embConfig.key,
             base_url: embConfig.baseUrl || undefined,
             model: embConfig.model,
-            dimensions: embConfig.dims ? parseInt(embConfig.dims) : undefined,
             use_stored: isMasked,
         }), (v) => setTesting(p => ({ ...p, emb: v })))
     }
@@ -230,7 +260,6 @@ export function AdminConfigTab() {
             if (!embConfig.key.startsWith(MASK_PREFIX)) await adminApi.setConfig('EMBEDDING_API_KEY', embConfig.key, 'Embedding API 密钥')
             if (embConfig.baseUrl) await adminApi.setConfig('EMBEDDING_BASE_URL', embConfig.baseUrl, 'Embedding 基础 URL')
             await adminApi.setConfig('EMBEDDING_MODEL', embConfig.model || 'text-embedding-3-small', 'Embedding 模型名称')
-            if (embConfig.dims) await adminApi.setConfig('EMBEDDING_DIMS', embConfig.dims, '向量维度')
             if (ocrConfig.key && !ocrConfig.key.startsWith(MASK_PREFIX)) await adminApi.setConfig('OCR_API_KEY', ocrConfig.key, 'OCR API 密钥')
             if (ocrConfig.baseUrl) await adminApi.setConfig('OCR_API_URL', ocrConfig.baseUrl, 'OCR API 基础 URL')
             await adminApi.setConfig('OCR_MODEL', ocrConfig.model || 'gpt-4o', 'OCR 视觉模型名称')
@@ -240,8 +269,45 @@ export function AdminConfigTab() {
             }
             await adminApi.setConfig('DAILY_ASSISTANT_ENABLED', String(dailyAssistantEnabled), '每日 AI 助理定时任务开关')
             toast.success('AI 服务配置已保存')
+
+            await checkVectorIndexAfterConfigChange()
+
             loadConfigs()
         } catch { toast.error('保存失败') } finally { setSaving(p => ({ ...p, aiServices: false })) }
+    }
+
+    const handleVectorConfirm = async () => {
+        setVectorConfirm(p => ({ ...p, loading: true }))
+        try {
+            toast.loading('正在清空旧向量并提交重建...', { id: 'vector-index' })
+            await adminApi.buildVectorIndex(true)
+            const reindexRes = await adminApi.reindexAll()
+            toast.success(
+                `已提交 ${reindexRes.queued} 个文档重新处理。完成后再次保存即可构建向量索引。`,
+                { id: 'vector-index', duration: 10000 },
+            )
+        } catch (err: any) {
+            toast.error(err?.message || '重建失败', { id: 'vector-index' })
+        } finally {
+            setVectorConfirm({ open: false, loading: false, res: null })
+            loadConfigs()
+        }
+    }
+
+    const handleReindexAll = async () => {
+        setReindexConfirm(false)
+        setReindexing(true)
+        try {
+            const res = await adminApi.reindexAll()
+            toast.success(`已提交 ${res.queued} 个文档进行重建`)
+            if (res.queued > 0) {
+                toast.info('文档处理完成后，请再次保存 Embedding 配置以重建向量索引', { duration: 8000 })
+            }
+        } catch (err: any) {
+            toast.error(err?.message || '重建索引失败')
+        } finally {
+            setReindexing(false)
+        }
     }
 
     const runTestModal = async (type: 'llm' | 'embedding' | 'ocr', apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
@@ -303,7 +369,6 @@ export function AdminConfigTab() {
                 if (cfg.baseUrl) await adminApi.setConfig(`${prefix}_BASE_URL`, cfg.baseUrl, `${node.label} Base URL`)
                 if (cfg.model) await adminApi.setConfig(`${prefix}_MODEL`, cfg.model, `${node.label} 模型名称`)
             }
-            // Solve verifier special configs
             const modelsPayload = studentModels.slice(0, studentCount).map((m, i) => ({
                 label: `学生${i + 1}`,
                 api_key: m.apiKey,
@@ -389,7 +454,6 @@ export function AdminConfigTab() {
 
     return (
         <div className="animate-fade-in">
-            {/* Page header */}
             <div className="px-6 py-5 border-b border-border flex items-center gap-3">
                 <div className="flex size-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-600 to-indigo-700 shadow-lg shadow-violet-500/25">
                     <Settings2 className="size-5 text-white" />
@@ -421,7 +485,6 @@ export function AdminConfigTab() {
                 )}
             </div>
 
-            {/* Sub-tabs */}
             <div className="flex border-b border-border px-6">
                 {SUB_TABS.map(t => (
                     <button
@@ -484,7 +547,12 @@ export function AdminConfigTab() {
                                 </div>
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Database className="size-3" /> 向量维度</label>
-                                    <input type="number" value={embConfig.dims} onChange={e => setEmbConfig(p => ({ ...p, dims: e.target.value }))} placeholder="可选，默认由模型决定" className={inputClass} />
+                                    <div className={`${inputClass} flex items-center bg-muted/50 cursor-default`}>
+                                        {configs.find(c => c.key === 'EMBEDDING_DIMENSIONS')?.value
+                                            ? <span className="font-mono">{configs.find(c => c.key === 'EMBEDDING_DIMENSIONS')?.value}</span>
+                                            : <span className="text-muted-foreground">保存后自动检测</span>
+                                        }
+                                    </div>
                                 </div>
                             </div>
                             <div className="px-6 py-5 space-y-5">
@@ -502,6 +570,11 @@ export function AdminConfigTab() {
                             <button onClick={handleTestEmb} disabled={testing.emb} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
                                 {testing.emb ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
                                 {testing.emb ? '测试中...' : '测试连接'}
+                            </button>
+                            <span className="text-border">|</span>
+                            <button onClick={() => setReindexConfirm(true)} disabled={reindexing} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                {reindexing ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <RefreshCw className="size-3.5 text-amber-500" />}
+                                {reindexing ? '提交中...' : '重建全部索引'}
                             </button>
                         </div>
                     </div>
@@ -1042,6 +1115,115 @@ export function AdminConfigTab() {
                             >
                                 <Upload className="size-4" />
                                 确认导入
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Vector index dimension/model change confirmation */}
+            {vectorConfirm.open && vectorConfirm.res && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => !vectorConfirm.loading && setVectorConfirm({ open: false, loading: false, res: null })}>
+                    <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 space-y-4">
+                            <div className="flex items-start gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+                                    <AlertTriangle className="size-5 text-amber-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-medium text-foreground">Embedding 配置已变更</h3>
+                                    <p className="mt-1 text-sm text-muted-foreground">检测到以下变化，继续将需要重建所有向量数据。</p>
+                                </div>
+                            </div>
+
+                            {/* Change details */}
+                            <div className="rounded-lg border border-border bg-muted/30 divide-y divide-border">
+                                {vectorConfirm.res.model_changed && (
+                                    <div className="px-4 py-3 flex items-center gap-3">
+                                        <span className="text-xs font-medium text-muted-foreground w-10 shrink-0">模型</span>
+                                        <span className="text-sm font-mono text-muted-foreground truncate">{vectorConfirm.res.previous_model}</span>
+                                        <ArrowRight className="size-3.5 text-amber-500 shrink-0" />
+                                        <span className="text-sm font-mono text-foreground font-medium truncate">{vectorConfirm.res.model}</span>
+                                    </div>
+                                )}
+                                {vectorConfirm.res.dimension_changed && (
+                                    <div className="px-4 py-3 flex items-center gap-3">
+                                        <span className="text-xs font-medium text-muted-foreground w-10 shrink-0">维度</span>
+                                        <span className="text-sm font-mono text-muted-foreground">{vectorConfirm.res.previous_dimension}</span>
+                                        <ArrowRight className="size-3.5 text-amber-500 shrink-0" />
+                                        <span className="text-sm font-mono text-foreground font-medium">{vectorConfirm.res.dimension}</span>
+                                    </div>
+                                )}
+                                {vectorConfirm.res.model_changed && !vectorConfirm.res.dimension_changed && (
+                                    <div className="px-4 py-2.5">
+                                        <p className="text-xs text-amber-600 dark:text-amber-400">维度相同，但不同模型的向量空间不兼容</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Consequences */}
+                            <div className="space-y-1.5 text-sm text-muted-foreground">
+                                <p className="font-medium text-foreground text-xs uppercase tracking-wider">继续将会：</p>
+                                <ul className="space-y-1 ml-0.5">
+                                    <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">•</span>清空所有已有的向量数据</li>
+                                    <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">•</span>自动重新处理所有文档（重新生成向量）</li>
+                                    <li className="flex items-start gap-2"><span className="text-amber-500 mt-0.5">•</span>耗时取决于文档数量</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+                            <button
+                                onClick={() => { setVectorConfirm({ open: false, loading: false, res: null }); toast.info('已取消，旧向量数据未受影响', { id: 'vector-index' }) }}
+                                disabled={vectorConfirm.loading}
+                                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleVectorConfirm}
+                                disabled={vectorConfirm.loading}
+                                className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 transition disabled:opacity-50"
+                            >
+                                {vectorConfirm.loading
+                                    ? <><div className="size-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> 重建中...</>
+                                    : <><RefreshCw className="size-4" /> 确认重建</>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Reindex all confirmation */}
+            {reindexConfirm && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setReindexConfirm(false)}>
+                    <div className="w-full max-w-md rounded-xl border border-border bg-card shadow-xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                        <div className="px-6 py-5 space-y-3">
+                            <div className="flex items-start gap-3">
+                                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+                                    <RefreshCw className="size-5 text-amber-500" />
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-medium text-foreground">重建全部索引</h3>
+                                    <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">
+                                        将对所有已就绪文档重新执行完整处理流程<span className="text-foreground font-medium">（解析 → 分块 → 向量化 → 大纲提取）</span>。此操作不可中断且耗时较长。
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 border-t border-border px-6 py-4">
+                            <button
+                                onClick={() => setReindexConfirm(false)}
+                                className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted transition"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleReindexAll}
+                                className="flex items-center gap-1.5 rounded-lg bg-amber-500 px-4 py-2 text-sm font-medium text-white hover:bg-amber-600 transition"
+                            >
+                                <RefreshCw className="size-4" />
+                                确认重建
                             </button>
                         </div>
                     </div>

@@ -4,7 +4,7 @@ import asyncio
 import logging
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import UploadFile
@@ -101,9 +101,7 @@ async def list_acquired_kbs(
     return [KBResponse.model_validate(kb) for kb in result.scalars().all()]
 
 
-async def unacquire_kb(
-    kb_id: int, user: User, session: AsyncSession
-) -> None:
+async def unacquire_kb(kb_id: int, user: User, session: AsyncSession) -> None:
     result = await session.execute(
         select(KBAcquisition).where(
             KBAcquisition.user_id == user.id,
@@ -113,6 +111,7 @@ async def unacquire_kb(
     acq = result.scalar_one_or_none()
     if not acq:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="未找到该获取记录")
     await session.delete(acq)
     await session.commit()
@@ -136,7 +135,7 @@ async def update_kb(
         kb.description = req.description
     if req.tags is not None:
         kb.tags = req.tags
-    kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    kb.updated_at = datetime.now(UTC).replace(tzinfo=None)
 
     session.add(kb)
     await session.flush()
@@ -198,7 +197,7 @@ async def upload_document(
         .where(KnowledgeBase.id == kb.id)
         .values(
             document_count=KnowledgeBase.document_count + 1,
-            updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
     )
     await session.flush()
@@ -219,11 +218,12 @@ async def _process_document_background(
     file_path: str,
     file_type: str,
 ) -> None:
-    """Background task: parse → chunk → embed a document."""
+    """Background task: parse → chunk → embed a document, then extract outline."""
     from backend.app.core.database import async_session_factory
-    from backend.app.rag.chunker import chunk_sections
+    from backend.app.rag.chunker import chunk_document
     from backend.app.rag.embeddings import embed_and_store_chunks
     from backend.app.rag.parser import parse_document
+    from backend.app.services.outline_service import extract_and_store_outline
 
     async with async_session_factory() as session:
         try:
@@ -235,20 +235,19 @@ async def _process_document_background(
                 document_id,
                 len(parse_result.sections),
             )
-            chunks = chunk_sections(
-                parse_result.sections,
-                strategy="semantic",
-                chunk_size=800,
-                chunk_overlap=150,
-            )
+            chunks = chunk_document(parse_result)
 
             if not chunks:
                 logger.warning("Processing doc %d: no chunks produced", document_id)
                 await _update_doc_status(session, document_id, "ready", chunk_count=0)
                 return
 
+            child_count = sum(1 for c in chunks if c.chunk_level == "child")
             logger.info(
-                "Processing doc %d: embedding %d chunks", document_id, len(chunks)
+                "Processing doc %d: embedding %d child chunks (%d total)",
+                document_id,
+                child_count,
+                len(chunks),
             )
             count = await embed_and_store_chunks(
                 document_id, knowledge_base_id, chunks, session
@@ -257,8 +256,15 @@ async def _process_document_background(
             await _update_doc_status(session, document_id, "ready", chunk_count=count)
             await session.commit()
             logger.info(
-                "Processing doc %d: done (%d chunks stored)", document_id, count
+                "Processing doc %d: done (%d child chunks stored)", document_id, count
             )
+
+            # Outline extraction — non-blocking, failure doesn't affect document status
+            outline_task = asyncio.create_task(
+                extract_and_store_outline(document_id, parse_result, session)
+            )
+            _background_tasks.add(outline_task)
+            outline_task.add_done_callback(_background_tasks.discard)
 
         except Exception as e:
             logger.error("Processing doc %d failed: %s", document_id, e, exc_info=True)
@@ -269,6 +275,34 @@ async def _process_document_background(
                 await session.commit()
             except Exception:
                 logger.error("Failed to update doc %d error status", document_id)
+
+
+async def reprocess_document(document_id: int) -> None:
+    """
+    Re-run the full processing pipeline for an existing document.
+    Used by the admin reindex endpoints. Reads file path and type from DB.
+    """
+    from backend.app.core.database import async_session_factory
+
+    async with async_session_factory() as session:
+        result = await session.execute(
+            select(KBDocument).where(KBDocument.id == document_id)
+        )
+        doc = result.scalar_one_or_none()
+        if not doc:
+            logger.warning("reprocess_document: doc %d not found", document_id)
+            return
+        if doc.status != "ready":
+            logger.info(
+                "reprocess_document: skipping doc %d (status=%s)",
+                document_id,
+                doc.status,
+            )
+            return
+
+    await _process_document_background(
+        document_id, doc.knowledge_base_id, doc.file_path, doc.file_type
+    )
 
 
 async def _update_doc_status(
@@ -288,7 +322,7 @@ async def _update_doc_status(
         doc.status = status
         doc.chunk_count = chunk_count
         doc.error_message = error_message
-        doc.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        doc.updated_at = datetime.now(UTC).replace(tzinfo=None)
         session.add(doc)
         await session.flush()
 
@@ -338,7 +372,7 @@ async def delete_document(
         .where(KnowledgeBase.id == kb.id)
         .values(
             document_count=func.greatest(KnowledgeBase.document_count - 1, 0),
-            updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            updated_at=datetime.now(UTC).replace(tzinfo=None),
         )
     )
 
@@ -397,7 +431,7 @@ async def generate_share_code(
 
     if not kb.share_code:
         kb.share_code = secrets.token_urlsafe(8)[:12]
-        kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        kb.updated_at = datetime.now(UTC).replace(tzinfo=None)
         session.add(kb)
         await session.flush()
         await session.refresh(kb)
@@ -414,7 +448,7 @@ async def revoke_share_code(
         raise BadRequestError("请先从广场撤下再吊销分享码")
 
     kb.share_code = None
-    kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    kb.updated_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(kb)
     await session.flush()
     await session.refresh(kb)
@@ -428,8 +462,8 @@ async def publish_to_plaza(kb_id: int, user: User, session: AsyncSession) -> KBR
     if not kb.share_code:
         raise BadRequestError("请先生成分享码再发布到广场")
 
-    kb.shared_to_plaza_at = datetime.now(timezone.utc).replace(tzinfo=None)
-    kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    kb.shared_to_plaza_at = datetime.now(UTC).replace(tzinfo=None)
+    kb.updated_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(kb)
     await session.flush()
     await session.refresh(kb)
@@ -443,7 +477,7 @@ async def unpublish_from_plaza(
     _check_kb_owner(kb, user)
 
     kb.shared_to_plaza_at = None
-    kb.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    kb.updated_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(kb)
     await session.flush()
     await session.refresh(kb)
@@ -492,7 +526,6 @@ async def list_plaza_kbs(
     if q:
         conditions.append(KnowledgeBase.name.icontains(q))
 
-    # Acquire count subquery (built once, reused for count + main)
     acq_count_sub = (
         select(
             KBAcquisition.knowledge_base_id,
@@ -502,7 +535,6 @@ async def list_plaza_kbs(
         .subquery()
     )
 
-    # Total count — include User JOIN to match main query's INNER JOIN
     count_stmt = (
         select(func.count(KnowledgeBase.id))
         .join(User, KnowledgeBase.owner_id == User.id)
@@ -545,8 +577,7 @@ async def list_plaza_kbs(
             creator_avatar_url=creator_avatar_url,
             created_at=kb.created_at,
         )
-        for kb, creator_full_name, creator_username, creator_avatar_url, acquire_count
-        in result.all()
+        for kb, creator_full_name, creator_username, creator_avatar_url, acquire_count in result.all()
     ]
     return KBPlazaPage(items=items, total=total)
 
@@ -574,7 +605,6 @@ async def _check_kb_access(
         return
     if kb.shared_to_plaza_at:
         return
-    # Check if the user has legitimately acquired this KB via share code or plaza
     acq_result = await session.execute(
         select(KBAcquisition).where(
             KBAcquisition.user_id == user.id,
