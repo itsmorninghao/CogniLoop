@@ -158,16 +158,11 @@ export default function ChallengePage() {
         <div className="container mx-auto space-y-6 p-6 animate-fade-in">
             {/* Header */}
             <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10">
-                        <Sword className="size-5 text-primary" />
-                    </div>
-                    <div>
-                        <h1 className="text-foreground">我的挑战</h1>
-                        <p className="mt-0.5 text-sm text-muted-foreground">
-                            管理你收到和发出的知识挑战
-                        </p>
-                    </div>
+                <div>
+                    <h1 className="text-foreground">我的挑战</h1>
+                    <p className="mt-0.5 text-sm text-muted-foreground">
+                        管理你收到和发出的知识挑战
+                    </p>
                 </div>
                 <button
                     onClick={() => navigate('/quiz/create-smart')}

@@ -218,7 +218,7 @@ export default function PlazaPage() {
     ]
 
     return (
-        <div className="mx-auto w-[90%] max-w-7xl space-y-6 py-6">
+        <div className="container mx-auto space-y-6 p-6 animate-fade-in">
             <div>
                 <h1 className="text-2xl font-medium text-foreground">公共广场</h1>
                 <p className="mt-1 text-sm text-muted-foreground">探索社区分享的知识库和题目</p>
