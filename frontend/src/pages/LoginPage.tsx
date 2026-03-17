@@ -628,6 +628,7 @@ export default function LoginPage() {
                                                         className={inputCls}
                                                         placeholder="输入邮箱"
                                                         tabIndex={mode === 'register' ? 0 : -1}
+                                                        disabled={mode !== 'register'}
                                                     />
                                                 </div>
                                                 <div>
@@ -641,6 +642,7 @@ export default function LoginPage() {
                                                         className={inputCls}
                                                         placeholder="输入姓名"
                                                         tabIndex={mode === 'register' ? 0 : -1}
+                                                        disabled={mode !== 'register'}
                                                     />
                                                 </div>
                                             </div>
