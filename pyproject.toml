@@ -33,6 +33,8 @@ dependencies = [
     "apscheduler>=3.10.0",
     "cryptography>=42.0.0",
     "redis>=5.2.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
 ]
 
 [project.optional-dependencies]
@@ -71,3 +73,13 @@ known-first-party = ["backend"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["backend/tests"]
+
+# Use CPU-only PyTorch — the server has no GPU, CUDA wheels waste ~3GB
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
