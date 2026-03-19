@@ -46,7 +46,7 @@ echo -e "${GREEN}✓ 配置文件下载完成${NC}"
 echo ""
 
 echo -e "${YELLOW}请设置数据库密码（推荐:直接回车将自动生成随机密码）:${NC}"
-read -r -s DB_PASS
+read -r -s DB_PASS </dev/tty
 echo ""
 if [ -z "$DB_PASS" ]; then
   DB_PASS=$(openssl rand -hex 16)
