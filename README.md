@@ -11,38 +11,38 @@
 
 ## 快速开始
 
-> 启动 CogniLoop 最简单的方式是通过 Docker Compose。在运行以下命令启动 CogniLoop 之前，请确保您的机器上已安装 [Docker](https://docs.docker.com/get-started/get-docker/)和 [Docker Compose](https://docs.docker.com/compose/install/)
+> 启动 CogniLoop 最简单的方式是通过 Docker Compose。在运行以下命令启动 CogniLoop 之前，请确保您的机器上已安装 [Docker](https://docs.docker.com/get-started/get-docker/) 和 [Docker Compose](https://docs.docker.com/compose/install/)
 
 > 部署遇到的任何问题，欢迎提交 issue，我会第一时间帮助您!
 
-一、clone 本仓库
+执行一键安装命令：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/itsmorninghao/CogniLoop/v2/install.sh | bash
+```
+
+脚本会自动检查环境、下载配置文件、引导你设置密码并启动服务。支持 `linux/amd64` 和 `linux/arm64`。
+
+## 您也可以自行从源码构建
 
 ```bash
 git clone https://github.com/itsmorninghao/CogniLoop.git
 cd CogniLoop
-```
-
-二、复制并编辑环境变量文件
-
-```bash
 cp .env.example .env
 ```
 
-### 编辑 `.env` 文件，只需要设置一个安全的数据库密码，其余配置会帮你生成一个超级安全的随机值
-
-
-三、构建并启动服务
+编辑 `.env` 文件设置数据库密码，然后：
 
 ```bash
 docker compose up -d --build
 ```
 
-四、访问应用并进行一些必要的配置
+## 访问应用
 
-默认会启动在8000端口: http://localhost:8000 接下来你需要:
+默认启动在 8000 端口：http://localhost:8000
 
-- 首次访问时，系统会引导你创建管理员账号（Web 页面完成）
-- 以管理员账号登录进入系统管理 -> 系统设置，配置 LLM 连接信息,向量模型信息，即可开始使用 AI 功能
+- 首次访问时，系统会引导你创建管理员账号
+- 以管理员账号登录进入 系统管理 → 系统设置，配置 LLM 连接信息和向量模型信息，即可开始使用 AI 功能
 
 ## 界面展示
 

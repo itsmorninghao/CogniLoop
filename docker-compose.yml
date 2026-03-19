@@ -39,6 +39,7 @@ services:
 
   # CogniLoop App (Backend + Frontend)
   app:
+    image: morninghaoo/cogniloop:latest
     build:
       context: .
       dockerfile: Dockerfile
