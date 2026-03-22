@@ -4,7 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import func, select
 
 from backend.app.core.captcha import verify_captcha
-from backend.app.core.exceptions import AlreadyExistsError, BadRequestError, ForbiddenError
+from backend.app.core.exceptions import (
+    AlreadyExistsError,
+    BadRequestError,
+    ForbiddenError,
+)
 from backend.app.core.ip_block import (
     is_ip_blocked,
     record_login_failure,
@@ -35,12 +39,11 @@ async def check_needs_setup(session: AsyncSession) -> bool:
     return admin_count == 0
 
 
-async def setup_admin(req: SetupRequest, session: AsyncSession) -> UserResponse:
-    """Create the first admin user. Only works when no admin exists."""
+async def setup_admin(req: SetupRequest, session: AsyncSession) -> TokenResponse:
+    """Create the first admin user and return JWT. Only works when no admin exists."""
     if not await check_needs_setup(session):
         raise BadRequestError("System is already set up — admin exists")
 
-    # Check uniqueness
     existing = await session.execute(
         select(User).where((User.username == req.username) | (User.email == req.email))
     )
@@ -58,7 +61,8 @@ async def setup_admin(req: SetupRequest, session: AsyncSession) -> UserResponse:
     session.add(user)
     await session.flush()
     await session.refresh(user)
-    return UserResponse.model_validate(user)
+    token = create_access_token(data={"sub": str(user.id)})
+    return TokenResponse(access_token=token)
 
 
 async def register_user(

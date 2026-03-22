@@ -11,6 +11,7 @@ import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
+const SetupWizardPage = lazy(() => import('@/pages/SetupWizardPage'))
 const OAuthCallbackPage = lazy(() => import('@/pages/OAuthCallbackPage'))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const KnowledgeBasePage = lazy(() => import('@/pages/KnowledgeBasePage'))
@@ -72,6 +73,7 @@ export default function App() {
         <BrowserRouter>
             <Routes>
                 <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><LoginPage /></Suspense>} />
+                <Route path="/setup" element={<Suspense fallback={<PageSkeleton />}><SetupWizardPage /></Suspense>} />
                 <Route path="/oauth/callback" element={<Suspense fallback={<PageSkeleton />}><OAuthCallbackPage /></Suspense>} />
                 <Route
                     element={

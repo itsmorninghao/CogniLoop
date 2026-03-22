@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { useAuthStore } from '@/stores/auth'
 import { api, setupApi, linuxDoApi, authApi, ApiError } from '@/lib/api'
-import { Loader2, Sparkles, Shield, CheckCircle, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Sparkles, CheckCircle, Eye, EyeOff } from 'lucide-react'
 
 function EyeBall({
     size = 18,
@@ -74,7 +74,7 @@ function EyeBall({
     )
 }
 
-type PageMode = 'loading' | 'setup' | 'login' | 'register'
+type PageMode = 'loading' | 'login' | 'register'
 
 function translateError(msg: string): string {
     const map: [string, string][] = [
@@ -96,7 +96,6 @@ export default function LoginPage() {
     const [error, setError] = useState('')
     const [successMsg, setSuccessMsg] = useState('')
     const [loading, setLoading] = useState(false)
-    const [setupDone, setSetupDone] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
     const [captchaId, setCaptchaId] = useState('')
     const [captchaSvg, setCaptchaSvg] = useState('')
@@ -121,7 +120,11 @@ export default function LoginPage() {
 
     useEffect(() => {
         setupApi.check().then(({ needs_setup }) => {
-            setMode(needs_setup ? 'setup' : 'login')
+            if (needs_setup) {
+                navigate('/setup', { replace: true })
+                return
+            }
+            setMode('login')
         }).catch((err) => {
             setMode('login')
             if (err instanceof ApiError && err.status === 0) {
@@ -214,7 +217,7 @@ export default function LoginPage() {
 
     function validateForm(): string | null {
         if (!form.username.trim()) return '请输入用户名'
-        if (mode === 'register' || mode === 'setup') {
+        if (mode === 'register') {
             if (form.username.length < 3) return '用户名至少需要 3 个字符'
             if (form.username.length > 50) return '用户名不能超过 50 个字符'
             if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return '请输入有效的邮箱地址'
@@ -222,29 +225,8 @@ export default function LoginPage() {
         }
         if (!form.password) return '请输入密码'
         if (mode !== 'login' && form.password.length < 6) return '密码至少需要 6 个字符'
-        if ((mode === 'login' || mode === 'register') && !captchaAnswer.trim()) return '请输入验证码'
+        if (!captchaAnswer.trim()) return '请输入验证码'
         return null
-    }
-
-    const handleSetup = async (e: React.FormEvent) => {
-        e.preventDefault()
-        const err = validateForm()
-        if (err) { setError(err); return }
-        setError('')
-        setLoading(true)
-        try {
-            await setupApi.createAdmin(form)
-            setSetupDone(true)
-            setTimeout(() => {
-                setMode('login')
-                setSetupDone(false)
-                setSuccessMsg('管理员账户创建成功！请使用您的账号和密码登录')
-            }, 1500)
-        } catch (err) {
-            setError(translateError(err instanceof Error ? err.message : '创建失败，请重试'))
-        } finally {
-            setLoading(false)
-        }
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -491,40 +473,28 @@ export default function LoginPage() {
                 <div className="w-full max-w-md animate-fade-in-up">
                     {/* Mobile logo */}
                     <div className="mb-8 text-center lg:hidden">
-                        <div className={`mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl shadow-xl ${
-                            mode === 'setup'
-                                ? 'bg-gradient-to-br from-amber-500 to-orange-600 shadow-amber-500/25'
-                                : 'bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/25'
-                        }`}>
-                            {mode === 'setup' ? <Shield className="size-8 text-white" /> : <Sparkles className="size-8 text-white animate-pulse" />}
+                        <div className="mx-auto mb-4 flex size-16 items-center justify-center rounded-2xl shadow-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-indigo-500/25">
+                            <Sparkles className="size-8 text-white animate-pulse" />
                         </div>
                         <h1 className="text-2xl font-medium tracking-tight text-foreground">CogniLoop</h1>
                         <p className="mt-1.5 text-sm text-muted-foreground">
-                            {mode === 'setup' ? '首次启动 — 创建管理员账户' : 'AI 驱动的去中心化知识学习社区'}
+                            AI 驱动的去中心化知识学习社区
                         </p>
                     </div>
 
                     {/* Desktop heading */}
                     <div className="mb-8 hidden lg:block">
                         <h2 className="text-2xl font-medium tracking-tight text-foreground">
-                            {mode === 'setup' ? '初始化系统' : mode === 'login' ? '欢迎回来 👋' : '创建账户'}
+                            {mode === 'login' ? '欢迎回来 👋' : '创建账户'}
                         </h2>
                         <p className="mt-1.5 text-sm text-muted-foreground">
-                            {mode === 'setup'
-                                ? '首次启动，请创建管理员账户'
-                                : mode === 'login'
+                            {mode === 'login'
                                 ? '请登录您的 CogniLoop 账户继续学习'
                                 : '填写以下信息加入 CogniLoop'}
                         </p>
                     </div>
 
                     {/* Status banners */}
-                    {setupDone && (
-                        <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400 animate-fade-in">
-                            <CheckCircle className="size-5 shrink-0" />
-                            <span>管理员账户创建成功！正在自动登录...</span>
-                        </div>
-                    )}
                     {successMsg && (
                         <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400 animate-fade-in">
                             <CheckCircle className="size-5 shrink-0" />
@@ -533,46 +503,6 @@ export default function LoginPage() {
                     )}
 
                     <div className="rounded-xl border border-border bg-card/80 p-8 shadow-xl backdrop-blur-sm">
-                        {mode === 'setup' ? (
-                            <>
-                                <div className="mb-6 rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-                                    <p className="text-center text-sm text-amber-700 dark:text-amber-400 leading-relaxed">
-                                        系统首次启动，请创建管理员账户
-                                    </p>
-                                </div>
-                                {error && (
-                                    <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-                                        {error}
-                                    </div>
-                                )}
-                                <form onSubmit={handleSetup} className="space-y-4">
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-medium text-foreground">管理员用户名</label>
-                                        <input type="text" value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} className={inputCls} placeholder="如 admin" />
-                                    </div>
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-medium text-foreground">邮箱</label>
-                                        <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className={inputCls} placeholder="admin@example.com" />
-                                    </div>
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-medium text-foreground">姓名</label>
-                                        <input type="text" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} className={inputCls} placeholder="管理员" />
-                                    </div>
-                                    <div>
-                                        <label className="mb-1.5 block text-sm font-medium text-foreground">密码</label>
-                                        <div className="relative">
-                                            <input type={showPassword ? 'text' : 'password'} value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} className={`${inputCls} pr-10`} placeholder="至少 6 个字符" />
-                                            {passwordToggleBtn}
-                                        </div>
-                                    </div>
-                                    <button type="submit" disabled={loading || setupDone} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 text-sm font-medium text-white shadow-lg shadow-amber-500/25 transition-all duration-200 hover:shadow-xl hover:-translate-y-0.5 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
-                                        {loading && <Loader2 className="size-4 animate-spin" />}
-                                        <Shield className="size-4" />
-                                        创建管理员账户
-                                    </button>
-                                </form>
-                            </>
-                        ) : (
                             <>
                                 {registrationEnabled && (
                                     <div className="mb-6 flex rounded-lg bg-muted p-1">
@@ -728,7 +658,6 @@ export default function LoginPage() {
                                     </>
                                 )}
                             </>
-                        )}
                     </div>
 
                     <p className="mt-6 text-center text-xs text-muted-foreground">

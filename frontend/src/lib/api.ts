@@ -101,9 +101,9 @@ export const api = {
 // Setup API (first-run)
 
 export const setupApi = {
-    check: () => api.get<{ needs_setup: boolean }>('/auth/setup-check'),
+    check: () => api.get<{ needs_setup: boolean; onboarding_complete: boolean }>('/auth/setup-check'),
     createAdmin: (data: { username: string; email: string; password: string; full_name: string }) =>
-        api.post<{ id: number }>('/auth/setup', data),
+        api.post<{ access_token: string }>('/auth/setup', data),
 }
 
 // SSE helper

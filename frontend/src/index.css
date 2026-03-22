@@ -1,9 +1,6 @@
 @import "tailwindcss";
 
-/*
- * ─── CogniLoop v2 Design System ──────────────────────────────────
- * Precise reproduction from: _dev/CogniLoop v2 UI_UX Design
- */
+/* CogniLoop v2 Design System */
 
 @custom-variant dark (&:is(.dark *));
 
@@ -163,7 +160,7 @@
   }
 }
 
-/* ── Custom scrollbar ─────────────────────── */
+/* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -182,7 +179,7 @@
   background: var(--primary);
 }
 
-/* ── Animations ───────────────────────────── */
+/* Animations */
 @keyframes fade-in {
   from {
     opacity: 0;
@@ -247,7 +244,7 @@
   animation: shimmer 1.5s infinite;
 }
 
-/* ── Staggered children animation ─────────── */
+/* Staggered children animation */
 .stagger-children>* {
   animation: fade-in-up 0.4s ease-out backwards;
 }
@@ -274,4 +271,131 @@
 
 .stagger-children>*:nth-child(6) {
   animation-delay: 0.3s;
+}
+
+/* Setup Wizard Animations */
+@keyframes step-enter {
+  from {
+    opacity: 0;
+    transform: translateX(60px) scale(0.96);
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.animate-step-enter {
+  animation: step-enter 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-6px); }
+  80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes check-bounce {
+  0% { transform: scale(0) rotate(-45deg); }
+  50% { transform: scale(1.2) rotate(0); }
+  100% { transform: scale(1) rotate(0); }
+}
+
+.animate-check-bounce {
+  animation: check-bounce 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes ping-once {
+  0% { transform: scale(1); opacity: 0.5; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+.animate-ping-once {
+  animation: ping-once 0.6s ease-out forwards;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+  50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.5); }
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+@keyframes flow-dot {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(32px); opacity: 0; }
+}
+
+.animate-flow-dot {
+  animation: flow-dot 1.5s ease-in-out infinite;
+}
+
+@keyframes float-up {
+  0% { transform: translateY(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(-100vh); opacity: 0; }
+}
+
+.animate-float-up {
+  animation: float-up 15s linear infinite;
+}
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+}
+
+.animate-confetti-fall {
+  animation: confetti-fall 3s ease-in forwards;
+}
+
+@keyframes bounce-in {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes celebrate {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-15px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-8px); }
+}
+
+.animate-celebrate {
+  animation: celebrate 0.8s ease-in-out;
+}
+
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(3); opacity: 0; }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2s ease-out infinite;
+}
+
+@keyframes shimmer-bar {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer-bar 2s linear infinite;
 }

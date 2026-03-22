@@ -24,6 +24,7 @@ interface AuthState {
     isLoading: boolean
 
     login: (username: string, password: string, captchaId: string, captchaAnswer: string) => Promise<void>
+    loginWithToken: (token: string) => Promise<void>
     register: (data: { username: string; email: string; password: string; full_name: string }, captchaId: string, captchaAnswer: string) => Promise<void>
     logout: () => void
     fetchUser: () => Promise<void>
@@ -47,6 +48,17 @@ export const useAuthStore = create<AuthState>((set) => ({
         try {
             const user = await api.get<User>('/auth/me')
             set({ token: res.access_token, user })
+        } catch (err) {
+            localStorage.removeItem('token')
+            throw err
+        }
+    },
+
+    loginWithToken: async (token) => {
+        localStorage.setItem('token', token)
+        try {
+            const user = await api.get<User>('/auth/me')
+            set({ token, user, isLoading: false })
         } catch (err) {
             localStorage.removeItem('token')
             throw err

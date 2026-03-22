@@ -11,7 +11,11 @@ from sqlmodel import select
 from backend.app.core.captcha import issue_captcha
 from backend.app.core.database import get_session
 from backend.app.core.deps import get_current_user
-from backend.app.core.exceptions import AlreadyExistsError, BadRequestError, ForbiddenError
+from backend.app.core.exceptions import (
+    AlreadyExistsError,
+    BadRequestError,
+    ForbiddenError,
+)
 from backend.app.core.ip_block import get_client_ip
 from backend.app.core.redis_pubsub import get_redis
 from backend.app.core.security import create_access_token, hash_password
@@ -44,7 +48,11 @@ async def get_captcha():
 async def setup_check(session: AsyncSession = Depends(get_session)):
     """Check if the system needs initial admin setup (public endpoint)."""
     needs_setup = await auth_service.check_needs_setup(session)
-    return {"needs_setup": needs_setup}
+    onboarding = await config_service.get_config("ONBOARDING_COMPLETE", session)
+    return {
+        "needs_setup": needs_setup,
+        "onboarding_complete": onboarding == "true",
+    }
 
 
 @router.get("/registration-enabled")
@@ -54,12 +62,12 @@ async def registration_enabled(session: AsyncSession = Depends(get_session)):
     return {"enabled": val != "false"}  # absent → True (backward-compatible)
 
 
-@router.post("/setup", response_model=UserResponse, status_code=201)
+@router.post("/setup", response_model=TokenResponse, status_code=201)
 async def setup_admin(
     req: SetupRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    """Create the first admin user. Only works when no admin exists."""
+    """Create the first admin user and return JWT. Only works when no admin exists."""
     return await auth_service.setup_admin(req, session)
 
 
