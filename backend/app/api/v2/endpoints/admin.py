@@ -478,17 +478,16 @@ async def test_ocr_config(
                         "role": "user",
                         "content": [
                             {
-                                "type": "text",
-                                "text": "请识别并提取图片中的所有文字内容，保持原始格式输出。",
-                            },
-                            {
                                 "type": "image_url",
                                 "image_url": {"url": f"data:image/png;base64,{b64}"},
+                            },
+                            {
+                                "type": "text",
+                                "text": "<|grounding|>OCR this image.",
                             },
                         ],
                     }
                 ],
-                temperature=0.0,
                 max_tokens=512,
                 timeout=20,
             )
