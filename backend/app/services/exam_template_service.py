@@ -643,7 +643,7 @@ async def ocr_scan_file(
 
         try:
             if ocr_mode == "ocr_plus_llm":
-                # Step 1: extract raw text
+                # Step 1: extract raw text via OCR model
                 step1_response = await client.chat.completions.create(
                     model=ocr_model,
                     messages=[
@@ -651,19 +651,18 @@ async def ocr_scan_file(
                             "role": "user",
                             "content": [
                                 {
-                                    "type": "text",
-                                    "text": f"请识别并提取第 {page_num} 页中的所有文字内容，包括题目、选项和答案，保持原始格式输出。",
-                                },
-                                {
                                     "type": "image_url",
                                     "image_url": {
                                         "url": f"data:{mime};base64,{b64}",
                                     },
                                 },
+                                {
+                                    "type": "text",
+                                    "text": "<|grounding|>OCR this image.",
+                                },
                             ],
                         },
                     ],
-                    temperature=0.0,
                     max_tokens=4096,
                 )
                 raw_text = step1_response.choices[0].message.content or ""
