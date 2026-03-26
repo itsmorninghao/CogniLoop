@@ -617,12 +617,12 @@ async def ocr_scan_file(
 
             doc = fitz.open(stream=file_bytes, filetype="pdf")
             for page in doc:
-                pix = page.get_pixmap(dpi=200)
-                pages.append(pix.tobytes("png"))
+                pix = page.get_pixmap(dpi=150)
+                pages.append(pix.tobytes("jpeg"))
             doc.close()
         except ImportError:
-            # Fallback: treat whole PDF as single page
-            pages = [file_bytes]
+            yield f"data: {json.dumps({'type': 'error', 'message': '服务器缺少 PDF 处理组件，请重新部署或联系管理员'})}\n\n"
+            return
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'message': f'PDF 解析失败: {e!s}'})}\n\n"
             return
@@ -639,7 +639,7 @@ async def ocr_scan_file(
 
         # Encode image
         b64 = base64.b64encode(page_bytes).decode("utf-8")
-        mime = "image/png" if content_type == "application/pdf" else content_type
+        mime = "image/jpeg" if content_type == "application/pdf" else content_type
 
         try:
             if ocr_mode == "ocr_plus_llm":
