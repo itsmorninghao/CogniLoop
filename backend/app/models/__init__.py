@@ -24,3 +24,10 @@ from backend.app.models.quiz import (  # noqa: F401
 from backend.app.models.quiz_preset import QuizPreset  # noqa: F401
 from backend.app.models.system_config import SystemConfig  # noqa: F401
 from backend.app.models.user import User  # noqa: F401
+from backend.app.models.course import (  # noqa: F401
+    Course,
+    CourseNode,
+    CourseNodeContent,
+    CourseProgress,
+    CourseQuiz,
+)

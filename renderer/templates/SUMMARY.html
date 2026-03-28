@@ -1,0 +1,18 @@
+{% extends "slide_base.html" %}
+{% block content %}
+<div style="flex: 1; display: flex; flex-direction: column; gap: 32px;">
+  <div>
+    <span class="badge" style="margin-bottom: 12px;">本节回顾</span>
+    <h2>{{ heading }}</h2>
+  </div>
+  <div class="divider"></div>
+  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; flex: 1;">
+    {% for point in points %}
+    <div class="card" style="display: flex; align-items: flex-start; gap: 16px; padding: 24px;">
+      <span style="color: var(--primary); font-size: 24px; font-weight: 700; flex-shrink: 0;">{{ loop.index }}</span>
+      <p style="font-size: 20px; line-height: 1.5;">{{ point }}</p>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

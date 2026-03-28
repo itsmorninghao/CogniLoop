@@ -34,7 +34,7 @@ dependencies = [
     "apscheduler>=3.10.0",
     "cryptography>=42.0.0",
     "redis>=5.2.0",
-    "torch>=2.0.0",
+"torch>=2.0.0",
     "torchvision>=0.15.0",
 ]
 

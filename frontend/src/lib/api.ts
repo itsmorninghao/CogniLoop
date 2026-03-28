@@ -686,6 +686,8 @@ export const adminApi = {
         api.post<{ ok: boolean; dimensions_returned: number; test_text?: string }>('/admin/system-configs/test-embedding', data),
     testOcr: () =>
         api.post<{ ok: boolean; message: string; image_base64?: string; raw_ocr_text?: string; mode?: string }>('/admin/system-configs/test-ocr', {}),
+    testTts: () =>
+        api.post<{ ok: boolean; audio_base64: string; voice_name: string; voice_id: string; model: string; base_url: string; test_text: string }>('/admin/system-configs/test-tts', {}),
     listKBs: (search?: string, plazaOnly = false, limit = 50, offset = 0) => {
         let url = `/admin/knowledge-bases?limit=${limit}&offset=${offset}&plaza_only=${plazaOnly}`
         if (search) url += `&search=${encodeURIComponent(search)}`
@@ -944,4 +946,134 @@ export const linuxDoApi = {
     bind: (code: string, state: string) =>
         api.post<{ message: string }>('/auth/linux-do/bind', { code, state }),
     unbind: () => api.delete<{ message: string }>('/auth/linux-do/bind'),
+}
+
+export interface CourseNodeResponse {
+    id: number
+    parent_id: number | null
+    title: string
+    order: number
+    depth: number
+    is_leaf: boolean
+    content_type: 'video' | 'text' | null
+    gen_status: string | null
+    progress_status: string | null
+}
+
+export interface CourseResponse {
+    id: number
+    title: string
+    creator_id: number
+    kb_ids: number[]
+    level: string
+    voice_id: string | null
+    cover_url: string | null
+    visibility: 'private' | 'public'
+    status: string
+    created_at: string
+    updated_at: string
+    nodes: CourseNodeResponse[]
+    total_leaf_nodes: number
+    completed_leaf_nodes: number
+    progress_pct: number
+}
+
+export interface CourseListItem {
+    id: number
+    title: string
+    level: string
+    cover_url: string | null
+    visibility: 'private' | 'public'
+    status: string
+    created_at: string
+    total_leaf_nodes: number
+    completed_leaf_nodes: number
+    progress_pct: number
+}
+
+export interface CoursePlazaItem {
+    id: number
+    title: string
+    level: string
+    cover_url: string | null
+    creator_id: number
+    creator_name: string
+    status: string
+    created_at: string
+    total_leaf_nodes: number
+}
+
+export interface OutlineNodeDraft {
+    temp_id: string
+    parent_temp_id: string | null
+    title: string
+    depth: number
+    order: number
+    is_leaf: boolean
+    content_type: 'video' | 'text' | null
+}
+
+export interface OutlineDraftResponse {
+    draft_id: string
+    course_title: string
+    nodes: OutlineNodeDraft[]
+}
+
+export interface NodeContentResponse {
+    node_id: number
+    content_type: 'video' | 'text'
+    gen_status: string
+    video_url: string | null
+    text_content: string | null
+    script_json: unknown | null
+    error_msg: string | null
+    retry_count: number
+    quiz_session_id: string | null
+}
+
+export interface NodeProgressResponse {
+    node_id: number
+    status: string
+    completed_at: string | null
+}
+
+export interface GenerationStatusResponse {
+    course_id: number
+    status: string
+    total_nodes: number
+    done_nodes: number
+    failed_nodes: number
+    node_statuses: Array<{node_id: number; title: string; gen_status: string; error_msg: string | null}>
+}
+
+export const courseApi = {
+    list: (limit = 100, offset = 0) =>
+        api.get<CourseListItem[]>(`/courses/?limit=${limit}&offset=${offset}`),
+    plaza: (limit = 20, offset = 0) =>
+        api.get<CoursePlazaItem[]>(`/courses/plaza?limit=${limit}&offset=${offset}`),
+    get: (id: number) => api.get<CourseResponse>(`/courses/${id}`),
+    update: (id: number, data: { title?: string; visibility?: 'private' | 'public' }) =>
+        api.patch<CourseResponse>(`/courses/${id}`, data),
+    delete: (id: number) => api.delete(`/courses/${id}`),
+    uploadCover: (id: number, file: File) =>
+        api.upload<CourseResponse>(`/courses/${id}/cover`, file),
+    togglePublish: (id: number) =>
+        api.post<CourseResponse>(`/courses/${id}/publish`),
+    getNodeContent: (courseId: number, nodeId: number) =>
+        api.get<NodeContentResponse>(`/courses/${courseId}/nodes/${nodeId}`),
+    updateNodeProgress: (courseId: number, nodeId: number, status: string) =>
+        api.post<NodeProgressResponse>(`/courses/${courseId}/nodes/${nodeId}/progress`, { status }),
+    getGenerationStatus: (id: number) =>
+        api.get<GenerationStatusResponse>(`/courses/${id}/generation-status`),
+}
+
+export const courseGenApi = {
+    generateOutline: (data: { kb_ids: number[]; level: string; voice_id?: string }) =>
+        api.post<OutlineDraftResponse>('/course-generation/outline', data),
+    editOutline: (draftId: string, nodes: OutlineNodeDraft[]) =>
+        api.patch<OutlineDraftResponse>(`/course-generation/outline/${draftId}/nodes`, { nodes }),
+    confirmOutline: (draftId: string, data: { course_title: string; nodes: OutlineNodeDraft[] }) =>
+        api.post<{ course_id: number; status: string }>(`/course-generation/outline/${draftId}/confirm`, data),
+    retryNode: (nodeId: number) =>
+        api.post(`/course-generation/nodes/${nodeId}/retry`),
 }

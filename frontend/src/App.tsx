@@ -32,6 +32,10 @@ const NotificationsPage = lazy(() => import('@/pages/NotificationsPage'))
 const AdminPage = lazy(() => import('@/pages/AdminPage'))
 const ExamTemplatePage = lazy(() => import('@/pages/ExamTemplatePage'))
 const ExamTemplateEditorPage = lazy(() => import('@/pages/ExamTemplateEditorPage'))
+const CoursesPage = lazy(() => import('@/pages/CoursesPage'))
+const CourseCreatePage = lazy(() => import('@/pages/CourseCreatePage'))
+const CourseOutlinePage = lazy(() => import('@/pages/CourseOutlinePage'))
+const CourseDetailPage = lazy(() => import('@/pages/CourseDetailPage'))
 
 function PageSkeleton() {
     return (
@@ -101,6 +105,10 @@ export default function App() {
                     <Route path="profile/:userId" element={<Suspense fallback={<PageSkeleton />}><UserProfileViewPage /></Suspense>} />
                     <Route path="notifications" element={<Suspense fallback={<PageSkeleton />}><NotificationsPage /></Suspense>} />
                     <Route path="admin" element={<Suspense fallback={<PageSkeleton />}><AdminPage /></Suspense>} />
+                    <Route path="courses" element={<Suspense fallback={<PageSkeleton />}><CoursesPage /></Suspense>} />
+                    <Route path="courses/create" element={<Suspense fallback={<PageSkeleton />}><CourseCreatePage /></Suspense>} />
+                    <Route path="courses/outline/:draftId" element={<Suspense fallback={<PageSkeleton />}><CourseOutlinePage /></Suspense>} />
+                    <Route path="courses/:courseId" element={<Suspense fallback={<PageSkeleton />}><CourseDetailPage /></Suspense>} />
                 </Route>
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

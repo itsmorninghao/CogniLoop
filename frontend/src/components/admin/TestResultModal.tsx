@@ -3,7 +3,7 @@ import { X, Loader2, AlertCircle } from 'lucide-react'
 interface Props {
     open: boolean
     onClose: () => void
-    type: 'llm' | 'embedding' | 'ocr'
+    type: 'llm' | 'embedding' | 'ocr' | 'tts'
     loading: boolean
     result: any | null
     error: string | null
@@ -13,6 +13,7 @@ const TITLES: Record<Props['type'], string> = {
     llm: 'LLM 连接测试',
     embedding: 'Embedding 连接测试',
     ocr: 'OCR 识别测试',
+    tts: 'TTS 语音合成测试',
 }
 
 export function TestResultModal({ open, onClose, type, loading, result, error }: Props) {
@@ -20,6 +21,7 @@ export function TestResultModal({ open, onClose, type, loading, result, error }:
 
     const maxW = type === 'ocr'
         ? (result?.mode === 'ocr_plus_llm' ? 'max-w-4xl' : 'max-w-2xl')
+        : type === 'tts' ? 'max-w-md'
         : 'max-w-lg'
 
     return (
@@ -57,6 +59,7 @@ export function TestResultModal({ open, onClose, type, loading, result, error }:
                             {type === 'llm' && <LlmResult result={result} />}
                             {type === 'embedding' && <EmbeddingResult result={result} />}
                             {type === 'ocr' && <OcrResult result={result} />}
+                            {type === 'tts' && <TtsResult result={result} />}
                         </>
                     )}
                 </div>
@@ -108,6 +111,39 @@ function EmbeddingResult({ result }: { result: any }) {
                 <div className="flex items-center gap-3 rounded-lg bg-muted p-4">
                     <span className="text-3xl font-medium text-primary">{result.dimensions_returned}</span>
                     <span className="text-sm text-muted-foreground">dimensions</span>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function TtsResult({ result }: { result: any }) {
+    const audioSrc = `data:audio/mpeg;base64,${result.audio_base64}`
+    return (
+        <div className="space-y-4">
+            <div>
+                <p className="mb-1.5 text-sm font-medium text-muted-foreground">合成文本</p>
+                <div className="rounded-lg bg-muted p-3 text-sm text-foreground">{result.test_text}</div>
+            </div>
+            <div>
+                <p className="mb-1.5 text-sm font-medium text-muted-foreground">播放试听</p>
+                {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                <audio controls src={audioSrc} className="w-full h-10" />
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="rounded-lg bg-muted px-3 py-2 space-y-0.5">
+                    <p className="text-muted-foreground">声音</p>
+                    <p className="font-medium font-mono truncate">{result.voice_id}</p>
+                </div>
+                <div className="rounded-lg bg-muted px-3 py-2 space-y-0.5">
+                    <p className="text-muted-foreground">模型</p>
+                    <p className="font-medium font-mono">{result.model}</p>
+                </div>
+                <div className="rounded-lg bg-muted px-3 py-2 space-y-0.5">
+                    <p className="text-muted-foreground">服务</p>
+                    <p className="font-medium font-mono truncate" title={result.base_url}>
+                        {result.base_url.replace(/^https?:\/\//, '').split('/')[0]}
+                    </p>
                 </div>
             </div>
         </div>
