@@ -1,0 +1,13 @@
+{% extends "slide_base.html" %}
+{% block content %}
+<div style="flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 24px;">
+  {% if badge %}
+  <div><span class="badge">{{ badge }}</span></div>
+  {% endif %}
+  <h1 class="gradient-text" style="font-size: 56px;">{{ title }}</h1>
+  <div class="divider"></div>
+  {% if subtitle %}
+  <p style="color: var(--muted); font-size: 26px;">{{ subtitle }}</p>
+  {% endif %}
+</div>
+{% endblock %}

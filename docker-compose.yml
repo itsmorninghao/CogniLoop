@@ -55,6 +55,7 @@ services:
       - ./.env:/app/.env
       - cogniloop_uploads:/app/uploads
       - cogniloop_question_sets:/app/question_sets
+      - /tmp/renderer_frames:/tmp/renderer_frames
     networks:
       - net
     depends_on:
@@ -71,6 +72,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  # Renderer service — Playwright + Chromium slide rendering
+  renderer:
+    build:
+      context: ./renderer
+      dockerfile: Dockerfile
+    container_name: cogniloop_renderer
+    restart: unless-stopped
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - /tmp/renderer_frames:/tmp/renderer_frames
+    networks:
+      - net
+    depends_on:
+      redis:
+        condition: service_healthy
 
 networks:
   net:

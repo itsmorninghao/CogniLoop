@@ -25,7 +25,9 @@ interface LlmConfig  { key: string; baseUrl: string; model: string }
 interface EmbConfig  { key: string; baseUrl: string; model: string }
 interface OcrConfig  { key: string; baseUrl: string; model: string; mode: 'multimodal'|'ocr_plus_llm'; llmModel: string }
 interface LdConfig   { enabled: boolean; clientId: string; clientSecret: string; redirectUri: string; minTrust: string }
-interface TestingState { llm: boolean; emb: boolean; ocr: boolean }
+interface VoiceEntry { name: string; voice_id: string; model: string }
+interface TtsConfig  { apiKey: string; baseUrl: string; voices: VoiceEntry[] }
+interface TestingState { llm: boolean; emb: boolean; ocr: boolean; tts: boolean }
 interface SavingState  { aiServices: boolean; proNodes: boolean; ld: boolean }
 interface ExportState  { showConfirm: boolean; isExporting: boolean }
 interface ImportState  { isImporting: boolean; showConfirm: boolean; file: File|null; preview: { key:string; value:string|null; description:string|null }[] }
@@ -40,7 +42,8 @@ export function AdminConfigTab() {
     const [embConfig,   setEmbConfig]   = useState<EmbConfig>({ key: '', baseUrl: '', model: '' })
     const [ocrConfig,   setOcrConfig]   = useState<OcrConfig>({ key: '', baseUrl: '', model: '', mode: 'multimodal', llmModel: '' })
     const [ldConfig,    setLdConfig]    = useState<LdConfig>({ enabled: false, clientId: '', clientSecret: '', redirectUri: '', minTrust: '1' })
-    const [testing,     setTesting]     = useState<TestingState>({ llm: false, emb: false, ocr: false })
+    const [ttsConfig,   setTtsConfig]   = useState<TtsConfig>({ apiKey: '', baseUrl: '', voices: [] })
+    const [testing,     setTesting]     = useState<TestingState>({ llm: false, emb: false, ocr: false, tts: false })
     const [saving,      setSaving]      = useState<SavingState>({ aiServices: false, proNodes: false, ld: false })
     const [exportState, setExportState] = useState<ExportState>({ showConfirm: false, isExporting: false })
     const [importState, setImportState] = useState<ImportState>({ isImporting: false, showConfirm: false, file: null, preview: [] })
@@ -54,7 +57,7 @@ export function AdminConfigTab() {
 
     const [testModal, setTestModal] = useState<{
         open: boolean
-        type: 'llm' | 'embedding' | 'ocr'
+        type: 'llm' | 'embedding' | 'ocr' | 'tts'
         loading: boolean
         result: any | null
         error: string | null
@@ -174,6 +177,25 @@ export function AdminConfigTab() {
             setEmbConfig({ key: get('EMBEDDING_API_KEY'), baseUrl: get('EMBEDDING_BASE_URL'), model: get('EMBEDDING_MODEL') })
             setOcrConfig({ key: get('OCR_API_KEY'), baseUrl: get('OCR_API_URL'), model: get('OCR_MODEL'), mode: (get('OCR_MODE') as 'multimodal' | 'ocr_plus_llm') || 'multimodal', llmModel: get('OCR_LLM_MODEL') || '' })
             setLdConfig({ enabled: get('LINUX_DO_ENABLED') === 'true', clientId: get('LINUX_DO_CLIENT_ID'), clientSecret: get('LINUX_DO_CLIENT_SECRET'), redirectUri: get('LINUX_DO_REDIRECT_URI'), minTrust: get('LINUX_DO_MIN_TRUST_LEVEL') || '1' })
+            const rawVoices = get('COURSE_VOICES')
+            let parsedVoices: VoiceEntry[] = []
+            if (rawVoices) {
+                try {
+                    const arr = JSON.parse(rawVoices)
+                    if (Array.isArray(arr)) {
+                        parsedVoices = arr.map((v: any) => ({
+                            name:     v.name     || '',
+                            voice_id: v.voice_id || '',
+                            model:    v.model    || '',
+                        }))
+                    }
+                } catch { /* ignore */ }
+            }
+            setTtsConfig({
+                apiKey:  get('TTS_API_KEY'),
+                baseUrl: get('TTS_BASE_URL'),
+                voices:  parsedVoices,
+            })
 
             const newNodeConfigs = { ...nodeConfigs }
             for (const node of PRO_NODES) {
@@ -254,6 +276,10 @@ export function AdminConfigTab() {
         runTestModal('ocr', () => adminApi.testOcr(), (v) => setTesting(p => ({ ...p, ocr: v })))
     }
 
+    const handleTestTts = () => {
+        runTestModal('tts', () => adminApi.testTts(), (v) => setTesting(p => ({ ...p, tts: v })))
+    }
+
     const saveAiServicesConfig = async () => {
         setSaving(p => ({ ...p, aiServices: true }))
         try {
@@ -274,6 +300,27 @@ export function AdminConfigTab() {
 
             loadConfigs()
         } catch { toast.error('保存失败') } finally { setSaving(p => ({ ...p, aiServices: false })) }
+    }
+
+    const saveTtsConfig = async () => {
+        try {
+            // Credentials stored encrypted (same pattern as LLM/OCR keys)
+            if (ttsConfig.apiKey && !ttsConfig.apiKey.startsWith(MASK_PREFIX))
+                await adminApi.setConfig('TTS_API_KEY', ttsConfig.apiKey, 'TTS API 密钥（加密存储）')
+            if (ttsConfig.baseUrl)
+                await adminApi.setConfig('TTS_BASE_URL', ttsConfig.baseUrl, 'TTS Base URL')
+            if (ttsConfig.voices.length > 0) {
+                const serialized = ttsConfig.voices.map(v => ({
+                    id:       v.voice_id.replace(/[^a-zA-Z0-9_/-]/g, '_') || 'voice',
+                    name:     v.name,
+                    voice_id: v.voice_id,
+                    ...(v.model ? { model: v.model } : {}),
+                }))
+                await adminApi.setConfig('COURSE_VOICES', JSON.stringify(serialized), '课程 TTS 声音列表')
+            }
+            toast.success('TTS 配置已保存')
+            loadConfigs()
+        } catch { toast.error('保存失败') }
     }
 
     const handleVectorConfirm = async () => {
@@ -310,7 +357,7 @@ export function AdminConfigTab() {
         }
     }
 
-    const runTestModal = async (type: 'llm' | 'embedding' | 'ocr', apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
+    const runTestModal = async (type: 'llm' | 'embedding' | 'ocr' | 'tts', apiCall: () => Promise<any>, setLoader: (v: boolean) => void) => {
         setTestModal({ open: true, type, loading: true, result: null, error: null })
         setLoader(true)
         try {
@@ -628,6 +675,103 @@ export function AdminConfigTab() {
                             <button onClick={handleTestOcr} disabled={testing.ocr} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
                                 {testing.ocr ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
                                 {testing.ocr ? '识别中...' : '测试识别'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* TTS section */}
+                    <div className="rounded-xl border border-border bg-card overflow-hidden">
+                        <div className="px-6 py-4 border-b border-border">
+                            <p className="text-xs font-medium text-foreground uppercase tracking-wider mb-0.5">课程 TTS 语音合成</p>
+                            <p className="text-sm text-muted-foreground">用于 AI 课程视频的旁白配音。支持任何兼容 OpenAI <code className="font-mono text-xs">/audio/speech</code> 接口的服务（OpenAI、硅基流动等）。留空则回落至全局 LLM 配置。</p>
+                        </div>
+                        <div className="divide-y divide-border">
+                            <div className="grid lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-border">
+                                <div className="px-6 py-5 space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Key className="size-3" /> API Key <span className="text-muted-foreground/50 font-normal">可选</span></label>
+                                    <input type="password" value={ttsConfig.apiKey} onChange={e => setTtsConfig(p => ({ ...p, apiKey: e.target.value }))} placeholder="留空则使用全局 LLM Key" className={inputClass} />
+                                </div>
+                                <div className="px-6 py-5 space-y-1">
+                                    <label className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Server className="size-3" /> Base URL <span className="text-muted-foreground/50 font-normal">可选</span></label>
+                                    <input type="text" value={ttsConfig.baseUrl} onChange={e => setTtsConfig(p => ({ ...p, baseUrl: e.target.value }))} placeholder="如：https://api.siliconflow.cn/v1" className={inputClass} />
+                                </div>
+                            </div>
+                            <div className="px-6 py-5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground">声音列表</p>
+                                        <p className="text-[10px] text-muted-foreground mt-0.5">不配置时默认使用 alloy / nova / echo</p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => setTtsConfig(p => ({ ...p, voices: [...p.voices, { name: '', voice_id: '', model: '' }] }))}
+                                        className="flex items-center gap-1 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
+                                    >
+                                        <Plus className="size-3.5" /> 添加声音
+                                    </button>
+                                </div>
+                                {ttsConfig.voices.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground/60 italic">使用默认声音列表（alloy / nova / echo）</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {ttsConfig.voices.map((voice, i) => {
+                                            const update = (patch: Partial<VoiceEntry>) =>
+                                                setTtsConfig(p => ({ ...p, voices: p.voices.map((v, j) => j === i ? { ...v, ...patch } : v) }))
+                                            return (
+                                                <div key={i} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2.5">
+                                                    <div className="flex items-end gap-2">
+                                                        <div className="flex-1 space-y-1">
+                                                            <label className="text-[10px] text-muted-foreground">显示名称</label>
+                                                            <input
+                                                                type="text"
+                                                                value={voice.name}
+                                                                onChange={e => update({ name: e.target.value })}
+                                                                placeholder="如：温柔女声"
+                                                                className="w-full bg-transparent border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:border-foreground transition-colors"
+                                                            />
+                                                        </div>
+                                                        <div className="flex-1 space-y-1">
+                                                            <label className="text-[10px] text-muted-foreground">Voice ID</label>
+                                                            <input
+                                                                type="text"
+                                                                value={voice.voice_id}
+                                                                onChange={e => update({ voice_id: e.target.value })}
+                                                                placeholder="alloy / FunAudioLLM/CosyVoice2-0.5B"
+                                                                className="w-full bg-transparent border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-foreground transition-colors"
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setTtsConfig(p => ({ ...p, voices: p.voices.filter((_, j) => j !== i) }))}
+                                                            className="text-muted-foreground hover:text-rose-500 transition-colors pb-1.5 shrink-0"
+                                                        >
+                                                            <Trash2 className="size-4" />
+                                                        </button>
+                                                    </div>
+                                                    <div className="w-40 space-y-1">
+                                                        <label className="text-[10px] text-muted-foreground">模型 <span className="opacity-50">可选</span></label>
+                                                        <input
+                                                            type="text"
+                                                            value={voice.model}
+                                                            onChange={e => update({ model: e.target.value })}
+                                                            placeholder="tts-1"
+                                                            className="w-full bg-transparent border border-border rounded px-2 py-1.5 text-xs font-mono focus:outline-none focus:border-foreground transition-colors"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-3 px-6 py-4 border-t border-border bg-muted/10">
+                            <button onClick={saveTtsConfig} className="bg-foreground text-background px-5 py-2 rounded-md text-sm font-medium transition-colors hover:bg-foreground/90">
+                                保存
+                            </button>
+                            <button onClick={handleTestTts} disabled={testing.tts} className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50">
+                                {testing.tts ? <div className="size-3.5 animate-spin rounded-full border-2 border-foreground border-t-transparent" /> : <Play className="size-3.5 text-emerald-500" />}
+                                {testing.tts ? '合成中...' : '测试语音'}
                             </button>
                         </div>
                     </div>

@@ -1,0 +1,12 @@
+{% extends "slide_base.html" %}
+{% block content %}
+<div style="flex: 1; display: flex; flex-direction: column; gap: 36px;">
+  <h2>{{ heading }}</h2>
+  <div class="divider"></div>
+  <ul class="bullet-list">
+    {% for point in points %}
+    <li>{{ point }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}

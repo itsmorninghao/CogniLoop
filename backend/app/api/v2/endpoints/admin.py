@@ -540,6 +540,53 @@ async def test_ocr_config(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/system-configs/test-tts")
+async def test_tts_config(
+    session: AsyncSession = Depends(get_session),
+):
+    """Test TTS connection by synthesizing a short sample sentence."""
+    import tempfile
+
+    from backend.app.services import tts_service
+
+    test_text = "这是一段语音合成测试，如果您能听到这段声音，说明 TTS 配置成功。"
+
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            tmp_path = Path(f.name)
+
+        await tts_service.synthesize_speech(
+            text=test_text,
+            voice_config_id=None,  # uses first configured voice
+            session=session,
+            output_path=tmp_path,
+        )
+
+        audio_b64 = base64.b64encode(tmp_path.read_bytes()).decode()
+        tmp_path.unlink(missing_ok=True)
+
+        voices = await tts_service.get_available_voices(session)
+        first_voice = voices[0] if voices else {}
+        api_key = await config_service.get_config(
+            "TTS_API_KEY", session
+        ) or await config_service.get_config("OPENAI_API_KEY", session)
+        base_url = await config_service.get_config(
+            "TTS_BASE_URL", session
+        ) or await config_service.get_config("OPENAI_BASE_URL", session)
+
+        return {
+            "ok": True,
+            "audio_base64": audio_b64,
+            "voice_name": first_voice.get("name", "默认声音"),
+            "voice_id": first_voice.get("voice_id", "alloy"),
+            "model": first_voice.get("model", "tts-1"),
+            "base_url": base_url or "https://api.openai.com/v1",
+            "test_text": test_text,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 class AdminKBItem(BaseModel):
     id: int
     name: str
