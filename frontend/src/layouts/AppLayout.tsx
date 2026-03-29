@@ -83,6 +83,13 @@ export default function AppLayout() {
         document.documentElement.classList.toggle('dark', dark)
     }, [dark])
 
+    // Auto-collapse sidebar when viewing a course detail page
+    useEffect(() => {
+        if (/^\/courses\/\d+/.test(location.pathname)) {
+            setCollapsed(true)
+        }
+    }, [location.pathname])
+
     const toggleDark = () => {
         const next = !dark
         setDark(next)

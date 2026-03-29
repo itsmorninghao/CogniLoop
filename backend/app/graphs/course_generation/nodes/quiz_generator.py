@@ -115,9 +115,6 @@ async def _save_quiz(
     from backend.app.models.quiz import QuizSession, QuizQuestion
     from backend.app.models.course import CourseQuiz
 
-    # answer letter → index mapping
-    answer_map = {"A": 0, "B": 1, "C": 2, "D": 3}
-
     session_id = str(uuid.uuid4())
 
     async with async_session_factory() as db:
@@ -136,7 +133,6 @@ async def _save_quiz(
         for idx, q in enumerate(questions):
             options = q.get("options", [])
             answer_letter = q.get("answer", "A").strip().upper()
-            correct_idx = answer_map.get(answer_letter, 0)
 
             qq = QuizQuestion(
                 session_id=session_id,
@@ -144,7 +140,7 @@ async def _save_quiz(
                 question_type="single_choice",
                 content=q.get("question", ""),
                 options=options,
-                correct_answer=str(correct_idx),
+                correct_answer=answer_letter,
                 analysis=q.get("explanation", ""),
             )
             db.add(qq)

@@ -14,7 +14,55 @@ import {
 } from 'lucide-react'
 import { courseApi, courseGenApi, type CourseNodeResponse, type NodeContentResponse } from '@/lib/api'
 import { useAsync } from '@/hooks/useAsync'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
+
+const MD: Components = {
+    h1: ({ children }) => (
+        <h1 className="text-2xl font-semibold text-foreground mt-0 mb-5 pb-3 border-b border-border">{children}</h1>
+    ),
+    h2: ({ children }) => (
+        <h2 className="text-lg font-semibold text-foreground mt-10 mb-3 pb-2 border-b border-border/60">{children}</h2>
+    ),
+    h3: ({ children }) => (
+        <h3 className="text-base font-semibold text-primary mt-6 mb-2">{children}</h3>
+    ),
+    h4: ({ children }) => (
+        <h4 className="text-sm font-semibold text-foreground/90 mt-4 mb-1">{children}</h4>
+    ),
+    p: ({ children }) => (
+        <p className="text-foreground/80 leading-[1.85] mb-4 last:mb-0">{children}</p>
+    ),
+    strong: ({ children }) => (
+        <strong className="font-semibold text-foreground">{children}</strong>
+    ),
+    em: ({ children }) => (
+        <em className="italic text-foreground/70">{children}</em>
+    ),
+    ul: ({ children }) => (
+        <ul className="list-disc pl-5 mb-4 space-y-1.5 text-foreground/80">{children}</ul>
+    ),
+    ol: ({ children }) => (
+        <ol className="list-decimal pl-5 mb-4 space-y-1.5 text-foreground/80">{children}</ol>
+    ),
+    li: ({ children }) => (
+        <li className="leading-7 pl-0.5">{children}</li>
+    ),
+    blockquote: ({ children }) => (
+        <blockquote className="my-4 border-l-4 border-primary/50 bg-primary/5 pl-4 py-2 rounded-r-lg text-foreground/70 [&>p]:mb-0">{children}</blockquote>
+    ),
+    hr: () => <hr className="my-8 border-border" />,
+    pre: ({ children }) => (
+        <pre className="my-4 overflow-x-auto rounded-lg border border-border bg-muted p-4 text-sm font-mono leading-relaxed">{children}</pre>
+    ),
+    code: ({ children, className }) => {
+        if (className?.startsWith('language-')) {
+            return <code className={`font-mono text-sm ${className}`}>{children}</code>
+        }
+        return (
+            <code className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[0.82em] text-primary">{children}</code>
+        )
+    },
+}
 
 export default function CourseDetailPage() {
     const { courseId } = useParams<{ courseId: string }>()
@@ -33,6 +81,7 @@ export default function CourseDetailPage() {
     const [textExpanded, setTextExpanded] = useState(true)
     const [retrying, setRetrying] = useState(false)
     const contentRef = useRef<HTMLDivElement>(null)
+    const pendingScrollRef = useRef<number | null>(null)
 
     // Auto-select first leaf node
     useEffect(() => {
@@ -80,8 +129,20 @@ export default function CourseDetailPage() {
         setSelectedNodeId(node.id)
     }
 
+    // Restore scroll position after refetch (refetch briefly sets course=null, resetting scroll)
+    useEffect(() => {
+        if (course && pendingScrollRef.current !== null && contentRef.current) {
+            const pos = pendingScrollRef.current
+            pendingScrollRef.current = null
+            requestAnimationFrame(() => {
+                if (contentRef.current) contentRef.current.scrollTop = pos
+            })
+        }
+    }, [course])
+
     const handleMarkComplete = async (nodeId: number) => {
         if (!course) return
+        if (contentRef.current) pendingScrollRef.current = contentRef.current.scrollTop
         try {
             await courseApi.updateNodeProgress(course.id, nodeId, 'completed')
             refetchCourse()
@@ -205,16 +266,14 @@ export default function CourseDetailPage() {
 
     return (
         <div className="flex h-full overflow-hidden">
-            <div className={`flex flex-col border-r border-border bg-card transition-all duration-300 ${sidebarCollapsed ? 'w-12' : 'w-64'} flex-shrink-0`}>
-                <div className="flex items-center justify-between border-b border-border p-3">
-                    {!sidebarCollapsed && (
-                        <span className="text-xs font-medium text-muted-foreground truncate">课程大纲</span>
-                    )}
+            <div className={`flex flex-col border-r border-border bg-card transition-all duration-300 ${sidebarCollapsed ? 'w-0 overflow-hidden' : 'w-64'} flex-shrink-0`}>
+                <div className="h-11 flex items-center justify-between border-b border-border px-3">
+                    <span className="text-xs font-medium text-muted-foreground truncate">课程大纲</span>
                     <button
-                        onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                        onClick={() => setSidebarCollapsed(true)}
                         className="ml-auto rounded-lg p-1 hover:bg-muted transition-colors"
                     >
-                        {sidebarCollapsed ? <ChevronRight className="size-4" /> : <ChevronLeft className="size-4" />}
+                        <ChevronLeft className="size-4" />
                     </button>
                 </div>
 
@@ -241,23 +300,31 @@ export default function CourseDetailPage() {
             </div>
 
             <div className="flex-1 overflow-y-auto" onScroll={handleTextScroll} ref={contentRef}>
-                <div className="border-b border-border px-6 py-4">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                        <button onClick={() => navigate('/courses')} className="hover:text-foreground transition-colors">
-                            我的课程
-                        </button>
-                        <ChevronRight className="size-3" />
-                        <span className="truncate text-foreground">{course.title}</span>
-                        {selectedNode && (
-                            <>
-                                <ChevronRight className="size-3" />
-                                <span className="truncate">{selectedNode.title}</span>
-                            </>
-                        )}
-                    </div>
-                    <div className="flex items-center justify-between">
-                        <h1 className="text-xl font-medium line-clamp-1">{course.title}</h1>
-                        <div className="flex items-center gap-2">
+                <div className="h-11 flex items-center border-b border-border px-6">
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground min-w-0">
+                            {sidebarCollapsed && (
+                                <button
+                                    onClick={() => setSidebarCollapsed(false)}
+                                    className="rounded-lg p-1 hover:bg-muted transition-colors shrink-0 mr-1"
+                                    title="展开课程大纲"
+                                >
+                                    <ChevronRight className="size-4" />
+                                </button>
+                            )}
+                            <button onClick={() => navigate('/courses')} className="hover:text-foreground transition-colors shrink-0">
+                                我的课程
+                            </button>
+                            <ChevronRight className="size-3 shrink-0" />
+                            <span className="truncate text-foreground">{course.title}</span>
+                            {selectedNode && (
+                                <>
+                                    <ChevronRight className="size-3 shrink-0" />
+                                    <span className="truncate">{selectedNode.title}</span>
+                                </>
+                            )}
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-4">
                             {course.status === 'generating' && (
                                 <span className="flex items-center gap-1.5 text-xs text-purple-500">
                                     <Sparkles className="size-3.5 animate-pulse" />
@@ -275,7 +342,7 @@ export default function CourseDetailPage() {
                     </div>
                 </div>
 
-                <div className="px-6 py-6 max-w-4xl space-y-6">
+                <div className="px-6 py-6 space-y-6">
                     {!selectedNodeId && (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
                             <GraduationCap className="size-12 text-muted-foreground mb-3" />
@@ -285,21 +352,6 @@ export default function CourseDetailPage() {
 
                     {selectedNode && (
                         <>
-                            <div>
-                                <h2 className="text-2xl font-medium">{selectedNode.title}</h2>
-                                <div className="flex items-center gap-2 mt-2">
-                                    {selectedNode.content_type === 'video' ? (
-                                        <span className="flex items-center gap-1 text-xs text-primary">
-                                            <Video className="size-3.5" /> 视频讲解
-                                        </span>
-                                    ) : (
-                                        <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                                            <FileText className="size-3.5" /> 文字讲解
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-
                             {contentLoading ? (
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                     <Loader2 className="size-4 animate-spin" />
@@ -406,20 +458,27 @@ function NodeContentView({
             )}
 
             {content.text_content && (
-                <div className="rounded-xl border border-border bg-card">
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
                     <button
                         onClick={() => setTextExpanded(!textExpanded)}
-                        className="flex w-full items-center justify-between p-4 text-sm font-medium hover:bg-muted/50 transition-colors rounded-xl"
+                        className="flex w-full items-center justify-between px-5 py-3.5 hover:bg-muted/50 transition-colors"
                     >
-                        <span className="flex items-center gap-2">
-                            <FileText className="size-4" />
-                            {node.content_type === 'video' ? '文字版（快速复习）' : '文字讲解'}
+                        <span className="flex items-center gap-2.5">
+                            <span className="flex size-7 items-center justify-center rounded-lg bg-green-100 dark:bg-green-900/30">
+                                <FileText className="size-3.5 text-green-600 dark:text-green-400" />
+                            </span>
+                            <span className="text-sm font-medium">
+                                {node.content_type === 'video' ? '文字版（快速复习）' : '文字讲解'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">建议通读全文</span>
                         </span>
-                        {textExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                        {textExpanded
+                            ? <ChevronUp className="size-4 text-muted-foreground" />
+                            : <ChevronDown className="size-4 text-muted-foreground" />}
                     </button>
                     {textExpanded && (
-                        <div className="border-t border-border px-5 py-4 prose prose-sm dark:prose-invert max-w-none">
-                            <ReactMarkdown>{content.text_content}</ReactMarkdown>
+                        <div className="border-t border-border px-8 py-7">
+                            <ReactMarkdown components={MD}>{content.text_content}</ReactMarkdown>
                         </div>
                     )}
                 </div>
