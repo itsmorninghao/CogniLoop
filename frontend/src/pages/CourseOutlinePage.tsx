@@ -1,8 +1,9 @@
 /**
  * Course Outline Review Page — shows LLM-generated outline, allows editing, then confirms to start Phase 2.
+ * Supports streaming mode: nodes appear progressively as LLM generates them.
  */
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import {
@@ -10,7 +11,7 @@ import {
     Video, FileText, Loader2, Sparkles, GraduationCap,
     LayoutList,
 } from 'lucide-react'
-import { courseGenApi, type OutlineNodeDraft, type OutlineDraftResponse } from '@/lib/api'
+import { courseGenApi, streamOutline, type OutlineNodeDraft, type OutlineDraftResponse } from '@/lib/api'
 
 const CONTENT_TYPE_ICONS = {
     video: <Video className="size-3.5 text-primary" />,
@@ -27,8 +28,57 @@ export default function CourseOutlinePage() {
     const location = useLocation()
     const navigate = useNavigate()
 
-    const locationState = location.state as { draft: OutlineDraftResponse } | null
+    const locationState = location.state as {
+        draft?: OutlineDraftResponse
+        streamParams?: { kb_ids: number[]; level: string; voice_id?: string }
+    } | null
+
+    const isStreamingMode = draftId === 'streaming' && !!locationState?.streamParams
+
     const [draft, setDraft] = useState<OutlineDraftResponse | null>(locationState?.draft ?? null)
+    const [streamingNodes, setStreamingNodes] = useState<OutlineNodeDraft[]>([])
+    const [streamingTitle, setStreamingTitle] = useState('')
+    const [streamPhase, setStreamPhase] = useState<string>('')
+    const [streamDone, setStreamDone] = useState(false)
+    const streamStarted = useRef(false)
+
+    // Start streaming on mount if in streaming mode
+    useEffect(() => {
+        if (!isStreamingMode || streamStarted.current) return
+        streamStarted.current = true
+        const params = locationState!.streamParams!
+
+        setStreamPhase('正在分析知识库...')
+
+        streamOutline(params, {
+            onPhase: (step) => {
+                if (step === 'kb_summary') setStreamPhase('正在分析知识库...')
+                else if (step === 'llm_generating') setStreamPhase('AI 正在生成大纲...')
+            },
+            onTitle: (title) => {
+                setStreamingTitle(title)
+            },
+            onNode: (node) => {
+                setStreamingNodes(prev => [...prev, node])
+            },
+            onDone: (data) => {
+                setDraft(data)
+                setStreamDone(true)
+                setStreamPhase('')
+                // Replace URL so refresh works with the real draftId
+                window.history.replaceState(
+                    { draft: data },
+                    '',
+                    `/courses/outline/${data.draft_id}`,
+                )
+            },
+            onError: (msg) => {
+                toast.error(msg || '大纲生成失败')
+                setStreamPhase('')
+                setStreamDone(true)
+            },
+        })
+    }, [isStreamingMode, locationState])
 
     const [courseTitle, setCourseTitle] = useState(draft?.course_title ?? '')
     const [editingTitle, setEditingTitle] = useState(false)
@@ -36,7 +86,18 @@ export default function CourseOutlinePage() {
     const [editingText, setEditingText] = useState('')
     const [confirming, setConfirming] = useState(false)
 
-    if (!draft || !draftId) {
+    // Sync courseTitle when draft or streamingTitle changes
+    useEffect(() => {
+        if (draft?.course_title) setCourseTitle(draft.course_title)
+        else if (streamingTitle) setCourseTitle(streamingTitle)
+    }, [draft?.course_title, streamingTitle])
+
+    // Use streamed nodes while streaming, final draft nodes when done
+    const displayNodes = draft?.nodes ?? streamingNodes
+    const isStreaming = isStreamingMode && !streamDone
+
+    // Show empty state only if not streaming and no draft
+    if (!isStreaming && !draft) {
         return (
             <div className="flex h-full flex-col items-center justify-center gap-4">
                 <GraduationCap className="size-12 text-muted-foreground" />
@@ -51,13 +112,12 @@ export default function CourseOutlinePage() {
         )
     }
 
-    const nodes = draft.nodes
-
-    // Build hierarchy for rendering
+    const nodes = displayNodes
     const rootNodes = nodes.filter((n) => !n.parent_temp_id)
     const childrenOf = (tempId: string) => nodes.filter((n) => n.parent_temp_id === tempId)
 
     const toggleContentType = (tempId: string) => {
+        if (isStreaming) return
         setDraft((prev) => {
             if (!prev) return prev
             return {
@@ -86,13 +146,14 @@ export default function CourseOutlinePage() {
     }
 
     const handleConfirm = async () => {
+        if (!draft || !draft.draft_id) return
         if (!courseTitle.trim()) {
             toast.error('请输入课程标题')
             return
         }
         setConfirming(true)
         try {
-            const result = await courseGenApi.confirmOutline(draftId, {
+            const result = await courseGenApi.confirmOutline(draft.draft_id, {
                 course_title: courseTitle,
                 nodes: draft.nodes,
             })
@@ -114,7 +175,7 @@ export default function CourseOutlinePage() {
         const isEditing = editingNodeId === node.temp_id
 
         return (
-            <div key={node.temp_id}>
+            <div key={node.temp_id} className="animate-fade-in">
                 <div
                     className={`group flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-muted/50 transition-colors ${
                         depth === 0 ? 'font-medium' : ''
@@ -154,7 +215,7 @@ export default function CourseOutlinePage() {
                         <span className="flex-1 text-sm">{node.title}</span>
                     )}
 
-                    {node.is_leaf && !isEditing && (
+                    {node.is_leaf && !isEditing && !isStreaming && (
                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                                 onClick={() => toggleContentType(node.temp_id)}
@@ -167,7 +228,7 @@ export default function CourseOutlinePage() {
                         </div>
                     )}
 
-                    {!isEditing && (
+                    {!isEditing && !isStreaming && (
                         <button
                             onClick={() => { setEditingNodeId(node.temp_id); setEditingText(node.title) }}
                             className="opacity-0 group-hover:opacity-100 transition-opacity"
@@ -185,7 +246,7 @@ export default function CourseOutlinePage() {
     }
 
     return (
-        <div className="container mx-auto max-w-3xl p-6 space-y-6">
+        <div className="container mx-auto space-y-6 p-6">
             <button
                 onClick={() => navigate('/courses/create')}
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -200,54 +261,80 @@ export default function CourseOutlinePage() {
                     <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
                 </div>
                 <div className="flex-1">
-                    <p className="text-sm text-muted-foreground mb-1">AI 已生成课程大纲，请审阅后确认</p>
-                    {editingTitle ? (
-                        <div className="flex items-center gap-2">
-                            <input
-                                autoFocus
-                                value={courseTitle}
-                                onChange={(e) => setCourseTitle(e.target.value)}
-                                onBlur={() => setEditingTitle(false)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingTitle(false) }}
-                                className="flex-1 rounded-lg border border-primary bg-background px-2 py-1 text-xl font-medium focus:outline-none"
-                            />
+                    {isStreaming ? (
+                        <div className="flex items-center gap-2 mb-1">
+                            <Loader2 className="size-4 animate-spin text-primary" />
+                            <p className="text-sm text-muted-foreground">{streamPhase}</p>
                         </div>
                     ) : (
-                        <button
-                            onClick={() => setEditingTitle(true)}
-                            className="group flex items-center gap-2"
-                        >
-                            <h1 className="text-2xl font-medium">{courseTitle}</h1>
-                            <Edit2 className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </button>
+                        <p className="text-sm text-muted-foreground mb-1">AI 已生成课程大纲，请审阅后确认</p>
                     )}
+                    {courseTitle ? (
+                        editingTitle ? (
+                            <div className="flex items-center gap-2">
+                                <input
+                                    autoFocus
+                                    value={courseTitle}
+                                    onChange={(e) => setCourseTitle(e.target.value)}
+                                    onBlur={() => setEditingTitle(false)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setEditingTitle(false) }}
+                                    className="flex-1 rounded-lg border border-primary bg-background px-2 py-1 text-xl font-medium focus:outline-none"
+                                />
+                            </div>
+                        ) : (
+                            <button
+                                onClick={() => !isStreaming && setEditingTitle(true)}
+                                className="group flex items-center gap-2"
+                                disabled={isStreaming}
+                            >
+                                <h1 className="text-2xl font-medium">{courseTitle}</h1>
+                                {!isStreaming && <Edit2 className="size-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />}
+                            </button>
+                        )
+                    ) : isStreaming ? (
+                        <div className="h-8 w-48 rounded-lg bg-muted animate-pulse" />
+                    ) : null}
                 </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-                <span className="rounded-full bg-muted px-3 py-1 text-sm">{leafCount} 个内容节</span>
-                {videoCount > 0 && (
-                    <span className="flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-sm">
-                        <Video className="size-3.5" />
-                        {videoCount} 个视频节
+            {nodes.length > 0 && (
+                <div className="flex flex-wrap gap-3">
+                    <span className="rounded-full bg-muted px-3 py-1 text-sm">
+                        {isStreaming && <Loader2 className="inline size-3 animate-spin mr-1" />}
+                        {leafCount} 个内容节
                     </span>
-                )}
-                {textCount > 0 && (
-                    <span className="flex items-center gap-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 px-3 py-1 text-sm">
-                        <FileText className="size-3.5" />
-                        {textCount} 个文字节
-                    </span>
-                )}
-            </div>
+                    {videoCount > 0 && (
+                        <span className="flex items-center gap-1 rounded-full bg-primary/10 text-primary px-3 py-1 text-sm">
+                            <Video className="size-3.5" />
+                            {videoCount} 个视频节
+                        </span>
+                    )}
+                    {textCount > 0 && (
+                        <span className="flex items-center gap-1 rounded-full bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400 px-3 py-1 text-sm">
+                            <FileText className="size-3.5" />
+                            {textCount} 个文字节
+                        </span>
+                    )}
+                </div>
+            )}
 
-            <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
-                <p>• 点击节点标题右侧的 <Edit2 className="inline size-3" /> 图标可修改标题</p>
-                <p>• 点击 <span className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 text-xs"><Video className="size-3" />视频讲解</span> 标签可在视频/文字之间切换</p>
-                <p>• 确认后 AI 将在后台异步生成所有内容，期间可以继续做其他事</p>
-            </div>
+            {!isStreaming && (
+                <div className="rounded-xl border border-border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
+                    <p>• 点击节点标题右侧的 <Edit2 className="inline size-3" /> 图标可修改标题</p>
+                    <p>• 点击 <span className="inline-flex items-center gap-0.5 rounded border border-border px-1.5 text-xs"><Video className="size-3" />视频讲解</span> 标签可在视频/文字之间切换</p>
+                    <p>• 确认后 AI 将在后台异步生成所有内容，期间可以继续做其他事</p>
+                </div>
+            )}
 
             <div className="rounded-xl border border-border bg-card p-4">
-                {rootNodes.map((node) => renderNode(node))}
+                {nodes.length === 0 && isStreaming ? (
+                    <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground">
+                        <Loader2 className="size-5 animate-spin text-primary" />
+                        <span className="text-sm">等待 AI 生成大纲节点...</span>
+                    </div>
+                ) : (
+                    rootNodes.map((node) => renderNode(node))
+                )}
             </div>
 
             <div className="flex items-center justify-end gap-4 pt-2">
@@ -259,13 +346,18 @@ export default function CourseOutlinePage() {
                 </button>
                 <button
                     onClick={handleConfirm}
-                    disabled={confirming}
+                    disabled={confirming || isStreaming || !draft}
                     className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-2.5 text-sm font-medium text-white hover:scale-105 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                     {confirming ? (
                         <>
                             <Loader2 className="size-4 animate-spin" />
                             创建中...
+                        </>
+                    ) : isStreaming ? (
+                        <>
+                            <Loader2 className="size-4 animate-spin" />
+                            生成中...
                         </>
                     ) : (
                         <>

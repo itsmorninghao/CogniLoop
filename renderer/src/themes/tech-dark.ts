@@ -1,0 +1,26 @@
+import type { ThemeConfig } from "../types";
+
+export const techDark: ThemeConfig = {
+  name: "tech-dark",
+  bg: "#0a0a0f",
+  bgGradient: "linear-gradient(135deg, #0a0a0f 0%, #13131a 50%, #0d0d15 100%)",
+  cardBg: "#13131a",
+  cardBorder: "rgba(255, 255, 255, 0.1)",
+  cardShadow: "0 4px 24px rgba(0, 0, 0, 0.4)",
+  textPrimary: "#f1f5f9",
+  textSecondary: "#cbd5e1",
+  textMuted: "#717182",
+  primary: "#6366f1",
+  primaryLight: "#818cf8",
+  primaryDark: "#4f46e5",
+  accent: "#8b5cf6",
+  accentGlow: "rgba(139, 92, 246, 0.3)",
+  success: "#10b981",
+  warning: "#f59e0b",
+  accentBarGradient: "linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899)",
+  decorCircle1: "rgba(99, 102, 241, 0.12)",
+  decorCircle2: "rgba(139, 92, 246, 0.08)",
+  enable3d: true,
+  particleColor: "#818cf8",
+  glowColor: "#8b5cf6",
+};

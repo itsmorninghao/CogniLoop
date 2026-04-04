@@ -8,9 +8,9 @@ import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
 import {
     ArrowLeft, BookOpen, Check, ChevronRight,
-    Loader2, Mic, Sparkles,
+    Loader2, Mic, Moon, Sparkles, Sun,
 } from 'lucide-react'
-import { kbApi, courseGenApi, type KnowledgeBase } from '@/lib/api'
+import { kbApi, type KnowledgeBase } from '@/lib/api'
 import { useAsync } from '@/hooks/useAsync'
 
 const LEVEL_OPTIONS = [
@@ -42,6 +42,7 @@ export default function CourseCreatePage() {
     const [selectedKbs, setSelectedKbs] = useState<Set<number>>(new Set())
     const [level, setLevel] = useState<'beginner' | 'advanced'>('beginner')
     const [voiceId, setVoiceId] = useState<string>('openai_alloy')
+    const [theme, setTheme] = useState<'tech-dark' | 'clean-bright'>('tech-dark')
     const [generating, setGenerating] = useState(false)
 
     const toggleKb = (id: number) => {
@@ -53,30 +54,26 @@ export default function CourseCreatePage() {
         })
     }
 
-    const handleGenerate = async () => {
+    const handleGenerate = () => {
         if (selectedKbs.size === 0) {
             toast.error('请至少选择一个知识库')
             return
         }
         setGenerating(true)
-        try {
-            const draft = await courseGenApi.generateOutline({
-                kb_ids: Array.from(selectedKbs),
-                level,
-                voice_id: voiceId,
-            })
-            navigate(`/courses/outline/${draft.draft_id}`, {
-                state: { draft, level, voiceId },
-            })
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : '大纲生成失败，请稍后重试')
-        } finally {
-            setGenerating(false)
-        }
+        navigate('/courses/outline/streaming', {
+            state: {
+                streamParams: {
+                    kb_ids: Array.from(selectedKbs),
+                    level,
+                    voice_id: voiceId,
+                    theme,
+                },
+            },
+        })
     }
 
     return (
-        <div className="container mx-auto max-w-3xl p-6 space-y-8">
+        <div className="container mx-auto space-y-8 p-6">
             <button
                 onClick={() => navigate('/courses')}
                 className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -209,6 +206,73 @@ export default function CourseCreatePage() {
                 <p className="text-xs text-muted-foreground">更多音色可在管理后台 → 系统配置中添加（COURSE_VOICES）</p>
             </div>
 
+            {/* Step 4: Theme */}
+            <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                    <span className="flex size-6 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">4</span>
+                    <h2 className="text-base font-medium">视频风格</h2>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                        onClick={() => setTheme('tech-dark')}
+                        className={`rounded-xl border p-4 text-left transition-all duration-200 ${
+                            theme === 'tech-dark'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-primary/50'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <Moon className="size-4 text-primary" />
+                                <span className="font-medium">科技深色</span>
+                            </div>
+                            {theme === 'tech-dark' && (
+                                <div className="size-4 rounded-full bg-primary flex items-center justify-center">
+                                    <Check className="size-2.5 text-white" />
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">深色背景 + 霓虹光效 + 粒子动画，适合科技类内容</p>
+                        <div className="mt-3 h-8 rounded-lg overflow-hidden flex">
+                            <div className="flex-1 bg-[#0a0a0f]" />
+                            <div className="flex-1 bg-[#13131a]" />
+                            <div className="flex-1 bg-[#6366f1]" />
+                            <div className="flex-1 bg-[#8b5cf6]" />
+                            <div className="flex-1 bg-[#ec4899]" />
+                        </div>
+                    </button>
+
+                    <button
+                        onClick={() => setTheme('clean-bright')}
+                        className={`rounded-xl border p-4 text-left transition-all duration-200 ${
+                            theme === 'clean-bright'
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-primary/50'
+                        }`}
+                    >
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <Sun className="size-4 text-primary" />
+                                <span className="font-medium">简洁明亮</span>
+                            </div>
+                            {theme === 'clean-bright' && (
+                                <div className="size-4 rounded-full bg-primary flex items-center justify-center">
+                                    <Check className="size-2.5 text-white" />
+                                </div>
+                            )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">浅色背景 + 扁平风格 + 弹性动画，适合教育类内容</p>
+                        <div className="mt-3 h-8 rounded-lg overflow-hidden flex">
+                            <div className="flex-1 bg-[#fafbfc]" />
+                            <div className="flex-1 bg-[#f0f0f5]" />
+                            <div className="flex-1 bg-[#6366f1]" />
+                            <div className="flex-1 bg-[#8b5cf6]" />
+                            <div className="flex-1 bg-[#c4b5fd]" />
+                        </div>
+                    </button>
+                </div>
+            </div>
+
             <div className="flex items-center justify-between pt-2">
                 <p className="text-sm text-muted-foreground">
                     {selectedKbs.size > 0 ? `已选 ${selectedKbs.size} 个知识库` : '请选择至少一个知识库'}
@@ -221,7 +285,7 @@ export default function CourseCreatePage() {
                     {generating ? (
                         <>
                             <Loader2 className="size-4 animate-spin" />
-                            AI 生成大纲中...
+                            跳转中...
                         </>
                     ) : (
                         <>
@@ -232,6 +296,7 @@ export default function CourseCreatePage() {
                     )}
                 </button>
             </div>
+
         </div>
     )
 }

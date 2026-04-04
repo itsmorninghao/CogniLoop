@@ -72,7 +72,7 @@ export default function CoursesPage() {
     }
 
     return (
-        <div className="container mx-auto max-w-6xl p-6 space-y-6">
+        <div className="container mx-auto space-y-6 p-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-medium">我的课程</h1>

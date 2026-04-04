@@ -1,0 +1,885 @@
+{
+  "version": 1,
+  "assets": {
+    "char:celebrating": {
+      "path": "characters/celebrating.json",
+      "category": "character",
+      "tags": [
+        "celebrating",
+        "success",
+        "win"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:presenting": {
+      "path": "characters/presenting.json",
+      "category": "character",
+      "tags": [
+        "presenting",
+        "speaker",
+        "demo"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:questioning": {
+      "path": "characters/questioning.json",
+      "category": "character",
+      "tags": [
+        "questioning",
+        "confused",
+        "ask"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:reading": {
+      "path": "characters/reading.json",
+      "category": "character",
+      "tags": [
+        "reading",
+        "study",
+        "book"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:scientist": {
+      "path": "characters/scientist.json",
+      "category": "character",
+      "tags": [
+        "scientist",
+        "research",
+        "lab"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:student": {
+      "path": "characters/student.json",
+      "category": "character",
+      "tags": [
+        "student",
+        "learning",
+        "young"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:teacher-explaining": {
+      "path": "characters/teacher-explaining.json",
+      "category": "character",
+      "tags": [
+        "teacher",
+        "explaining",
+        "lecture"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:teacher-pointing": {
+      "path": "characters/teacher-pointing.json",
+      "category": "character",
+      "tags": [
+        "teacher",
+        "pointing",
+        "show"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:thinking": {
+      "path": "characters/thinking.json",
+      "category": "character",
+      "tags": [
+        "thinking",
+        "pondering",
+        "idea"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:waving": {
+      "path": "characters/waving.json",
+      "category": "character",
+      "tags": [
+        "waving",
+        "greeting",
+        "hello"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:working": {
+      "path": "characters/working.json",
+      "category": "character",
+      "tags": [
+        "working",
+        "desk",
+        "busy"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "char:writing": {
+      "path": "characters/writing.json",
+      "category": "character",
+      "tags": [
+        "writing",
+        "typing",
+        "note"
+      ],
+      "defaultSize": {
+        "w": 350,
+        "h": 350
+      },
+      "loopable": true
+    },
+    "icon:clock": {
+      "path": "icons/abstract/clock.json",
+      "category": "icon",
+      "tags": [
+        "clock",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:gear": {
+      "path": "icons/abstract/gear.json",
+      "category": "icon",
+      "tags": [
+        "gear",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:key": {
+      "path": "icons/abstract/key.json",
+      "category": "icon",
+      "tags": [
+        "key",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:lightbulb": {
+      "path": "icons/abstract/lightbulb.json",
+      "category": "icon",
+      "tags": [
+        "lightbulb",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:magnifier": {
+      "path": "icons/abstract/magnifier.json",
+      "category": "icon",
+      "tags": [
+        "magnifier",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:network": {
+      "path": "icons/abstract/network.json",
+      "category": "icon",
+      "tags": [
+        "network",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:puzzle": {
+      "path": "icons/abstract/puzzle.json",
+      "category": "icon",
+      "tags": [
+        "puzzle",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:rocket": {
+      "path": "icons/abstract/rocket.json",
+      "category": "icon",
+      "tags": [
+        "rocket",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:shield": {
+      "path": "icons/abstract/shield.json",
+      "category": "icon",
+      "tags": [
+        "shield",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:target": {
+      "path": "icons/abstract/target.json",
+      "category": "icon",
+      "tags": [
+        "target",
+        "abstract"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:chart": {
+      "path": "icons/business/chart.json",
+      "category": "icon",
+      "tags": [
+        "chart",
+        "business"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:growth": {
+      "path": "icons/business/growth.json",
+      "category": "icon",
+      "tags": [
+        "growth",
+        "business"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:handshake": {
+      "path": "icons/business/handshake.json",
+      "category": "icon",
+      "tags": [
+        "handshake",
+        "business"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:money": {
+      "path": "icons/business/money.json",
+      "category": "icon",
+      "tags": [
+        "money",
+        "business"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:team": {
+      "path": "icons/business/team.json",
+      "category": "icon",
+      "tags": [
+        "team",
+        "business"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:book": {
+      "path": "icons/education/book.json",
+      "category": "icon",
+      "tags": [
+        "book",
+        "education"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:graduation": {
+      "path": "icons/education/graduation.json",
+      "category": "icon",
+      "tags": [
+        "graduation",
+        "education"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:notebook": {
+      "path": "icons/education/notebook.json",
+      "category": "icon",
+      "tags": [
+        "notebook",
+        "education"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:pencil": {
+      "path": "icons/education/pencil.json",
+      "category": "icon",
+      "tags": [
+        "pencil",
+        "education"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:trophy": {
+      "path": "icons/education/trophy.json",
+      "category": "icon",
+      "tags": [
+        "trophy",
+        "education"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:checkmark": {
+      "path": "icons/general/checkmark.json",
+      "category": "icon",
+      "tags": [
+        "checkmark",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:cross": {
+      "path": "icons/general/cross.json",
+      "category": "icon",
+      "tags": [
+        "cross",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:globe": {
+      "path": "icons/general/globe.json",
+      "category": "icon",
+      "tags": [
+        "globe",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:heart": {
+      "path": "icons/general/heart.json",
+      "category": "icon",
+      "tags": [
+        "heart",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:star": {
+      "path": "icons/general/star.json",
+      "category": "icon",
+      "tags": [
+        "star",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:thumbsup": {
+      "path": "icons/general/thumbsup.json",
+      "category": "icon",
+      "tags": [
+        "thumbsup",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:warning": {
+      "path": "icons/general/warning.json",
+      "category": "icon",
+      "tags": [
+        "warning",
+        "general"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:earth": {
+      "path": "icons/nature/earth.json",
+      "category": "icon",
+      "tags": [
+        "earth",
+        "nature"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:leaf": {
+      "path": "icons/nature/leaf.json",
+      "category": "icon",
+      "tags": [
+        "leaf",
+        "nature"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:sun": {
+      "path": "icons/nature/sun.json",
+      "category": "icon",
+      "tags": [
+        "sun",
+        "nature"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:tree": {
+      "path": "icons/nature/tree.json",
+      "category": "icon",
+      "tags": [
+        "tree",
+        "nature"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:water": {
+      "path": "icons/nature/water.json",
+      "category": "icon",
+      "tags": [
+        "water",
+        "nature"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:atom": {
+      "path": "icons/science/atom.json",
+      "category": "icon",
+      "tags": [
+        "atom",
+        "science"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:brain": {
+      "path": "icons/science/brain.json",
+      "category": "icon",
+      "tags": [
+        "brain",
+        "science"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:dna": {
+      "path": "icons/science/dna.json",
+      "category": "icon",
+      "tags": [
+        "dna",
+        "science"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:flask": {
+      "path": "icons/science/flask.json",
+      "category": "icon",
+      "tags": [
+        "flask",
+        "science"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:microscope": {
+      "path": "icons/science/microscope.json",
+      "category": "icon",
+      "tags": [
+        "microscope",
+        "science"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:cloud": {
+      "path": "icons/tech/cloud.json",
+      "category": "icon",
+      "tags": [
+        "cloud",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:code": {
+      "path": "icons/tech/code.json",
+      "category": "icon",
+      "tags": [
+        "code",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:gear-tech": {
+      "path": "icons/tech/gear-tech.json",
+      "category": "icon",
+      "tags": [
+        "gear-tech",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:laptop": {
+      "path": "icons/tech/laptop.json",
+      "category": "icon",
+      "tags": [
+        "laptop",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:robot": {
+      "path": "icons/tech/robot.json",
+      "category": "icon",
+      "tags": [
+        "robot",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:server": {
+      "path": "icons/tech/server.json",
+      "category": "icon",
+      "tags": [
+        "server",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "icon:wifi": {
+      "path": "icons/tech/wifi.json",
+      "category": "icon",
+      "tags": [
+        "wifi",
+        "tech"
+      ],
+      "defaultSize": {
+        "w": 80,
+        "h": 80
+      },
+      "loopable": false
+    },
+    "deco:arrow-down": {
+      "path": "decorations/arrow-down.json",
+      "category": "decoration",
+      "tags": [
+        "arrow",
+        "down",
+        "direction"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:arrow-right": {
+      "path": "decorations/arrow-right.json",
+      "category": "decoration",
+      "tags": [
+        "arrow",
+        "right",
+        "direction"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:checkmark": {
+      "path": "decorations/checkmark.json",
+      "category": "decoration",
+      "tags": [
+        "checkmark",
+        "done",
+        "correct"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:circle": {
+      "path": "decorations/circle.json",
+      "category": "decoration",
+      "tags": [
+        "circle",
+        "emphasis",
+        "highlight"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:confetti": {
+      "path": "decorations/confetti.json",
+      "category": "decoration",
+      "tags": [
+        "confetti",
+        "celebration",
+        "party"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:loading": {
+      "path": "decorations/loading.json",
+      "category": "decoration",
+      "tags": [
+        "loading",
+        "progress",
+        "wait"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": true
+    },
+    "deco:sparkle": {
+      "path": "decorations/sparkle.json",
+      "category": "decoration",
+      "tags": [
+        "sparkle",
+        "emphasis",
+        "shine"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": true
+    },
+    "deco:starburst": {
+      "path": "decorations/starburst.json",
+      "category": "decoration",
+      "tags": [
+        "star",
+        "burst",
+        "emphasis"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:underline": {
+      "path": "decorations/underline.json",
+      "category": "decoration",
+      "tags": [
+        "underline",
+        "emphasis",
+        "draw"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": false
+    },
+    "deco:wave": {
+      "path": "decorations/wave.json",
+      "category": "decoration",
+      "tags": [
+        "wave",
+        "pulse",
+        "motion"
+      ],
+      "defaultSize": {
+        "w": 100,
+        "h": 100
+      },
+      "loopable": true
+    }
+  }
+}

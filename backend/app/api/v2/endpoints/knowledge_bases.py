@@ -106,6 +106,17 @@ async def list_documents(
     return await kb_service.list_documents(kb_id, user, session)
 
 
+@router.post("/{kb_id}/documents/{doc_id}/retry", response_model=DocumentResponse)
+async def retry_document(
+    kb_id: int,
+    doc_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """Retry processing for a failed document."""
+    return await kb_service.retry_failed_document(kb_id, doc_id, user, session)
+
+
 @router.delete("/{kb_id}/documents/{doc_id}", status_code=204)
 async def delete_document(
     kb_id: int,

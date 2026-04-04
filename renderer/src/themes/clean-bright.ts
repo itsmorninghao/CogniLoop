@@ -1,0 +1,26 @@
+import type { ThemeConfig } from "../types";
+
+export const cleanBright: ThemeConfig = {
+  name: "clean-bright",
+  bg: "#fafbfc",
+  bgGradient: "linear-gradient(135deg, #fafbfc 0%, #f0f0f5 50%, #fafbfc 100%)",
+  cardBg: "#ffffff",
+  cardBorder: "rgba(0, 0, 0, 0.08)",
+  cardShadow: "0 4px 16px rgba(0, 0, 0, 0.06)",
+  textPrimary: "#1e1e2e",
+  textSecondary: "#4a4a5a",
+  textMuted: "#717182",
+  primary: "#6366f1",
+  primaryLight: "#818cf8",
+  primaryDark: "#4f46e5",
+  accent: "#8b5cf6",
+  accentGlow: "rgba(139, 92, 246, 0.15)",
+  success: "#10b981",
+  warning: "#f59e0b",
+  accentBarGradient: "linear-gradient(90deg, #6366f1, #8b5cf6, #ec4899)",
+  decorCircle1: "rgba(99, 102, 241, 0.06)",
+  decorCircle2: "rgba(139, 92, 246, 0.04)",
+  enable3d: true,
+  particleColor: "#c4b5fd",
+  glowColor: "#a78bfa",
+};

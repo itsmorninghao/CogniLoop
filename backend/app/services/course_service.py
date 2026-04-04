@@ -106,6 +106,7 @@ async def _build_course_response(
         kb_ids=course.kb_ids or [],
         level=course.level,
         voice_id=course.voice_id,
+        theme=course.theme,
         cover_url=course.cover_url,
         visibility=course.visibility,
         status=course.status,

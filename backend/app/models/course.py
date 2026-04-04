@@ -21,6 +21,7 @@ class Course(SQLModel, table=True):
     cover_url: str | None = Field(default=None, max_length=500)
     visibility: str = Field(default="private", max_length=20)  # private / public
     status: str = Field(default="draft", max_length=30)  # draft / generating / ready / partial_failed
+    theme: str = Field(default="tech-dark", max_length=30)  # tech-dark / clean-bright
     shared_to_plaza_at: datetime | None = Field(default=None)
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
@@ -41,6 +42,8 @@ class CourseNode(SQLModel, table=True):
     depth: int = Field(default=1)  # 1 / 2 / 3
     is_leaf: bool = Field(default=False)
     content_type: str | None = Field(default=None, max_length=20)  # video / text
+    key_points: Any = Field(default=None, sa_column=Column(JSON))  # core topics for this node
+    scope_note: str | None = Field(default=None, sa_column=Column(Text))
 
 
 class CourseNodeContent(SQLModel, table=True):

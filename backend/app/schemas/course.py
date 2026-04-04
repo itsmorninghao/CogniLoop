@@ -12,6 +12,7 @@ class OutlineGenerateRequest(BaseModel):
     kb_ids: list[int] = Field(..., min_length=1, description="Knowledge base IDs to generate from")
     level: str = Field(default="beginner", pattern="^(beginner|advanced)$")
     voice_id: str | None = None
+    theme: str = Field(default="tech-dark", pattern="^(tech-dark|clean-bright)$")
 
 
 class OutlineNodeDraft(BaseModel):
@@ -23,6 +24,8 @@ class OutlineNodeDraft(BaseModel):
     order: int
     is_leaf: bool
     content_type: str | None = None  # video / text
+    key_points: list[str] | None = None  # core topics this node should cover
+    scope_note: str | None = None  # boundary: what to cover vs. skip
 
 
 class OutlineDraftResponse(BaseModel):
@@ -87,6 +90,7 @@ class CourseResponse(BaseModel):
     kb_ids: list[int]
     level: str
     voice_id: str | None
+    theme: str
     cover_url: str | None
     visibility: str
     status: str

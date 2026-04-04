@@ -20,13 +20,13 @@ export function useAsync<T>(
     fnRef.current = fn
 
     const refetch = useCallback(() => {
-        setData(null)
         setRefreshKey(k => k + 1)
     }, [])
 
     useEffect(() => {
         let cancelled = false
-        setLoading(true)
+        const isInitial = data === null
+        if (isInitial) setLoading(true)
         setError(null)
         fnRef.current()
             .then(result => { if (!cancelled) { setData(result); setLoading(false) } })

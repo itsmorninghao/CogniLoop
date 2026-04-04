@@ -467,6 +467,8 @@ export const kbApi = {
     listDocs: (kbId: number) => api.get<KBDocument[]>(`/knowledge-bases/${kbId}/documents`),
     deleteDoc: (kbId: number, docId: number) =>
         api.delete(`/knowledge-bases/${kbId}/documents/${docId}`),
+    retryDoc: (kbId: number, docId: number) =>
+        api.post<KBDocument>(`/knowledge-bases/${kbId}/documents/${docId}/retry`),
     generateShareCode: (id: number) =>
         api.post<KnowledgeBase>(`/knowledge-bases/${id}/share`),
     revokeShareCode: (id: number) =>
@@ -686,8 +688,8 @@ export const adminApi = {
         api.post<{ ok: boolean; dimensions_returned: number; test_text?: string }>('/admin/system-configs/test-embedding', data),
     testOcr: () =>
         api.post<{ ok: boolean; message: string; image_base64?: string; raw_ocr_text?: string; mode?: string }>('/admin/system-configs/test-ocr', {}),
-    testTts: () =>
-        api.post<{ ok: boolean; audio_base64: string; voice_name: string; voice_id: string; model: string; base_url: string; test_text: string }>('/admin/system-configs/test-tts', {}),
+    testTts: (data?: { api_key?: string; base_url?: string; voices_json?: string }) =>
+        api.post<{ ok: boolean; audio_base64: string; voice_name: string; voice_id: string; model: string; base_url: string; test_text: string }>('/admin/system-configs/test-tts', data ?? {}),
     listKBs: (search?: string, plazaOnly = false, limit = 50, offset = 0) => {
         let url = `/admin/knowledge-bases?limit=${limit}&offset=${offset}&plaza_only=${plazaOnly}`
         if (search) url += `&search=${encodeURIComponent(search)}`
@@ -1067,8 +1069,135 @@ export const courseApi = {
         api.get<GenerationStatusResponse>(`/courses/${id}/generation-status`),
 }
 
+export interface OutlineStreamCallbacks {
+    onPhase?: (step: string) => void
+    onTitle?: (title: string) => void
+    onNode?: (node: OutlineNodeDraft, index: number) => void
+    onDone?: (data: OutlineDraftResponse) => void
+    onError?: (message: string) => void
+}
+
+export async function streamOutline(
+    data: { kb_ids: number[]; level: string; voice_id?: string; theme?: string },
+    callbacks: OutlineStreamCallbacks,
+): Promise<void> {
+    const res = await fetch(`${BASE_URL}/course-generation/outline/stream`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders(),
+        },
+        body: JSON.stringify(data),
+    })
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '请求失败' }))
+        callbacks.onError?.(err.detail || `HTTP ${res.status}`)
+        return
+    }
+
+    const reader = res.body?.getReader()
+    if (!reader) { callbacks.onError?.('浏览器不支持流式响应'); return }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    const processLines = (lines: string[], currentEvent: { value: string }) => {
+        for (const line of lines) {
+            if (line.startsWith('event: ')) {
+                currentEvent.value = line.slice(7).trim()
+            } else if (line.startsWith('data: ') && currentEvent.value) {
+                try {
+                    const payload = JSON.parse(line.slice(6))
+                    if (currentEvent.value === 'phase') callbacks.onPhase?.(payload.step)
+                    else if (currentEvent.value === 'title') callbacks.onTitle?.(payload.course_title)
+                    else if (currentEvent.value === 'node') callbacks.onNode?.(payload as OutlineNodeDraft, payload.index)
+                    else if (currentEvent.value === 'done') callbacks.onDone?.(payload)
+                    else if (currentEvent.value === 'error') callbacks.onError?.(payload.message || '未知错误')
+                } catch { /* skip malformed */ }
+                currentEvent.value = ''
+            }
+        }
+    }
+
+    const eventState = { value: '' }
+
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        processLines(lines, eventState)
+    }
+
+    // Flush remaining buffer after stream ends
+    if (buffer.trim()) {
+        processLines(buffer.split('\n'), eventState)
+    }
+}
+
+export interface NodeStreamCallbacks {
+    onToken?: (token: string) => void
+    onDone?: (text: string) => void
+    onError?: (message: string) => void
+}
+
+export async function streamNodeContent(
+    nodeId: number,
+    callbacks: NodeStreamCallbacks,
+): Promise<void> {
+    const res = await fetch(`${BASE_URL}/course-generation/nodes/${nodeId}/stream`, {
+        headers: getAuthHeaders(),
+    })
+
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: '请求失败' }))
+        callbacks.onError?.(err.detail || `HTTP ${res.status}`)
+        return
+    }
+
+    const reader = res.body?.getReader()
+    if (!reader) { callbacks.onError?.('浏览器不支持流式响应'); return }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    const processLines = (lines: string[], currentEvent: { value: string }) => {
+        for (const line of lines) {
+            if (line.startsWith('event: ')) {
+                currentEvent.value = line.slice(7).trim()
+            } else if (line.startsWith('data: ') && currentEvent.value) {
+                try {
+                    const payload = JSON.parse(line.slice(6))
+                    if (currentEvent.value === 'token') callbacks.onToken?.(payload.t || '')
+                    else if (currentEvent.value === 'done') callbacks.onDone?.(payload.text || '')
+                    else if (currentEvent.value === 'error') callbacks.onError?.(payload.message || '未知错误')
+                } catch { /* skip */ }
+                currentEvent.value = ''
+            }
+        }
+    }
+
+    const eventState = { value: '' }
+
+    while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() || ''
+        processLines(lines, eventState)
+    }
+
+    if (buffer.trim()) {
+        processLines(buffer.split('\n'), eventState)
+    }
+}
+
 export const courseGenApi = {
-    generateOutline: (data: { kb_ids: number[]; level: string; voice_id?: string }) =>
+    generateOutline: (data: { kb_ids: number[]; level: string; voice_id?: string; theme?: string }) =>
         api.post<OutlineDraftResponse>('/course-generation/outline', data),
     editOutline: (draftId: string, nodes: OutlineNodeDraft[]) =>
         api.patch<OutlineDraftResponse>(`/course-generation/outline/${draftId}/nodes`, { nodes }),

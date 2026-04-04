@@ -1,6 +1,7 @@
 """Course generation flow endpoints."""
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.core.database import get_session
@@ -23,8 +24,24 @@ async def generate_outline(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    """Phase 1: Submit KB + config, generate outline draft (synchronous, seconds)."""
+    """Phase 1: Submit KB + config, generate outline draft (synchronous fallback)."""
     return await course_generation_service.generate_outline(req, user, session)
+
+
+@router.post("/outline/stream")
+async def stream_outline(
+    req: OutlineGenerateRequest,
+    user: User = Depends(get_current_user),
+):
+    """Phase 1 (streaming): Generate outline via SSE token stream."""
+    return StreamingResponse(
+        course_generation_service.stream_outline(req, user),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.patch("/outline/{draft_id}/nodes", response_model=OutlineDraftResponse)
@@ -46,6 +63,22 @@ async def confirm_outline(
 ):
     """User confirms outline — creates Course + nodes, triggers Phase 2 async generation."""
     return await course_generation_service.confirm_outline(draft_id, req, user, session)
+
+
+@router.get("/nodes/{node_id}/stream")
+async def stream_node_content(
+    node_id: int,
+    user: User = Depends(get_current_user),
+):
+    """SSE stream for text node content generation. Relays tokens from Redis pub/sub."""
+    return StreamingResponse(
+        course_generation_service.stream_node_content(node_id, user),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post("/nodes/{node_id}/retry")

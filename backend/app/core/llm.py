@@ -61,7 +61,8 @@ async def get_chat_model(
         temperature=temperature
         if temperature is not None
         else float(await _get("OPENAI_TEMPERATURE", session)),
-        max_retries=0,
+        max_retries=2,
+        request_timeout=300,
     )
 
 

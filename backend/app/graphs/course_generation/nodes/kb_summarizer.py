@@ -49,7 +49,7 @@ async def kb_summarizer(state: OutlineGenState) -> dict:
             parts: list[str] = []
             total = 0
             for chunk in chunks:
-                piece = chunk[:300]
+                piece = chunk[:500]
                 if total + len(piece) > _MAX_SUMMARY_CHARS:
                     break
                 parts.append(piece)
