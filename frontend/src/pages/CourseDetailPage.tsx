@@ -12,9 +12,10 @@ import {
     RotateCcw, ChevronDown, ChevronUp,
     Globe, Lock, GraduationCap,
 } from 'lucide-react'
-import { courseApi, courseGenApi, type CourseNodeResponse, type NodeContentResponse } from '@/lib/api'
+import { courseApi, courseGenApi, streamNodeContent, type CourseNodeResponse, type NodeContentResponse } from '@/lib/api'
 import { useAsync } from '@/hooks/useAsync'
 import ReactMarkdown, { type Components } from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 
 const MD: Components = {
     h1: ({ children }) => (
@@ -62,6 +63,26 @@ const MD: Components = {
             <code className="rounded bg-primary/10 px-1.5 py-0.5 font-mono text-[0.82em] text-primary">{children}</code>
         )
     },
+    table: ({ children }) => (
+        <div className="my-4 overflow-x-auto rounded-lg border border-border">
+            <table className="w-full border-collapse text-sm">{children}</table>
+        </div>
+    ),
+    thead: ({ children }) => (
+        <thead className="bg-muted/50">{children}</thead>
+    ),
+    tbody: ({ children }) => (
+        <tbody className="divide-y divide-border">{children}</tbody>
+    ),
+    tr: ({ children }) => (
+        <tr className="transition-colors hover:bg-muted/30">{children}</tr>
+    ),
+    th: ({ children }) => (
+        <th className="px-4 py-2.5 text-left font-semibold text-foreground">{children}</th>
+    ),
+    td: ({ children }) => (
+        <td className="px-4 py-2.5 text-foreground/80">{children}</td>
+    ),
 }
 
 export default function CourseDetailPage() {
@@ -81,7 +102,19 @@ export default function CourseDetailPage() {
     const [textExpanded, setTextExpanded] = useState(true)
     const [retrying, setRetrying] = useState(false)
     const contentRef = useRef<HTMLDivElement>(null)
-    const pendingScrollRef = useRef<number | null>(null)
+    const autoCompletedRef = useRef<Set<number>>(new Set())
+    const [localCompleted, setLocalCompleted] = useState<Set<number>>(new Set())
+
+    // Refs to avoid stale closures in polling interval
+    const courseIdRef = useRef(course?.id)
+    courseIdRef.current = course?.id
+    const selectedNodeIdRef = useRef(selectedNodeId)
+    selectedNodeIdRef.current = selectedNodeId
+
+    const isNodeCompleted = useCallback((nodeId: number) => {
+        if (localCompleted.has(nodeId)) return true
+        return course?.nodes.find(n => n.id === nodeId)?.progress_status === 'completed'
+    }, [course, localCompleted])
 
     // Auto-select first leaf node
     useEffect(() => {
@@ -90,21 +123,23 @@ export default function CourseDetailPage() {
         if (firstLeaf) setSelectedNodeId(firstLeaf.id)
     }, [course, selectedNodeId])
 
-    // Load node content when selection changes
+    // Load node content when user switches node (only depends on selectedNodeId)
     useEffect(() => {
-        if (!selectedNodeId || !course) return
+        if (!selectedNodeId || !courseIdRef.current) return
         setNodeContent(null)
         setContentLoading(true)
-        courseApi.getNodeContent(course.id, selectedNodeId)
+        courseApi.getNodeContent(courseIdRef.current, selectedNodeId)
             .then(setNodeContent)
             .catch(() => {})
             .finally(() => setContentLoading(false))
-    }, [selectedNodeId, course])
+    }, [selectedNodeId]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Poll generation status if course is still generating (max 120 polls = ~10 min)
     const pollCountRef = useRef(0)
+    const courseStatus = course?.status
+    const courseIdStable = course?.id
     useEffect(() => {
-        if (!course || !['generating', 'draft'].includes(course.status)) {
+        if (!courseIdStable || !courseStatus || !['generating', 'draft'].includes(courseStatus)) {
             pollCountRef.current = 0
             return
         }
@@ -115,37 +150,39 @@ export default function CourseDetailPage() {
             }
             pollCountRef.current += 1
             refetchCourse()
-            if (selectedNodeId && course) {
-                courseApi.getNodeContent(course.id, selectedNodeId)
-                    .then(setNodeContent)
+            const nid = selectedNodeIdRef.current
+            const cid = courseIdRef.current
+            if (nid && cid) {
+                courseApi.getNodeContent(cid, nid)
+                    .then((nc) => {
+                        setNodeContent(prev => {
+                            // Don't overwrite while streaming text content
+                            if (prev?.gen_status === 'generating' && prev?.content_type === 'text') {
+                                // Unless server says generation finished
+                                if (nc.gen_status !== 'generating') return nc
+                                return prev
+                            }
+                            return nc
+                        })
+                    })
                     .catch(() => {})
             }
         }, 5000)
         return () => clearInterval(timer)
-    }, [course, selectedNodeId, refetchCourse])
+    }, [courseIdStable, courseStatus, refetchCourse])
 
     const handleSelectNode = (node: CourseNodeResponse) => {
         if (!node.is_leaf) return
         setSelectedNodeId(node.id)
     }
 
-    // Restore scroll position after refetch (refetch briefly sets course=null, resetting scroll)
-    useEffect(() => {
-        if (course && pendingScrollRef.current !== null && contentRef.current) {
-            const pos = pendingScrollRef.current
-            pendingScrollRef.current = null
-            requestAnimationFrame(() => {
-                if (contentRef.current) contentRef.current.scrollTop = pos
-            })
-        }
-    }, [course])
 
     const handleMarkComplete = async (nodeId: number) => {
         if (!course) return
-        if (contentRef.current) pendingScrollRef.current = contentRef.current.scrollTop
         try {
             await courseApi.updateNodeProgress(course.id, nodeId, 'completed')
-            refetchCourse()
+            // Update node progress locally — avoid refetchCourse() which resets scroll
+            setLocalCompleted(prev => new Set(prev).add(nodeId))
         } catch {
             toast.error('标记失败')
         }
@@ -174,8 +211,10 @@ export default function CourseDetailPage() {
         const el = e.currentTarget
         const atBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50
         if (atBottom && nodeContent.gen_status === 'done' && selectedNodeId && course) {
+            if (autoCompletedRef.current.has(selectedNodeId)) return
             const node = course.nodes.find((n) => n.id === selectedNodeId)
-            if (node?.progress_status !== 'completed') {
+            if (!isNodeCompleted(node!.id)) {
+                autoCompletedRef.current.add(selectedNodeId)
                 handleMarkComplete(selectedNodeId)
             }
         }
@@ -203,7 +242,7 @@ export default function CourseDetailPage() {
 
     const selectedNode = course.nodes.find((n) => n.id === selectedNodeId)
     const totalLeaf = course.nodes.filter((n) => n.is_leaf).length
-    const completedLeaf = course.nodes.filter((n) => n.is_leaf && n.progress_status === 'completed').length
+    const completedLeaf = course.nodes.filter((n) => n.is_leaf && isNodeCompleted(n.id)).length
 
     // Build outline tree
     const rootNodes = course.nodes.filter((n) => !n.parent_id)
@@ -215,7 +254,7 @@ export default function CourseDetailPage() {
         const isLeaf = node.is_leaf
 
         const progressIcon = isLeaf ? (
-            node.progress_status === 'completed' ? (
+            isNodeCompleted(node.id) ? (
                 <CheckCircle2 className="size-4 text-green-500 flex-shrink-0" />
             ) : node.progress_status === 'in_progress' ? (
                 <div className="size-4 rounded-full border-2 border-primary flex-shrink-0" />
@@ -361,11 +400,21 @@ export default function CourseDetailPage() {
                                 <NodeContentView
                                     node={selectedNode}
                                     content={nodeContent}
+                                    isCompleted={isNodeCompleted(selectedNode.id)}
                                     onMarkComplete={() => handleMarkComplete(selectedNode.id)}
                                     onRetry={() => handleRetryNode(selectedNode.id)}
                                     retrying={retrying}
                                     textExpanded={textExpanded}
                                     setTextExpanded={setTextExpanded}
+                                    onContentReady={() => {
+                                        // Refetch to get the final DB-persisted content
+                                        setTimeout(() => {
+                                            courseApi.getNodeContent(course.id, selectedNode.id)
+                                                .then(setNodeContent)
+                                                .catch(() => {})
+                                            refetchCourse()
+                                        }, 1000)
+                                    }}
                                 />
                             ) : null}
                         </>
@@ -379,23 +428,61 @@ export default function CourseDetailPage() {
 interface NodeContentViewProps {
     node: CourseNodeResponse
     content: NodeContentResponse
+    isCompleted: boolean
     onMarkComplete: () => void
     onRetry: () => void
     retrying: boolean
     textExpanded: boolean
     setTextExpanded: (v: boolean) => void
+    onContentReady?: (text: string) => void
 }
 
 function NodeContentView({
     node,
     content,
+    isCompleted,
     onMarkComplete,
     onRetry,
     retrying,
     textExpanded,
     setTextExpanded,
+    onContentReady,
 }: NodeContentViewProps) {
-    if (content.gen_status === 'pending' || content.gen_status === 'generating') {
+    const [streamingText, setStreamingText] = useState('')
+    const streamStarted = useRef(false)
+    const streamTextRef = useRef('')
+
+    // Start streaming for text nodes that are generating
+    useEffect(() => {
+        if (node.content_type !== 'text') return
+        if (content.gen_status !== 'generating') return
+        if (streamStarted.current) return
+        streamStarted.current = true
+        setStreamingText('')
+        streamTextRef.current = ''
+
+        streamNodeContent(node.id, {
+            onToken: (t) => {
+                streamTextRef.current += t
+                setStreamingText(streamTextRef.current)
+            },
+            onDone: (text) => {
+                setStreamingText(text)
+                onContentReady?.(text)
+            },
+            onError: () => {},
+        })
+    }, [node.id, node.content_type, content.gen_status]) // eslint-disable-line
+
+    // Reset when switching nodes
+    useEffect(() => {
+        streamStarted.current = false
+        setStreamingText('')
+        streamTextRef.current = ''
+    }, [node.id])
+
+    // Video nodes generating — keep original spinner
+    if ((content.gen_status === 'pending' || content.gen_status === 'generating') && node.content_type !== 'text') {
         return (
             <div className="flex flex-col items-center justify-center py-16 gap-4 text-center rounded-xl border border-border bg-muted/30">
                 <div className="relative">
@@ -405,6 +492,36 @@ function NodeContentView({
                 <div>
                     <p className="font-medium">AI 正在生成内容...</p>
                     <p className="text-sm text-muted-foreground mt-1">请稍候，生成完成后将自动刷新</p>
+                </div>
+            </div>
+        )
+    }
+
+    // Text node generating — show streaming or waiting
+    if ((content.gen_status === 'pending' || content.gen_status === 'generating') && node.content_type === 'text') {
+        return (
+            <div className="space-y-6">
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="flex items-center gap-2.5 px-5 py-3.5 border-b border-border">
+                        <span className="flex size-7 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                            <Sparkles className="size-3.5 text-purple-600 dark:text-purple-400 animate-pulse" />
+                        </span>
+                        <span className="text-sm font-medium">AI 正在生成文字讲解...</span>
+                        <Loader2 className="size-3.5 animate-spin text-muted-foreground ml-auto" />
+                    </div>
+                    <div className="px-8 py-7">
+                        {streamingText ? (
+                            <>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>{streamingText}</ReactMarkdown>
+                                <span className="inline-block w-1.5 h-4 bg-primary/60 animate-pulse align-middle ml-0.5" />
+                            </>
+                        ) : (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Loader2 className="size-4 animate-spin" />
+                                <span className="text-sm">等待内容生成...</span>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         )
@@ -478,7 +595,7 @@ function NodeContentView({
                     </button>
                     {textExpanded && (
                         <div className="border-t border-border px-8 py-7">
-                            <ReactMarkdown components={MD}>{content.text_content}</ReactMarkdown>
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} components={MD}>{content.text_content}</ReactMarkdown>
                         </div>
                     )}
                 </div>
@@ -503,7 +620,7 @@ function NodeContentView({
                 </div>
             )}
 
-            {node.progress_status !== 'completed' && content.gen_status === 'done' && (
+            {!isCompleted && content.gen_status === 'done' && (
                 <div className="flex justify-end">
                     <button
                         onClick={onMarkComplete}
@@ -515,7 +632,7 @@ function NodeContentView({
                 </div>
             )}
 
-            {node.progress_status === 'completed' && (
+            {isCompleted && (
                 <div className="flex items-center gap-2 justify-end text-sm text-green-500">
                     <CheckCircle2 className="size-4" />
                     已完成

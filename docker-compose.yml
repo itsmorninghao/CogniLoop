@@ -55,7 +55,7 @@ services:
       - ./.env:/app/.env
       - cogniloop_uploads:/app/uploads
       - cogniloop_question_sets:/app/question_sets
-      - /tmp/renderer_frames:/tmp/renderer_frames
+      - renderer_output:/tmp/renderer_output
     networks:
       - net
     depends_on:
@@ -73,7 +73,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # Renderer service — Playwright + Chromium slide rendering
+  # Renderer service — Remotion video rendering (CPU via swangle)
   renderer:
     build:
       context: ./renderer
@@ -81,14 +81,19 @@ services:
     container_name: cogniloop_renderer
     restart: unless-stopped
     environment:
-      REDIS_URL: redis://redis:6379/0
+      PORT: "3100"
+      DISABLE_3D: "true"
     volumes:
-      - /tmp/renderer_frames:/tmp/renderer_frames
+      - renderer_output:/tmp/renderer_output
     networks:
       - net
-    depends_on:
-      redis:
-        condition: service_healthy
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3100/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
 networks:
   net:
@@ -98,3 +103,4 @@ volumes:
   cogniloop_pgdata:
   cogniloop_uploads:
   cogniloop_question_sets:
+  renderer_output:

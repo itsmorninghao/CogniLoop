@@ -1,6 +1,6 @@
 """Course generation service — orchestrates LangGraph pipelines for AI Course Studio.
 
-Phase 1 (synchronous):  generate_outline()   → outline_generation_graph
+Phase 1 (streaming):    stream_outline()     → SSE token stream
 Phase 2 (background):   confirm_outline()    → node_generation_graph (per leaf node)
 """
 
@@ -10,6 +10,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -120,6 +121,8 @@ async def generate_outline(
             order=n.get("order", i),
             is_leaf=n.get("is_leaf", True),
             content_type=n.get("content_type"),
+            key_points=n.get("key_points"),
+            scope_note=n.get("scope_note"),
         )
         for i, n in enumerate(raw_nodes)
     ]
@@ -131,6 +134,7 @@ async def generate_outline(
         "kb_ids": req.kb_ids,
         "level": req.level,
         "voice_id": req.voice_id,
+        "theme": req.theme,
         "course_title": course_title,
         "nodes": [n.model_dump() for n in nodes],
     }
@@ -141,6 +145,205 @@ async def generate_outline(
         course_title=course_title,
         nodes=nodes,
     )
+
+
+async def stream_outline(
+    req: OutlineGenerateRequest,
+    user: User,
+) -> AsyncGenerator[str, None]:
+    """Phase 1 (streaming): generate outline via SSE with incremental node parsing.
+
+    Yields SSE events:
+      - phase: {step: "kb_summary"|"llm_generating"}
+      - title: {course_title: str}          — as soon as title is parsed
+      - node:  {index, ...node fields}      — each time a complete node is parsed
+      - done:  {draft_id, course_title, nodes} — final result with draft saved
+      - error: {message: str}
+    """
+    import re
+
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    from backend.app.core.llm import get_chat_model
+    from backend.app.graphs.course_generation.nodes.kb_summarizer import kb_summarizer
+    from backend.app.graphs.course_generation.nodes.outline_generator import (
+        _SYSTEM_PROMPT,
+        _level_desc,
+        _strip_fences,
+    )
+
+    def _sse(event: str, data: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    # Step 1: KB summarization (fast, DB only)
+    try:
+        summary_result = await kb_summarizer({
+            "kb_ids": req.kb_ids,
+            "level": req.level,
+            "user_id": user.id,
+        })
+        kb_summary = summary_result.get("kb_summary", "")
+        yield _sse("phase", {"step": "kb_summary"})
+    except Exception as e:
+        yield _sse("error", {"message": f"知识库摘要失败: {e}"})
+        return
+
+    # Step 2: Stream LLM and incrementally parse nodes
+    prompt = _SYSTEM_PROMPT.format(
+        kb_summary=kb_summary or "（知识库内容为空）",
+        level_desc=_level_desc(req.level),
+    )
+
+    yield _sse("phase", {"step": "llm_generating"})
+
+    try:
+        async with async_session_factory() as session:
+            llm = await get_chat_model(session, temperature=0.5)
+
+        accumulated = ""
+        title_sent = False
+        nodes_sent = 0
+
+        node_pattern = re.compile(r'\{[^{}]*\}')
+
+        async for chunk in llm.astream([
+            SystemMessage(content=prompt),
+            HumanMessage(content="请根据以上要求生成课程大纲。"),
+        ]):
+            token = chunk.content or ""
+            if not token:
+                continue
+            accumulated += token
+
+            if not title_sent:
+                title_match = re.search(r'"course_title"\s*:\s*"([^"]*)"', accumulated)
+                if title_match:
+                    yield _sse("title", {"course_title": title_match.group(1)})
+                    title_sent = True
+
+            nodes_start = accumulated.find('"nodes"')
+            if nodes_start == -1:
+                continue
+            arr_start = accumulated.find('[', nodes_start)
+            if arr_start == -1:
+                continue
+
+            nodes_region = accumulated[arr_start:]
+            matches = list(node_pattern.finditer(nodes_region))
+
+            for m in matches[nodes_sent:]:
+                try:
+                    n = json.loads(m.group())
+                    node_data = {
+                        "index": nodes_sent,
+                        "temp_id": n.get("temp_id", f"n{nodes_sent}"),
+                        "parent_temp_id": n.get("parent_temp_id"),
+                        "title": n.get("title", ""),
+                        "depth": n.get("depth", 1),
+                        "order": n.get("order", nodes_sent),
+                        "is_leaf": bool(n.get("is_leaf", True)),
+                        "content_type": n.get("content_type"),
+                        "key_points": n.get("key_points"),
+                        "scope_note": n.get("scope_note"),
+                    }
+                    yield _sse("node", node_data)
+                    nodes_sent += 1
+                except json.JSONDecodeError:
+                    break  # incomplete node, wait for more tokens
+
+    except Exception as e:
+        logger.error("Outline stream LLM error: %s", e, exc_info=True)
+        yield _sse("error", {"message": f"大纲生成失败: {e}"})
+        return
+
+    # Step 3: Final parse and save draft
+    try:
+        raw = _strip_fences(accumulated)
+        data = json.loads(raw)
+        course_title = data.get("course_title", "未命名课程")
+        raw_nodes = data.get("nodes", [])
+
+        nodes = [
+            OutlineNodeDraft(
+                temp_id=n.get("temp_id", str(i)),
+                parent_temp_id=n.get("parent_temp_id"),
+                title=n.get("title", ""),
+                depth=n.get("depth", 1),
+                order=n.get("order", i),
+                is_leaf=n.get("is_leaf", True),
+                content_type=n.get("content_type"),
+                key_points=n.get("key_points"),
+                scope_note=n.get("scope_note"),
+            )
+            for i, n in enumerate(raw_nodes)
+        ]
+
+        draft_id = uuid.uuid4().hex
+        draft_data = {
+            "draft_id": draft_id,
+            "user_id": user.id,
+            "kb_ids": req.kb_ids,
+            "level": req.level,
+            "voice_id": req.voice_id,
+            "theme": req.theme,
+            "course_title": course_title,
+            "nodes": [n.model_dump() for n in nodes],
+        }
+        await _save_draft(draft_id, draft_data)
+
+        yield _sse("done", {
+            "draft_id": draft_id,
+            "course_title": course_title,
+            "nodes": [n.model_dump() for n in nodes],
+        })
+
+    except json.JSONDecodeError as e:
+        logger.error("Outline stream JSON parse error: %s\nRaw: %s", e, accumulated[:500])
+        yield _sse("error", {"message": f"大纲解析失败，LLM 返回格式错误: {e}"})
+
+
+async def stream_node_content(
+    node_id: int,
+    user: User,
+) -> AsyncGenerator[str, None]:
+    """SSE stream for text node content — relays tokens from Redis pub/sub.
+
+    If the node is already done, sends the full text immediately.
+    If generating, subscribes to the Redis channel for live tokens.
+    """
+    from backend.app.core.redis_pubsub import subscribe_channel
+
+    def _sse(event: str, data: dict) -> str:
+        return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+    async with async_session_factory() as session:
+        content = (await session.execute(
+            select(CourseNodeContent).where(CourseNodeContent.node_id == node_id)
+        )).scalar_one_or_none()
+
+        if not content:
+            yield _sse("error", {"message": "节点内容不存在"})
+            return
+
+        if content.gen_status == "done" and content.text_content:
+            yield _sse("done", {"text": content.text_content})
+            return
+
+        if content.gen_status == "failed":
+            yield _sse("error", {"message": content.error_msg or "生成失败"})
+            return
+
+    channel = f"course:node:{node_id}:stream"
+    try:
+        async for msg in subscribe_channel(channel):
+            if msg.get("type") == "token":
+                yield _sse("token", {"t": msg["t"]})
+            elif msg.get("type") == "done":
+                yield _sse("done", {"text": msg.get("text", "")})
+                return
+    except Exception as e:
+        logger.error("Node %d stream error: %s", node_id, e)
+        yield _sse("error", {"message": str(e)})
 
 
 async def edit_outline_draft(
@@ -185,6 +388,7 @@ async def confirm_outline(
         kb_ids=draft["kb_ids"],
         level=draft["level"],
         voice_id=draft.get("voice_id"),
+        theme=draft.get("theme", "tech-dark"),
         status="generating",
     )
     session.add(course)
@@ -207,6 +411,8 @@ async def confirm_outline(
             depth=node_data.depth,
             is_leaf=node_data.is_leaf,
             content_type=node_data.content_type if node_data.is_leaf else None,
+            key_points=node_data.key_points if node_data.is_leaf else None,
+            scope_note=node_data.scope_note if node_data.is_leaf else None,
         )
         session.add(node)
         await session.flush()
@@ -256,9 +462,23 @@ async def retry_node(node_id: int, user: User, session: AsyncSession) -> dict:
     session.add(content)
     await session.flush()
 
+    all_nodes = (await session.execute(
+        select(CourseNode).where(CourseNode.course_id == course.id)
+    )).scalars().all()
+    leaf_nodes = [n for n in all_nodes if n.is_leaf]
+    course_outline = _build_course_outline(course.title, list(all_nodes))
+    node_position = _build_node_position(node, leaf_nodes)
+
     task = asyncio.create_task(
-        _generate_single_node(course.id, node.id, course.level, list(course.kb_ids),
-                               course.voice_id, user.id)
+        _generate_single_node(
+            course.id, node.id, course.level, list(course.kb_ids),
+            course.voice_id, user.id,
+            course_outline=course_outline,
+            node_key_points=list(node.key_points or []),
+            node_position=node_position,
+            node_scope_note=node.scope_note or "",
+            theme=course.theme,
+        )
     )
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
@@ -267,6 +487,31 @@ async def retry_node(node_id: int, user: User, session: AsyncSession) -> dict:
 
 
 # Phase 2: Generation Pipeline
+
+def _build_course_outline(course_title: str, all_nodes: list[CourseNode]) -> str:
+    """Build a text summary of the full course outline for context injection."""
+    lines = [f"课程：{course_title}", ""]
+    for node in sorted(all_nodes, key=lambda n: n.id):
+        indent = "  " * (node.depth - 1)
+        line = f"{indent}- {node.title}"
+        if node.is_leaf and node.key_points:
+            line += f"（要点：{'、'.join(node.key_points)}）"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _build_node_position(current_node: CourseNode, leaf_nodes: list[CourseNode]) -> str:
+    """Describe this node's position within the course."""
+    sorted_leaves = sorted(leaf_nodes, key=lambda n: n.id)
+    idx = next((i for i, n in enumerate(sorted_leaves) if n.id == current_node.id), 0)
+    total = len(sorted_leaves)
+    parts = [f"第 {idx + 1}/{total} 节"]
+    if idx > 0:
+        parts.append(f"上一节：{sorted_leaves[idx - 1].title}")
+    if idx < total - 1:
+        parts.append(f"下一节：{sorted_leaves[idx + 1].title}")
+    return "，".join(parts)
+
 
 async def _run_generation_pipeline(course_id: int, user_id: int, draft_id: str | None = None) -> None:
     """Background: run node_generation_graph for every leaf node (with concurrency limit)."""
@@ -280,16 +525,17 @@ async def _run_generation_pipeline(course_id: int, user_id: int, draft_id: str |
         if not course:
             return
 
-        leaf_nodes = (await session.execute(
-            select(CourseNode).where(
-                CourseNode.course_id == course_id,
-                CourseNode.is_leaf == True,  # noqa: E712
-            )
+        all_nodes = (await session.execute(
+            select(CourseNode).where(CourseNode.course_id == course_id)
         )).scalars().all()
+
+        leaf_nodes = [n for n in all_nodes if n.is_leaf]
 
         kb_ids: list[int] = list(course.kb_ids or [])
         voice_id: str | None = course.voice_id
         level: str = course.level
+        theme: str = course.theme
+        course_outline = _build_course_outline(course.title, list(all_nodes))
 
     if not leaf_nodes:
         async with async_session_factory() as session:
@@ -308,6 +554,11 @@ async def _run_generation_pipeline(course_id: int, user_id: int, draft_id: str |
                 kb_ids=kb_ids,
                 voice_id=voice_id,
                 user_id=user_id,
+                course_outline=course_outline,
+                node_key_points=list(node.key_points or []),
+                node_position=_build_node_position(node, leaf_nodes),
+                node_scope_note=node.scope_note or "",
+                theme=theme,
             )
 
     await asyncio.gather(*[run_with_semaphore(n) for n in leaf_nodes], return_exceptions=True)
@@ -339,6 +590,11 @@ async def _generate_single_node(
     kb_ids: list[int],
     voice_id: str | None,
     user_id: int,
+    course_outline: str = "",
+    node_key_points: list[str] | None = None,
+    node_position: str = "",
+    node_scope_note: str = "",
+    theme: str = "tech-dark",
 ) -> None:
     """Run node_generation_graph for one leaf node and persist results to DB."""
     node_title: str = ""
@@ -376,7 +632,12 @@ async def _generate_single_node(
             "level": level,
             "kb_ids": kb_ids,
             "voice_id": voice_id,
+            "theme": theme,
             "user_id": user_id,
+            "course_outline": course_outline,
+            "node_key_points": node_key_points or [],
+            "node_position": node_position,
+            "node_scope_note": node_scope_note,
         })
 
         async with async_session_factory() as session:

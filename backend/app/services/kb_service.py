@@ -305,6 +305,39 @@ async def reprocess_document(document_id: int) -> None:
     )
 
 
+async def retry_failed_document(
+    kb_id: int, doc_id: int, user: User, session: AsyncSession
+) -> DocumentResponse:
+    """Retry processing for a failed document. Owner only."""
+    kb = await _get_kb_or_404(kb_id, session)
+    _check_kb_owner(kb, user)
+
+    result = await session.execute(
+        select(KBDocument).where(
+            KBDocument.id == doc_id, KBDocument.knowledge_base_id == kb.id
+        )
+    )
+    doc = result.scalar_one_or_none()
+    if not doc:
+        raise NotFoundError("文档不存在")
+    if doc.status != "error":
+        raise BadRequestError("只能重试失败状态的文档")
+
+    doc.status = "processing"
+    doc.error_message = None
+    session.add(doc)
+    await session.flush()
+    await session.commit()
+
+    asyncio.create_task(
+        _process_document_background(
+            doc.id, doc.knowledge_base_id, doc.file_path, doc.file_type
+        )
+    )
+
+    return DocumentResponse.model_validate(doc)
+
+
 async def _update_doc_status(
     session: AsyncSession,
     document_id: int,

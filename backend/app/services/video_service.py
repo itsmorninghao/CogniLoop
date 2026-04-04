@@ -1,7 +1,7 @@
 """
 Video synthesis service — ffmpeg integration.
 
-Assembles frame sequences + audio into MP4 video files.
+Muxes silent video from Remotion renderer with TTS audio into final MP4.
 """
 
 from __future__ import annotations
@@ -27,60 +27,65 @@ def _run_ffmpeg(args: list[str]) -> None:
         raise RuntimeError(f"ffmpeg failed: {result.stderr[-500:]}")
 
 
-async def frames_to_video(
-    frames_dir: Path,
-    audio_path: Path,
-    output_path: Path,
-    fps: int = 30,
-    audio_duration: float | None = None,
-    slides: list[dict] | None = None,
-) -> Path:
+async def concat_audio_files(audio_paths: list[Path], output_path: Path) -> Path:
     """
-    Convert frame sequence + audio to MP4.
+    Concatenate multiple audio files into a single MP3 using ffmpeg concat demuxer.
+    """
+    if len(audio_paths) == 1:
+        # Single file, just copy
+        shutil.copy2(str(audio_paths[0]), str(output_path))
+        return output_path
 
-    Args:
-        frames_dir: Directory containing frame_NNNNN.png files
-        audio_path: Path to narration audio (.mp3)
-        output_path: Output .mp4 path
-        fps: Frames per second
-        audio_duration: Total audio duration in seconds (for timing calculation)
-        slides: Slide list (used to calculate per-slide timing)
-    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    silent_video = frames_dir / "_silent.mp4"
+    # Write concat list file
+    list_file = output_path.parent / "_concat_list.txt"
+    with open(list_file, "w") as f:
+        for ap in audio_paths:
+            f.write(f"file '{ap}'\n")
 
-    # Step 1: frames → silent video
     await asyncio.get_event_loop().run_in_executor(
         None,
         _run_ffmpeg,
         [
-            "-framerate", str(fps),
-            "-i", str(frames_dir / "frame_%05d.png"),
-            "-c:v", "libx264",
-            "-pix_fmt", "yuv420p",
-            "-vf", "scale=1280:720",
-            str(silent_video),
+            "-f", "concat",
+            "-safe", "0",
+            "-i", str(list_file),
+            "-c", "copy",
+            str(output_path),
         ],
     )
 
-    # Step 2: add audio
+    list_file.unlink(missing_ok=True)
+    return output_path
+
+
+async def mux_audio(
+    silent_video: Path,
+    audio_path: Path,
+    output_path: Path,
+) -> Path:
+    """
+    Mux a silent MP4 video with an audio track.
+    Uses -c:v copy (no video re-encoding) for speed.
+    """
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
     await asyncio.get_event_loop().run_in_executor(
         None,
         _run_ffmpeg,
         [
             "-i", str(silent_video),
             "-i", str(audio_path),
+            "-map", "0:v:0",
+            "-map", "1:a:0",
             "-c:v", "copy",
             "-c:a", "aac",
-            "-b:a", "128k",
+            "-b:a", "192k",
             "-shortest",
             str(output_path),
         ],
     )
-
-    # Cleanup silent video
-    silent_video.unlink(missing_ok=True)
 
     return output_path
 
@@ -100,15 +105,15 @@ async def save_video_to_storage(
     filename = f"node_{node_id}_{uuid.uuid4().hex[:8]}.mp4"
     dest_path = dest_dir / filename
 
-    # Move (or copy+delete) to uploads
     shutil.move(str(source_path), str(dest_path))
 
     return f"/uploads/courses/{course_id}/{filename}"
 
 
-def cleanup_frames(frames_dir: Path) -> None:
-    """Delete temporary frame directory."""
+def cleanup_render_output(video_path: Path) -> None:
+    """Delete a rendered video file from /tmp/renderer_output/."""
     try:
-        shutil.rmtree(frames_dir, ignore_errors=True)
+        if video_path.exists():
+            video_path.unlink()
     except Exception as e:
-        logger.warning("Failed to cleanup frames at %s: %s", frames_dir, e)
+        logger.warning("Failed to cleanup render output %s: %s", video_path, e)

@@ -41,3 +41,8 @@ question_sets/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Renderer
+renderer/node_modules/
+renderer/bundle/
+renderer/dist/

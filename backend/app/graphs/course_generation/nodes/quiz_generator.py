@@ -64,7 +64,7 @@ async def quiz_generator(state: NodeGenState) -> dict:
     text_content: str | None = state.get("text_content")
     user_id: int = state.get("user_id", 0)
 
-    content_summary = text_content[:800] if text_content else narration_text[:800]
+    content_summary = text_content or narration_text or ""
 
     async with async_session_factory() as session:
         llm = await get_chat_model(session, temperature=0.6)

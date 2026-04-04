@@ -11,7 +11,7 @@ import {
     ArrowLeft, Database, BookMarked, Upload, Trash2, Share2, Copy,
     Link2Off, FileText, Loader2, Globe,
     Hash, CalendarDays, FileStack, AlertCircle,
-    ChevronRight, GlobeLock,
+    ChevronRight, GlobeLock, RotateCcw,
 } from 'lucide-react'
 import { kbApi, type KnowledgeBase, type KBDocument } from '@/lib/api'
 import { useAuthStore } from '@/stores/auth'
@@ -77,6 +77,18 @@ export default function KnowledgeBaseDetailPage() {
             toast.success('文档已删除')
             refetchDocs(); refetchKb()
         } catch { toast.error('删除失败') }
+    }
+
+    const [retryingDocId, setRetryingDocId] = useState<number | null>(null)
+    const handleRetryDoc = async (docId: number) => {
+        if (!kb) return
+        setRetryingDocId(docId)
+        try {
+            await kbApi.retryDoc(kb.id, docId)
+            toast.success('已重新开始处理')
+            refetchDocs()
+        } catch { toast.error('重试失败') }
+        finally { setRetryingDocId(null) }
     }
 
     const handleGenerateShareCode = async () => {
@@ -282,7 +294,7 @@ export default function KnowledgeBaseDetailPage() {
                 {/* Content list */}
                 <div className="rounded-xl border border-border bg-card overflow-hidden">
                     {docsArray.length > 0 && (
-                        <div className="grid grid-cols-[auto_1fr_100px_80px_120px_40px] items-center gap-4 border-b border-border bg-muted/20 px-6 py-2 text-xs font-medium text-muted-foreground">
+                        <div className="grid grid-cols-[auto_1fr_100px_80px_120px_auto] items-center gap-4 border-b border-border bg-muted/20 px-6 py-2 text-xs font-medium text-muted-foreground">
                             <span className="w-8" /><span>文件名</span><span>状态</span><span>分块</span><span>上传时间</span><span />
                         </div>
                     )}
@@ -298,7 +310,7 @@ export default function KnowledgeBaseDetailPage() {
                     ) : (
                         <div className="divide-y divide-border">
                             {docsArray.map(doc => (
-                                <div key={doc.id} className="grid grid-cols-[auto_1fr_100px_80px_120px_40px] items-center gap-4 px-6 py-3.5 hover:bg-muted/20 transition-colors">
+                                <div key={doc.id} className="grid grid-cols-[auto_1fr_100px_80px_120px_auto] items-center gap-4 px-6 py-3.5 hover:bg-muted/20 transition-colors">
                                     <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${fileTypeColor(doc.file_type)}`}><FileText className="size-4" /></div>
                                     <div className="min-w-0">
                                         <p className="truncate text-sm font-medium text-foreground">{doc.original_filename}</p>
@@ -308,9 +320,23 @@ export default function KnowledgeBaseDetailPage() {
                                     <div className="text-sm text-muted-foreground">{doc.chunk_count > 0 ? `${doc.chunk_count} 块` : '—'}</div>
                                     <div className="text-xs text-muted-foreground">{new Date(doc.created_at).toLocaleDateString('zh-CN')}</div>
                                     {isOwner ? (
-                                        <button onClick={() => handleDeleteDoc(doc.id)} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
-                                            <Trash2 className="size-3.5" />
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            {doc.status === 'error' && (
+                                                <button
+                                                    onClick={() => handleRetryDoc(doc.id)}
+                                                    disabled={retryingDocId === doc.id}
+                                                    title="重试处理"
+                                                    className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:opacity-50"
+                                                >
+                                                    {retryingDocId === doc.id
+                                                        ? <Loader2 className="size-3.5 animate-spin" />
+                                                        : <RotateCcw className="size-3.5" />}
+                                                </button>
+                                            )}
+                                            <button onClick={() => handleDeleteDoc(doc.id)} className="flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive">
+                                                <Trash2 className="size-3.5" />
+                                            </button>
+                                        </div>
                                     ) : <span />}
                                 </div>
                             ))}

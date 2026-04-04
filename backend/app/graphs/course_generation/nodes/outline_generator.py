@@ -16,13 +16,19 @@ from backend.app.graphs.course_generation.state import OutlineGenState
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
-你是一位专业的课程设计专家。根据以下知识库内容，为目标学员设计一套结构清晰的课程大纲。
+你是一位专业的课程设计专家。根据以下知识库内容，为目标学员设计一套结构清晰、教学逻辑连贯的课程大纲。
 
 ## 知识库摘要
 {kb_summary}
 
 ## 学员水平
 {level_desc}
+
+## 设计原则
+- 每个叶节点应聚焦一个独立的知识点，做到"一节讲透一件事"
+- 节点数量由知识内容的广度和复杂度决定，不要人为压缩或膨胀
+- 节点之间应有清晰的知识边界，避免内容重叠
+- 按照学习的逻辑递进顺序排列：先基础后进阶，先概念后应用
 
 ## 输出要求
 请严格按以下 JSON 格式返回课程大纲，不要包含其他文字：
@@ -37,26 +43,41 @@ _SYSTEM_PROMPT = """\
       "depth": 1,
       "order": 1,
       "is_leaf": false,
-      "content_type": null
+      "content_type": null,
+      "key_points": null,
+      "scope_note": null
     }},
     {{
       "temp_id": "n2",
       "parent_temp_id": "n1",
-      "title": "1.1 小节名称",
+      "title": "1.1 小节名称（适合视觉演示的内容）",
       "depth": 2,
       "order": 1,
       "is_leaf": true,
-      "content_type": "video"
+      "content_type": "video",
+      "key_points": ["要点1", "要点2", "要点3"],
+      "scope_note": "本节只讲XX，YY在下一节展开"
+    }},
+    {{
+      "temp_id": "n3",
+      "parent_temp_id": "n1",
+      "title": "1.2 小节名称（适合深度阅读的内容）",
+      "depth": 2,
+      "order": 2,
+      "is_leaf": true,
+      "content_type": "text",
+      "key_points": ["要点1", "要点2"],
+      "scope_note": "本节聚焦XX的理论背景"
     }}
   ]
 }}
 
 ## 层级与节点规则
 - 支持 1-3 级层级，由内容复杂度决定
-- 非叶节点（章节分组）is_leaf=false, content_type=null
+- 非叶节点（章节分组）is_leaf=false, content_type=null, key_points=null, scope_note=null
 - 叶节点是生成内容的最小单元，is_leaf=true
-- content_type: "video"（需要演示/流程）或 "text"（概念解释/文字说明）
-- 总叶节点数建议 5-12 个
+- 叶节点必须提供 key_points（2-4 个该节点要讲解的核心要点）和 scope_note（划定边界，说明讲什么、不讲什么）
+- content_type: "video"（视频讲解，含幻灯片动画 + 旁白配音）或 "text"（图文长文阅读）。请根据该节点知识的特点自行判断最合适的呈现形式，两种类型都应有合理的分布
 - temp_id 使用简短唯一字符串（n1, n2...）"""
 
 
@@ -89,7 +110,7 @@ async def outline_generator(state: OutlineGenState) -> dict:
     )
 
     async with async_session_factory() as session:
-        llm = await get_chat_model(session, temperature=0.7)
+        llm = await get_chat_model(session, temperature=0.5)
 
     response = await llm.ainvoke([
         SystemMessage(content=prompt),
@@ -117,6 +138,8 @@ async def outline_generator(state: OutlineGenState) -> dict:
             "order": n.get("order", i),
             "is_leaf": bool(n.get("is_leaf", True)),
             "content_type": n.get("content_type"),
+            "key_points": n.get("key_points"),
+            "scope_note": n.get("scope_note"),
         }
         for i, n in enumerate(raw_nodes)
     ]

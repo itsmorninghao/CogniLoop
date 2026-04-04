@@ -277,7 +277,17 @@ export function AdminConfigTab() {
     }
 
     const handleTestTts = () => {
-        runTestModal('tts', () => adminApi.testTts(), (v) => setTesting(p => ({ ...p, tts: v })))
+        const voicesSerialized = ttsConfig.voices.length > 0
+            ? JSON.stringify(ttsConfig.voices.map(v => ({
+                name: v.name, voice_id: v.voice_id,
+                ...(v.model ? { model: v.model } : {}),
+            })))
+            : undefined
+        runTestModal('tts', () => adminApi.testTts({
+            api_key: ttsConfig.apiKey || undefined,
+            base_url: ttsConfig.baseUrl || undefined,
+            voices_json: voicesSerialized,
+        }), (v) => setTesting(p => ({ ...p, tts: v })))
     }
 
     const saveAiServicesConfig = async () => {

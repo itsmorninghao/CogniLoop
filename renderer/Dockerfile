@@ -1,50 +1,44 @@
-FROM python:3.11-slim
+FROM node:20-slim AS builder
 
-# Install system dependencies for Playwright/Chromium
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    ca-certificates \
-    fonts-noto-cjk \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libcairo2 \
-    libcups2 \
-    libdbus-1-3 \
-    libexpat1 \
-    libfontconfig1 \
-    libgbm1 \
-    libglib2.0-0 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxcursor1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxi6 \
-    libxrandr2 \
-    libxrender1 \
-    libxss1 \
-    libxtst6 \
-    xvfb \
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+
+COPY tsconfig.json tsconfig.server.json remotion.config.ts ./
+COPY src/ src/
+COPY public/ public/
+
+# Bundle Remotion compositions + compile server
+RUN npx remotion bundle src/index.tsx --out-dir bundle \
+    && npx tsc -p tsconfig.server.json
+
+# -------------------------------------------------------
+FROM node:20-slim
+
+# System deps for Chromium headless shell
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libnss3 libdbus-1-3 libatk1.0-0 libgbm-dev libasound2 \
+    libxrandr2 libxkbcommon-dev libxfixes3 libxcomposite1 libxdamage1 \
+    libatk-bridge2.0-0 libpango-1.0-0 libcairo2 libcups2 \
+    fonts-noto-cjk fonts-noto-color-emoji \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=builder /app/package*.json ./
+RUN npm ci --omit=dev
 
-# Install Playwright Chromium browser
-RUN playwright install chromium
+COPY --from=builder /app/bundle ./bundle
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/public ./public
 
-COPY . .
+# Ensure Chrome headless shell is available
+RUN npx remotion browser ensure
 
-CMD ["python", "main.py"]
+# Output directory for rendered videos
+RUN mkdir -p /tmp/renderer_output
+
+ENV PORT=3100
+EXPOSE 3100
+
+CMD ["node", "dist/server.js"]

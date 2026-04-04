@@ -43,7 +43,13 @@ class NodeGenState(TypedDict, total=False):
     level: str
     kb_ids: list[int]
     voice_id: str | None
+    theme: str           # "tech-dark" | "clean-bright"
     user_id: int
+
+    course_outline: str          # full outline summary (titles + key points)
+    node_key_points: list[str]   # key points for this specific node
+    node_position: str           # e.g. "第3节，前面讲了X，后面讲Y"
+    node_scope_note: str         # boundary: what to cover vs. skip
 
     # rag_retriever output
     rag_content: str
