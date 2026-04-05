@@ -9,6 +9,8 @@
 **在线演示**：https://cogniloop.morninghao.online
 > 该站点只做演示作用，您在上面的所有数据随时都可能丢失
 
+**友情链接**：[Linux Do](https://linux.do/)
+
 ## 快速开始
 
 > 启动 CogniLoop 最简单的方式是通过 Docker Compose。在运行以下命令启动 CogniLoop 之前，请确保您的机器上已安装 [Docker](https://docs.docker.com/get-started/get-docker/) 和 [Docker Compose](https://docs.docker.com/compose/install/)
