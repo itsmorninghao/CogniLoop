@@ -1,0 +1,128 @@
+# CogniLoop v2 — Docker Compose GPU variant
+#
+# Usage:
+#   docker compose -f docker-compose.gpu.yml up -d --build
+#
+# Requirements on the host:
+#   - NVIDIA driver installed
+#   - NVIDIA Container Toolkit installed and configured for Docker
+
+services:
+  # PostgreSQL + pgvector
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: cogniloop_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-cogniloop}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME:-cogniloop_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - cogniloop_pgdata:/var/lib/postgresql/data
+    networks:
+      - net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-cogniloop} -d ${DB_NAME:-cogniloop_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Redis (SSE cross-process broadcast + task queue)
+  redis:
+    image: redis:7-alpine
+    container_name: cogniloop_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    networks:
+      - net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # CogniLoop App (Backend + Frontend)
+  app:
+    image: morninghaoo/cogniloop:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cogniloop_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./.env:/app/.env
+      - cogniloop_uploads:/app/uploads
+      - cogniloop_question_sets:/app/question_sets
+      - renderer_output:/tmp/renderer_output
+    networks:
+      - net
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Allow access to host network for Ollama
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Renderer service — Remotion video rendering with GPU-capable Chromium GL.
+  renderer:
+    build:
+      context: ./renderer
+      dockerfile: Dockerfile
+    container_name: cogniloop_renderer
+    restart: unless-stopped
+    environment:
+      PORT: "3100"
+      DISABLE_3D: "false"
+      # Chromium GL backend used by Remotion.
+      # Good first choices on NVIDIA Linux hosts: angle-egl, then vulkan.
+      REMOTION_GL: "angle-egl"
+      # Encoding knobs. libx264 + a faster preset is often faster end-to-end
+      # than NVENC because this renderer is mostly CPU-bound in Chromium frame capture.
+      REMOTION_ENCODER: "${REMOTION_ENCODER:-libx264}"
+      REMOTION_X264_PRESET: "${REMOTION_X264_PRESET:-veryfast}"
+      REMOTION_BINARIES_DIR: "${REMOTION_BINARIES_DIR:-/opt/remotion-nvenc-bin}"
+      REMOTION_NVENC_PRESET: "${REMOTION_NVENC_PRESET:-p4}"
+      REMOTION_NVENC_CQ: "${REMOTION_NVENC_CQ:-21}"
+      REMOTION_CONCURRENCY: "${REMOTION_CONCURRENCY:-12}"
+      NVIDIA_VISIBLE_DEVICES: "all"
+      NVIDIA_DRIVER_CAPABILITIES: "graphics,video,utility,compute"
+    gpus: all
+    shm_size: "2gb"
+    volumes:
+      - renderer_output:/tmp/renderer_output
+    networks:
+      - net
+    mem_limit: 4g
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3100/health').then(r=>{process.exit(r.ok?0:1)}).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+networks:
+  net:
+    driver: bridge
+
+volumes:
+  cogniloop_pgdata:
+  cogniloop_uploads:
+  cogniloop_question_sets:
+  renderer_output:

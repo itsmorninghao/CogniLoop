@@ -46,6 +46,9 @@ export const KineticText: React.FC<Props> = ({
   const fs = fontSizeOverride ?? defaults.fontSize;
   const textColor = color ?? theme.textPrimary;
   const dur = durationFrames ?? Math.max(30, Math.ceil(text.length * 1.5));
+  const shouldShadow = theme.name === "tech-dark" && (
+    style === "heading" || style === "subheading" || style === "emphasis" || style === "stat"
+  );
 
   if (localFrame < 0) return null;
 
@@ -55,8 +58,11 @@ export const KineticText: React.FC<Props> = ({
     lineHeight: defaults.lineHeight,
     color: textColor,
     fontFamily: "'Noto Sans SC', 'Inter', sans-serif",
+    letterSpacing: 0,
     whiteSpace: "pre-wrap",
     wordBreak: "break-word",
+    textShadow: shouldShadow ? "0 2px 18px rgba(0, 0, 0, 0.52)" : "none",
+    textRendering: "geometricPrecision",
   };
 
   switch (animation) {
@@ -111,12 +117,15 @@ const WordReveal: React.FC<{
   text: string; frame: number; dur: number;
   style: React.CSSProperties; fps: number;
 }> = ({ text, frame, dur, style, fps }) => {
-  const words = text.split(/\s+/);
-  const staggerDelay = Math.floor(dur / words.length);
+  const units = getRevealUnits(text);
+  if (units.length === 0) {
+    return <span style={style}>{text}</span>;
+  }
+  const staggerDelay = Math.max(1, Math.floor(dur / units.length));
 
   return (
     <span style={style}>
-      {words.map((word, i) => {
+      {units.map((unit, i) => {
         const wordStart = i * staggerDelay;
         const opacity = interpolate(frame, [wordStart, wordStart + 8], [0, 1], {
           extrapolateLeft: "clamp",
@@ -136,16 +145,71 @@ const WordReveal: React.FC<{
               display: "inline-block",
               opacity,
               transform: `translateY(${y}px)`,
-              marginRight: "0.3em",
+              marginRight: unit.compact ? 0 : "0.3em",
             }}
           >
-            {word}
+            {unit.text}
+            {unit.suffix}
           </span>
         );
       })}
     </span>
   );
 };
+
+function getRevealUnits(text: string): { text: string; suffix: string; compact: boolean }[] {
+  const units: { text: string; suffix: string; compact: boolean }[] = [];
+  const cjk = /[\u3040-\u30ff\u3400-\u9fff\uf900-\ufaff\uac00-\ud7af]/;
+  const punctuation = /[，。；：、！？,.!?]/;
+  let buffer = "";
+  let cjkBuffer = "";
+
+  const flushWord = () => {
+    if (buffer) {
+      units.push({ text: buffer, suffix: "", compact: false });
+      buffer = "";
+    }
+  };
+  const flushCjk = () => {
+    if (cjkBuffer) {
+      units.push({ text: cjkBuffer, suffix: "", compact: true });
+      cjkBuffer = "";
+    }
+  };
+
+  for (const ch of Array.from(text)) {
+    if (/\s/.test(ch)) {
+      flushWord();
+      flushCjk();
+      if (units.length > 0) {
+        units[units.length - 1].suffix += ch;
+      }
+      continue;
+    }
+
+    if (cjk.test(ch)) {
+      flushWord();
+      cjkBuffer += ch;
+      if (cjkBuffer.length >= 2) {
+        flushCjk();
+      }
+      continue;
+    }
+
+    if (punctuation.test(ch) && cjkBuffer) {
+      cjkBuffer += ch;
+      flushCjk();
+      continue;
+    }
+
+    flushCjk();
+    buffer += ch;
+  }
+
+  flushWord();
+  flushCjk();
+  return units;
+}
 
 const Highlight: React.FC<{
   text: string; frame: number; dur: number;

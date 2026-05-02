@@ -30,12 +30,35 @@ export const DiagramBuilder: React.FC<Props> = ({
   const localFrame = frame - startFrame;
   const dur = durationFrames ?? nodes.length * 12;
 
-  if (localFrame < 0) return null;
+  if (localFrame < 0 || nodes.length === 0) return null;
 
   const opacity = interpolate(localFrame, [0, 8], [0, 1], { extrapolateRight: "clamp" });
+  const isDark = theme.name === "tech-dark";
+  const surfaceBg = isDark
+    ? "linear-gradient(135deg, rgba(15, 23, 42, 0.78), rgba(2, 6, 23, 0.58))"
+    : "linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(240, 249, 255, 0.82))";
+  const surfaceBorder = isDark ? "rgba(148, 163, 184, 0.16)" : "rgba(15, 23, 42, 0.1)";
 
   return (
-    <div style={{ width, height, opacity, position: "relative" }}>
+    <div style={{
+      width,
+      height,
+      opacity,
+      position: "relative",
+      borderRadius: 8,
+      background: surfaceBg,
+      border: `1px solid ${surfaceBorder}`,
+      boxShadow: isDark ? "0 22px 58px rgba(0, 0, 0, 0.28)" : "0 18px 40px rgba(15, 23, 42, 0.09)",
+      overflow: "hidden",
+    }}>
+      <div style={{
+        position: "absolute",
+        inset: 0,
+        background: isDark
+          ? `linear-gradient(120deg, ${theme.primary}18, transparent 44%), repeating-linear-gradient(90deg, rgba(148,163,184,0.045) 0 1px, transparent 1px 58px)`
+          : `linear-gradient(120deg, ${theme.primary}14, transparent 44%), repeating-linear-gradient(90deg, rgba(15,23,42,0.035) 0 1px, transparent 1px 58px)`,
+        opacity: 0.7,
+      }} />
       {diagramType === "flowchart" && <Flowchart nodes={nodes} frame={localFrame} dur={dur} w={width} h={height} theme={theme} fps={fps} />}
       {diagramType === "mindmap" && <Mindmap nodes={nodes} frame={localFrame} dur={dur} w={width} h={height} theme={theme} fps={fps} />}
       {diagramType === "timeline-steps" && <TimelineSteps nodes={nodes} frame={localFrame} dur={dur} w={width} h={height} theme={theme} fps={fps} />}
@@ -48,25 +71,33 @@ export const DiagramBuilder: React.FC<Props> = ({
 
 const NodeBox: React.FC<{
   x: number; y: number; label: string; progress: number;
-  theme: ThemeConfig; isPrimary?: boolean;
-}> = ({ x, y, label, progress, theme, isPrimary }) => (
+  theme: ThemeConfig; isPrimary?: boolean; maxWidth?: number;
+}> = ({ x, y, label, progress, theme, isPrimary, maxWidth = 220 }) => (
   <div style={{
     position: "absolute",
     left: x, top: y,
     transform: `translate(-50%, -50%) scale(${interpolate(progress, [0, 1], [0.5, 1])})`,
     opacity: progress,
-    backgroundColor: isPrimary ? theme.primary : theme.cardBg,
+    background: isPrimary
+      ? `linear-gradient(135deg, ${theme.primary}, ${theme.accent})`
+      : theme.name === "tech-dark"
+        ? "linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 0.78))"
+        : "rgba(255, 255, 255, 0.9)",
     color: isPrimary ? "#fff" : theme.textPrimary,
-    border: `2px solid ${isPrimary ? theme.primary : theme.cardBorder}`,
-    borderRadius: 12,
-    padding: "10px 20px",
-    fontSize: 18,
-    fontWeight: 600,
+    border: `1px solid ${isPrimary ? `${theme.primary}aa` : theme.cardBorder}`,
+    borderRadius: 8,
+    padding: "12px 18px",
+    fontSize: isPrimary ? 20 : 18,
+    fontWeight: 720,
+    lineHeight: 1.25,
     fontFamily: "'Noto Sans SC', sans-serif",
     textAlign: "center",
-    maxWidth: 200,
-    boxShadow: isPrimary ? `0 4px 20px ${theme.primary}40` : theme.cardShadow,
-    whiteSpace: "nowrap",
+    minWidth: isPrimary ? 128 : 104,
+    maxWidth,
+    boxShadow: isPrimary ? `0 10px 28px ${theme.primary}40` : theme.cardShadow,
+    whiteSpace: "normal",
+    overflowWrap: "break-word",
+    textShadow: isPrimary ? "0 1px 8px rgba(0, 0, 0, 0.35)" : "none",
   }}>
     {label}
   </div>
@@ -78,6 +109,7 @@ const Flowchart: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;
   w: number; h: number; theme: ThemeConfig; fps: number;
 }> = ({ nodes, frame, dur, w, h, theme, fps }) => {
+  if (nodes.length === 0) return null;
   const stagger = dur / nodes.length;
   const rowH = h / nodes.length;
 
@@ -192,6 +224,7 @@ const TimelineSteps: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;
   w: number; h: number; theme: ThemeConfig; fps: number;
 }> = ({ nodes, frame, dur, w, h, theme, fps }) => {
+  if (nodes.length === 0) return null;
   const stagger = dur / nodes.length;
   const stepW = w / nodes.length;
   const lineY = h / 2;
@@ -199,10 +232,8 @@ const TimelineSteps: React.FC<{
   return (
     <>
       <svg width={w} height={h} style={{ position: "absolute", top: 0, left: 0 }}>
-        {/* Baseline */}
         <line x1={stepW / 2} y1={lineY} x2={w - stepW / 2} y2={lineY}
-          stroke={theme.textMuted} strokeWidth={2} opacity={0.2} />
-        {/* Progress line */}
+          stroke={theme.textMuted} strokeWidth={3} opacity={0.18} />
         {nodes.map((_, i) => {
           if (i === 0) return null;
           const lineProgress = interpolate(frame, [(i - 0.5) * stagger, i * stagger], [0, 1], {
@@ -214,21 +245,28 @@ const TimelineSteps: React.FC<{
             <line key={i}
               x1={x1} y1={lineY}
               x2={x1 + (x2 - x1) * lineProgress} y2={lineY}
-              stroke={theme.primary} strokeWidth={3}
+              stroke={theme.primary} strokeWidth={5}
             />
           );
         })}
-        {/* Dots */}
         {nodes.map((_, i) => {
           const dotProgress = interpolate(frame, [i * stagger, i * stagger + 6], [0, 1], {
             extrapolateLeft: "clamp", extrapolateRight: "clamp",
           });
           return (
-            <circle key={i}
-              cx={i * stepW + stepW / 2} cy={lineY}
-              r={8 * dotProgress}
-              fill={theme.primary}
-            />
+            <g key={i}>
+              <circle
+                cx={i * stepW + stepW / 2} cy={lineY}
+                r={18 * dotProgress}
+                fill={theme.primary}
+                opacity={0.16}
+              />
+              <circle
+                cx={i * stepW + stepW / 2} cy={lineY}
+                r={8 * dotProgress}
+                fill={theme.primary}
+              />
+            </g>
           );
         })}
       </svg>
@@ -242,19 +280,35 @@ const TimelineSteps: React.FC<{
           <div key={node.id} style={{
             position: "absolute",
             left: i * stepW + stepW / 2,
-            top: isAbove ? lineY - 60 : lineY + 30,
+            top: isAbove ? lineY - 70 : lineY + 40,
             transform: `translate(-50%, ${isAbove ? "-100%" : "0"}) scale(${interpolate(labelProgress, [0, 1], [0.5, 1])})`,
             opacity: labelProgress,
-            fontSize: 16, fontWeight: 600,
+            width: Math.max(132, stepW - 26),
+            minHeight: 82,
+            fontSize: 19, fontWeight: 720,
+            lineHeight: 1.25,
             color: theme.textPrimary,
             fontFamily: "'Noto Sans SC', sans-serif",
-            textAlign: "center",
-            maxWidth: stepW - 20,
-            backgroundColor: theme.cardBg,
+            textAlign: "left",
+            background: theme.name === "tech-dark"
+              ? "linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(2, 6, 23, 0.72))"
+              : "rgba(255,255,255,0.9)",
             border: `1px solid ${theme.cardBorder}`,
             borderRadius: 8,
-            padding: "6px 12px",
+            padding: "14px 14px 12px",
+            whiteSpace: "normal",
+            overflowWrap: "break-word",
+            boxShadow: theme.name === "tech-dark" ? "0 12px 32px rgba(0,0,0,0.22)" : "0 12px 24px rgba(15,23,42,0.08)",
           }}>
+            <div style={{
+              color: theme.primary,
+              fontSize: 15,
+              fontWeight: 820,
+              marginBottom: 7,
+              lineHeight: 1,
+            }}>
+              步骤 {i + 1}
+            </div>
             {node.label}
           </div>
         );
@@ -269,6 +323,7 @@ const Cycle: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;
   w: number; h: number; theme: ThemeConfig; fps: number;
 }> = ({ nodes, frame, dur, w, h, theme, fps }) => {
+  if (nodes.length === 0) return null;
   const cx = w / 2;
   const cy = h / 2;
   const radius = Math.min(w, h) * 0.35;

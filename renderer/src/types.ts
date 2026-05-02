@@ -241,6 +241,41 @@ export interface IconGridEvent extends VisualEventBase {
   columns?: number;
 }
 
+export interface CalloutCardEvent extends VisualEventBase {
+  type: "callout-card";
+  position: CanvasPosition;
+  title: string;
+  body?: string;
+  index?: number;
+  tone?: "primary" | "accent" | "success" | "warning";
+}
+
+export interface SpotlightEvent extends VisualEventBase {
+  type: "spotlight";
+  position: CanvasPosition;
+  title: string;
+  subtitle?: string;
+  labels?: string[];
+  variant?: "orbit" | "stack" | "signal";
+}
+
+export interface SceneAssetEvent extends VisualEventBase {
+  type: "scene-asset";
+  position: CanvasPosition;
+  assetKind: "dashboard" | "lab" | "code" | "network" | "document" | "timeline" | "signal";
+  title?: string;
+  labels?: string[];
+}
+
+export interface ConceptBuildEvent extends VisualEventBase {
+  type: "concept-build";
+  position: CanvasPosition;
+  mode: "concept" | "process" | "metric" | "comparison" | "summary";
+  title: string;
+  labels: string[];
+  caption?: string;
+}
+
 export interface TransitionEvent extends VisualEventBase {
   type: "transition";
   effect: "wipe-left" | "wipe-right" | "fade" | "slide-up" | "zoom";
@@ -268,6 +303,10 @@ export type VisualEvent =
   | DiagramEvent
   | NumberEvent
   | IconGridEvent
+  | CalloutCardEvent
+  | SpotlightEvent
+  | SceneAssetEvent
+  | ConceptBuildEvent
   | TransitionEvent
   | ClearEvent
   | ImageEvent;
