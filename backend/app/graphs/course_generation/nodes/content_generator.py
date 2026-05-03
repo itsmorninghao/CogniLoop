@@ -52,13 +52,15 @@ _SLIDE_PROMPT = """\
 
 ## 关键规则
 - 每张幻灯片必须包含 narration 字段，内容是讲师面向学员的口语化讲解，与该张幻灯片的视觉内容对应
-- narration 要自然流畅，像真人授课一样，每张 50-150 字
-- 幻灯片数量由内容决定，不要人为压缩，确保每个要点都有对应的幻灯片
+- narration 要自然流畅，像真人授课一样，每张 35-90 字
+- 幻灯片数量由内容决定，不要人为压缩；长解释拆成更多短页，每页只推进一个清晰小节奏
 - 第一张必须是 TITLE_SLIDE，最后一张必须是 SUMMARY
 - 注意与前后节点的衔接，不要重复其他节点已覆盖的内容
 - 幻灯片上的文字要精炼（标题、要点），详细解释放在 narration 里
 - points 必须是完整短句，不能只写“最后给方案：”“原因：”这类没有结论的半句话
 - 每页只保留一个视觉主旨：画面文字负责提示结构，解释细节放到 narration
+- 不要把所有内容都写成 BULLET_POINTS；概念定义优先 CONCEPT_EXPLAIN，机制/流程优先 DIAGRAM_TEXT，权衡和差异优先 COMPARISON
+- 每一节至少尝试使用 2 种以上页面结构，让标题页、解释页、过程页、对比页、总结页的视觉节奏明显不同
 - 严禁使用任何 emoji 或表情符号
 
 ## 可用 Slide 模板
@@ -104,7 +106,7 @@ _SLIDE_PROMPT_V2 = """\
   "slides": [
     {{
       "template": "BULLET_POINTS",
-      "narration": "旁白文字50-150字……",
+      "narration": "旁白文字35-90字……",
       "visual_events": [
         {{"at": 0, "type": "text", "text": "标题", "animation": "typewriter", "position": {{"x": 120, "y": 80}}, "style": "heading"}},
         {{"at": 1.5, "type": "lottie", "assetId": "icon:target", "position": {{"x": 80, "y": 200, "w": 50, "h": 50}}}},
@@ -117,7 +119,7 @@ _SLIDE_PROMPT_V2 = """\
 }}
 
 ## 规则
-- 每张必须有 narration(50-150字) 和 visual_events 数组
+- 每张必须有 narration(35-90字) 和 visual_events 数组
 - 第一张 TITLE_SLIDE，最后一张 SUMMARY
 - 每3-5秒至少1个视觉事件，at按升序，与旁白内容同步
 - text事件≤25字，style: heading/body/emphasis/subheading
@@ -214,88 +216,52 @@ def _generate_visual_events(slide: dict) -> list[dict]:
         title = _clean_display_text(slide.get("title", ""))
         subtitle = _clean_display_text(slide.get("subtitle", ""))
         labels = _spotlight_labels([title, subtitle, "目标", "拆解", "回顾"], 4)
-        events.append({"at": t, "type": "text", "text": title, "animation": "fade-up",
-                        "position": {"x": 120, "y": 150, "w": 900},
-                        "style": "heading", "fontSize": _heading_font_size(title, 68)})
-        t += 1.5
-        if subtitle:
-            events.append({"at": t, "type": "text", "text": subtitle, "animation": "fade-up",
-                            "position": {"x": 126, "y": 350, "w": 760}, "style": "subheading"})
-            t += 0.5
-        events.append({"at": t, "type": "svg-draw", "shape": "underline",
-                        "from": {"x": 126, "y": 490}, "to": {"x": 620, "y": 490},
-                        "strokeWidth": 3})
-        events.append({"at": 0.5, "type": "scene-asset",
-                        "position": {"x": 1030, "y": 210, "w": 720, "h": 560},
-                        "assetKind": _scene_asset_kind(title, template),
-                        "title": _short_label(title, 14),
+        asset_kind = _scene_asset_kind(title, template)
+        events.append({"at": t, "type": "scene-stage",
+                        "position": {"x": 110, "y": 120, "w": 1700, "h": 830},
+                        "stageKind": "hero",
+                        "sceneFamily": _scene_family_for_slide(template, "hero", asset_kind, title, [subtitle]),
+                        "title": title,
+                        "subtitle": subtitle,
+                        "assetKind": asset_kind,
+                        "assetPrompt": _asset_prompt_for_scene(title, subtitle, asset_kind),
                         "labels": labels,
-                        "duration": 5})
-        events.append({"at": 3.0, "type": "callout-card",
-                        "position": {"x": 126, "y": 620, "w": 760, "h": 138},
-                        "title": "这一节只抓核心",
-                        "body": "先建立概念，再看节奏，最后回到可验证的结论。",
-                        "index": 1,
-                        "tone": "accent"})
+                        "focus": "先建立对象，再拆成可验证的路径。",
+                        "duration": 7})
 
     elif template == "BULLET_POINTS":
         heading = _clean_display_text(slide.get("heading", ""))
         points = _clean_display_items(slide.get("points", []), 4)
-        events.append({"at": t, "type": "text", "text": heading, "animation": "fade-up",
-                        "position": {"x": 120, "y": 80, "w": 1180}, "style": "heading"})
-        t += 1.0
-        if points:
-            events.append({"at": t, "type": "concept-build",
-                            "mode": _concept_mode(heading, points, "process"),
-                            "position": {"x": 1010, "y": 300, "w": 760, "h": 460},
-                            "title": _short_label(heading, 14),
-                            "labels": _visual_labels([heading, *points], 5),
-                            "caption": _caption_from_items(points),
-                            "duration": 6})
-        for i, point in enumerate(points):
-            card_title, card_body = _split_card_text(point)
-            y = 190 + i * 154
-            events.append({"at": t + i * 0.45, "type": "callout-card",
-                            "position": {"x": 120, "y": y, "w": 780, "h": 124},
-                            "title": card_title,
-                            "body": card_body,
-                            "index": i + 1,
-                            "tone": _tone_for_index(i)})
+        stage_kind = _stage_kind_for_slide(template, heading, points)
+        asset_kind = _scene_asset_kind(" ".join([heading, *points]), template)
+        events.append({"at": t, "type": "scene-stage",
+                        "position": {"x": 100, "y": 125, "w": 1720, "h": 835},
+                        "stageKind": stage_kind,
+                        "sceneFamily": _scene_family_for_slide(template, stage_kind, asset_kind, heading, points),
+                        "title": heading,
+                        "subtitle": _caption_from_items(points),
+                        "assetKind": asset_kind,
+                        "assetPrompt": _asset_prompt_for_scene(heading, _caption_from_items(points), asset_kind),
+                        "labels": _visual_labels([heading, *points], 5),
+                        "focus": _caption_from_items(points),
+                        "duration": 7})
 
     elif template == "CONCEPT_EXPLAIN":
         heading = _clean_display_text(slide.get("heading", ""))
         definition = _clean_display_text(slide.get("definition", ""))
         analogy = _clean_display_text(slide.get("analogy", ""))
-        events.append({"at": t + 0.3, "type": "text", "text": heading, "animation": "scale-in",
-                        "position": {"x": 120, "y": 88, "w": 980},
-                        "style": "heading", "fontSize": _heading_font_size(heading, 62)})
-        t += 1.0
-        events.append({"at": t, "type": "svg-draw", "shape": "line",
-                        "from": {"x": 124, "y": 170}, "to": {"x": 210, "y": 170},
-                        "strokeWidth": 5})
-        if definition:
-            card_title, card_body = _split_card_text(definition)
-            events.append({"at": 1.4, "type": "callout-card",
-                            "position": {"x": 120, "y": 220, "w": 800, "h": 150},
-                            "title": card_title,
-                            "body": card_body,
-                            "index": 1,
-                            "tone": "primary"})
-        if analogy:
-            card_title, card_body = _split_card_text(analogy)
-            events.append({"at": 2.2, "type": "callout-card",
-                            "position": {"x": 120, "y": 410, "w": 800, "h": 150},
-                            "title": card_title,
-                            "body": card_body or "用熟悉场景降低理解成本。",
-                            "index": 2,
-                            "tone": "accent"})
-        events.append({"at": 1.0, "type": "concept-build",
-                        "mode": _concept_mode(heading, [definition, analogy], "concept"),
-                        "position": {"x": 1040, "y": 280, "w": 760, "h": 500},
-                        "title": _short_label(heading, 14),
+        asset_kind = _scene_asset_kind(f"{heading} {definition} {analogy}", template)
+        events.append({"at": t, "type": "scene-stage",
+                        "position": {"x": 100, "y": 125, "w": 1720, "h": 835},
+                        "stageKind": "deep-dive",
+                        "sceneFamily": _scene_family_for_slide(template, "deep-dive", asset_kind, heading, [definition, analogy]),
+                        "title": heading,
+                        "subtitle": _truncate_display(definition, 70),
+                        "assetKind": asset_kind,
+                        "assetPrompt": _asset_prompt_for_scene(heading, definition or analogy, asset_kind),
                         "labels": _visual_labels([heading, definition, analogy], 5),
-                        "caption": _truncate_display(definition or analogy, 54),
-                        "duration": 6})
+                        "focus": _truncate_display(analogy or definition, 58),
+                        "duration": 7})
 
     elif template == "COMPARISON":
         heading = _clean_display_text(slide.get("heading", ""))
@@ -303,33 +269,18 @@ def _generate_visual_events(slide: dict) -> list[dict]:
         right_label = _clean_display_text(slide.get("right_label", "右侧"))
         left_items = _clean_display_items(slide.get("left_items", []), 3)
         right_items = _clean_display_items(slide.get("right_items", []), 3)
-        events.append({"at": t, "type": "text", "text": heading, "animation": "typewriter",
-                        "position": {"x": 960, "y": 80, "anchor": "center"}, "style": "heading"})
-        t += 1.5
-        events.append({"at": t, "type": "text", "text": left_label, "animation": "fade-up",
-                        "position": {"x": 300, "y": 180, "anchor": "center"}, "style": "subheading"})
-        events.append({"at": t, "type": "text", "text": right_label, "animation": "fade-up",
-                        "position": {"x": 1620, "y": 180, "anchor": "center"}, "style": "subheading"})
-        t += 1.0
-        events.append({"at": t, "type": "svg-draw", "shape": "line",
-                        "from": {"x": 960, "y": 160}, "to": {"x": 960, "y": 900}})
-        events.append({"at": 1.0, "type": "concept-build",
-                        "mode": "comparison",
-                        "position": {"x": 520, "y": 270, "w": 880, "h": 520},
-                        "title": _short_label(heading, 14),
-                        "labels": _visual_labels([*left_items, *right_items], 6),
-                        "caption": "左右对照时，画面先建立判断维度，再揭示差异。",
-                        "duration": 6})
-        t += 0.5
-        for i, (li, ri) in enumerate(zip(left_items, right_items)):
-            y = 260 + i * 100
-            events.append({"at": t, "type": "text", "text": _truncate_display(li, 25), "animation": "word-reveal",
-                            "position": {"x": 120, "y": y}, "style": "body", "duration": 1.5})
-            events.append({"at": t + 0.3, "type": "text", "text": _truncate_display(ri, 25), "animation": "word-reveal",
-                            "position": {"x": 1000, "y": y}, "style": "body", "duration": 1.5})
-            t += 2.5
-        events.append({"at": t, "type": "lottie", "assetId": "char:thinking",
-                        "position": {"x": 880, "y": 700, "w": 200, "h": 200}})
+        asset_kind = _scene_asset_kind(f"{heading} {' '.join(left_items + right_items)}", template)
+        events.append({"at": t, "type": "scene-stage",
+                        "position": {"x": 100, "y": 125, "w": 1720, "h": 835},
+                        "stageKind": "comparison",
+                        "sceneFamily": _scene_family_for_slide(template, "comparison", asset_kind, heading, [*left_items, *right_items]),
+                        "title": heading,
+                        "subtitle": f"{left_label} 与 {right_label} 的关键差异",
+                        "assetKind": asset_kind,
+                        "assetPrompt": _asset_prompt_for_scene(heading, f"{left_label} versus {right_label}", asset_kind),
+                        "labels": _comparison_stage_labels(left_label, left_items, right_label, right_items),
+                        "focus": "先看判断维度，再看两侧取舍。",
+                        "duration": 7})
 
     elif template == "QUOTE_HIGHLIGHT":
         quote = _clean_display_text(slide.get("quote", ""))
@@ -352,45 +303,35 @@ def _generate_visual_events(slide: dict) -> list[dict]:
     elif template == "SUMMARY":
         heading = _clean_display_text(slide.get("heading", "本节回顾"))
         points = _clean_display_items(slide.get("points", []), 4)
-        events.append({"at": t, "type": "text", "text": heading, "animation": "scale-in",
-                        "position": {"x": 120, "y": 80, "w": 980}, "style": "heading"})
-        t += 1.0
-        if points:
-            events.append({"at": 1.0, "type": "concept-build",
-                            "mode": "summary",
-                            "position": {"x": 1060, "y": 260, "w": 700, "h": 520},
-                            "title": "本节结论",
-                            "labels": _spotlight_labels(points, 4),
-                            "caption": "回顾不是重复文字，而是把本节内容收束成一条可复用路径。",
-                            "duration": 6})
-        for i, point in enumerate(points):
-            card_title, card_body = _split_card_text(point)
-            y = 210 + i * 142
-            events.append({"at": t + i * 0.45, "type": "callout-card",
-                            "position": {"x": 120, "y": y, "w": 780, "h": 112},
-                            "title": card_title,
-                            "body": card_body,
-                            "index": i + 1,
-                            "tone": "success"})
+        asset_kind = _scene_asset_kind(" ".join([heading, *points]), template)
+        events.append({"at": t, "type": "scene-stage",
+                        "position": {"x": 100, "y": 125, "w": 1720, "h": 835},
+                        "stageKind": "recap",
+                        "sceneFamily": _scene_family_for_slide(template, "recap", asset_kind, heading, points),
+                        "title": heading,
+                        "subtitle": "把本节内容收束成一条可复用路径。",
+                        "assetKind": asset_kind,
+                        "assetPrompt": _asset_prompt_for_scene(heading, _caption_from_items(points), asset_kind),
+                        "labels": _visual_labels([heading, *points], 5),
+                        "focus": _caption_from_items(points),
+                        "duration": 7})
 
     elif template == "DIAGRAM_TEXT":
         heading = _clean_display_text(slide.get("heading", ""))
         description = _clean_display_text(slide.get("description", ""))
-        events.append({"at": t + 0.3, "type": "text", "text": heading, "animation": "fade-up",
-                        "position": {"x": 120, "y": 85, "w": 980}, "style": "heading"})
-        card_title, card_body = _split_card_text(description)
-        events.append({"at": 1.4, "type": "callout-card",
-                        "position": {"x": 120, "y": 230, "w": 820, "h": 170},
-                        "title": card_title,
-                        "body": card_body,
-                        "index": 1,
-                        "tone": "primary"})
-        events.append({"at": 1.0, "type": "scene-asset",
-                        "position": {"x": 1040, "y": 260, "w": 720, "h": 520},
-                        "assetKind": _scene_asset_kind(f"{heading} {description}", template),
-                        "title": _short_label(heading, 14),
-                        "labels": _spotlight_labels([heading, description], 4),
-                        "duration": 6})
+        stage_kind = _stage_kind_for_slide(template, heading, [description])
+        asset_kind = _scene_asset_kind(f"{heading} {description}", template)
+        events.append({"at": t, "type": "scene-stage",
+                        "position": {"x": 100, "y": 125, "w": 1720, "h": 835},
+                        "stageKind": stage_kind,
+                        "sceneFamily": _scene_family_for_slide(template, stage_kind, asset_kind, heading, [description]),
+                        "title": heading,
+                        "subtitle": _truncate_display(description, 70),
+                        "assetKind": asset_kind,
+                        "assetPrompt": _asset_prompt_for_scene(heading, description, asset_kind),
+                        "labels": _visual_labels([heading, description], 5),
+                        "focus": _truncate_display(description, 58),
+                        "duration": 7})
 
     return events
 
@@ -502,17 +443,106 @@ def _scene_asset_kind(text: str, template: str) -> str:
         return "code"
     if any(word in text for word in ("GPU", "渲染", "性能", "耗时", "毫秒", "帧", "卡顿", "指标")):
         return "dashboard"
+    if any(word in text for word in ("评价", "质量", "清晰度", "可信度", "参与感", "维度", "量化", "判断", "评估")):
+        return "dashboard"
+    if any(word in text for word in ("机制", "因果", "影响", "动机", "体验", "认知", "反馈", "关系", "链条")):
+        return "network"
+    if any(word in text for word in ("流程", "步骤", "节奏", "路径", "阶段", "递进")) or template == "BULLET_POINTS":
+        return "timeline"
+    if any(word in text for word in ("语言", "文本", "词汇", "句式", "语用", "文体", "文章", "正式英语", "资料", "知识库")):
+        return "document"
     if any(word in text for word in ("网络", "连接", "节点", "关系", "传播", "链路")):
         return "network"
     if any(word in text for word in ("文档", "文章", "资料", "笔记", "知识库", "课程大纲")):
         return "document"
     if any(word in text for word in ("实验", "测试", "验证", "观察", "质检")):
         return "lab"
-    if any(word in text for word in ("流程", "步骤", "节奏", "路径", "阶段", "递进")) or template == "BULLET_POINTS":
-        return "timeline"
     if any(word in text for word in ("波动", "趋势", "信号", "变化")):
         return "signal"
     return "network"
+
+
+def _scene_family_for_slide(
+    template: str,
+    stage_kind: str,
+    asset_kind: str,
+    heading: str,
+    items: list[str],
+) -> str:
+    merged = " ".join([_clean_display_text(heading), *(_clean_display_text(item) for item in items)])
+
+    if template == "TITLE_SLIDE" or stage_kind == "hero":
+        if asset_kind == "document":
+            return "document-scan"
+        if asset_kind in {"dashboard", "signal"}:
+            return "data-dashboard"
+        if asset_kind == "timeline":
+            return "process-board"
+        if asset_kind in {"lab", "code", "network"}:
+            return "mechanism-map"
+        return "cinematic-hero"
+    if template == "COMPARISON" or stage_kind == "comparison":
+        return "split-compare"
+    if template == "SUMMARY" or stage_kind == "recap":
+        return "recap-map"
+    if stage_kind == "metric" or asset_kind in {"dashboard", "signal"}:
+        return "data-dashboard"
+    if stage_kind == "process" or asset_kind == "timeline":
+        return "process-board"
+    if asset_kind == "document" or any(word in merged for word in ("语言", "文本", "词汇", "句式", "文章", "文档", "资料")):
+        return "document-scan"
+    if asset_kind == "lab" or template in {"CONCEPT_EXPLAIN", "DIAGRAM_TEXT"}:
+        return "mechanism-map"
+    return "mechanism-map"
+
+
+def _asset_prompt_for_scene(title: str, description: str, asset_kind: str) -> str:
+    """Metadata for future image generation/asset retrieval; renderer falls back to code-native visuals."""
+    title = _clean_display_text(title)
+    description = _truncate_display(description or title, 80)
+    styles = {
+        "document": "editorial document close-up, highlighted sentences, clean educational annotation",
+        "timeline": "cinematic process board, layered arrows, progressive construction",
+        "dashboard": "data dashboard, animated metrics, performance chart",
+        "signal": "signal waveform, trend line, analytical overlay",
+        "lab": "science lab visualization, experiment table, concept model",
+        "code": "code editor and system diagram, modern technical tutorial",
+        "network": "knowledge network map, connected nodes, educational explainer",
+    }
+    return f"{styles.get(asset_kind, styles['network'])}; topic: {title}; detail: {description}"
+
+
+def _stage_kind_for_slide(template: str, heading: str, items: list[str]) -> str:
+    if template == "TITLE_SLIDE":
+        return "hero"
+    if template == "COMPARISON":
+        return "comparison"
+    if template == "SUMMARY":
+        return "recap"
+
+    mode = _concept_mode(heading, items, "concept")
+    if mode == "metric":
+        return "metric"
+    if mode == "process":
+        return "process"
+    if mode == "summary":
+        return "recap"
+    return "deep-dive"
+
+
+def _comparison_stage_labels(
+    left_label: str,
+    left_items: list[str],
+    right_label: str,
+    right_items: list[str],
+) -> list[str]:
+    left = _visual_labels([left_label, *left_items], 3)
+    right = _visual_labels([right_label, *right_items], 3)
+    while len(left) < 3:
+        left.append(["方案 A", "优势", "代价"][len(left)])
+    while len(right) < 3:
+        right.append(["方案 B", "收益", "边界"][len(right)])
+    return [*left[:3], *right[:3]]
 
 
 def _concept_mode(text: str, items: list[str], fallback: str) -> str:

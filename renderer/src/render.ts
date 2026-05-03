@@ -12,7 +12,8 @@ import {
   type OpenGlRenderer,
 } from "@remotion/renderer";
 import type { RenderRequest, SlideData, AssetManifest } from "./types.js";
-import { VIDEO_FPS, VIDEO_WIDTH, VIDEO_HEIGHT, FADE_DURATION_FRAMES } from "./types.js";
+import { VIDEO_FPS, VIDEO_WIDTH, VIDEO_HEIGHT } from "./types.js";
+import { countSceneAssets, enrichSlidesWithVisualAssets } from "./visualAssets.js";
 
 const OUTPUT_DIR = "/tmp/renderer_output";
 const VALID_GL_RENDERERS: ReadonlySet<OpenGlRenderer> = new Set([
@@ -48,8 +49,7 @@ function calculateTotalFrames(slides: SlideData[]): number {
   let total = 0;
   for (let i = 0; i < slides.length; i++) {
     const durationFrames = Math.ceil((slides[i].duration_ms / 1000) * VIDEO_FPS);
-    const fadeFrames = i < slides.length - 1 ? FADE_DURATION_FRAMES : 0;
-    total += durationFrames + fadeFrames;
+    total += durationFrames;
   }
   return Math.max(1, total);
 }
@@ -286,7 +286,7 @@ export async function renderSlideVideo(
   // Ensure output directory exists
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const slides = req.script_json.slides;
+  const slides = enrichSlidesWithVisualAssets(req.script_json.slides);
   const totalFrames = calculateTotalFrames(slides);
   const theme = req.theme || "tech-dark";
   const outputPath = path.join(OUTPUT_DIR, `${req.task_id}.mp4`);
@@ -299,6 +299,7 @@ export async function renderSlideVideo(
   const manifest = assetManifest ?? { version: 1, assets: {} };
 
   const inputProps = { slides, theme, lottieCache, manifest };
+  const sceneAssetCount = countSceneAssets(slides);
 
   // Resolve composition with calculated metadata
   const composition = await selectComposition({
@@ -313,7 +314,8 @@ export async function renderSlideVideo(
 
   console.log(
     `Rendering task ${req.task_id}: ${slides.length} slides, ${totalFrames} frames, ` +
-    `theme=${theme}, concurrency=${concurrency}, gl=${glRenderer}, encoder=${encoding.label}`
+    `theme=${theme}, sceneAssets=${sceneAssetCount}, concurrency=${concurrency}, ` +
+    `gl=${glRenderer}, encoder=${encoding.label}`
   );
 
   const startTime = Date.now();

@@ -18,7 +18,9 @@ from backend.app.services import tts_service, video_service
 logger = logging.getLogger(__name__)
 
 _RENDERER_TIMEOUT = 1800  # CPU rendering ~4fps, 3000 frames ≈ 12min
-_ANIMATION_PADDING_MS = 800  # extra time for slide entrance animation
+_MIN_SLIDE_DURATION_MS = 1000
+_BEAT_INTERVAL_SECONDS = 5.0
+_MAX_TIMED_BEATS = 5
 _RENDERER_URL = "http://renderer:3100"
 
 
@@ -54,7 +56,8 @@ async def video_pipeline(state: NodeGenState) -> dict:
         return {"video_url": None, "current_node": "video_pipeline"}
 
     for slide, (_audio_path, duration) in zip(slides, audio_results, strict=False):
-        slide["duration_ms"] = int(duration * 1000) + _ANIMATION_PADDING_MS
+        slide["duration_ms"] = max(_MIN_SLIDE_DURATION_MS, int(duration * 1000))
+        _pace_visual_events_for_audio(slide, duration)
 
     # Step 2: Dispatch to Remotion renderer via HTTP
     try:
@@ -141,6 +144,113 @@ async def _synthesize_per_slide(
             valid.append(r)
 
     return valid
+
+
+def _pace_visual_events_for_audio(slide: dict, duration_seconds: float) -> None:
+    """
+    Keep slide visuals paced against the measured TTS duration.
+
+    The content generator can only guess timings before TTS. Once we know the
+    real narration length, stretch the main scene over the spoken segment and
+    add lightweight timed marks every few seconds so long slides keep changing.
+    """
+    events = slide.get("visual_events")
+    if not isinstance(events, list):
+        return
+
+    duration = max(1.0, duration_seconds)
+    for event in events:
+        if event.get("type") == "scene-stage":
+            event["duration"] = round(max(float(event.get("duration") or 0), duration), 2)
+
+    target_beats = _target_beat_count(duration)
+    if target_beats <= 0:
+        return
+
+    existing_beats = [
+        event for event in events
+        if event.get("type") not in {"scene-stage", "transition", "clear"}
+        and float(event.get("at") or 0) >= 3.0
+    ]
+    missing = target_beats - len(existing_beats)
+    if missing <= 0:
+        return
+
+    start_index = len(existing_beats)
+    labels = _slide_beat_labels(slide)
+    for offset, at in enumerate(_beat_times(duration, target_beats)[start_index:target_beats]):
+        index = start_index + offset
+        events.append(_make_visual_beat(index, at, labels))
+
+    events.sort(key=lambda event: float(event.get("at") or 0))
+
+
+def _target_beat_count(duration_seconds: float) -> int:
+    if duration_seconds < 8:
+        return 0
+    return min(_MAX_TIMED_BEATS, max(1, int(duration_seconds // _BEAT_INTERVAL_SECONDS)))
+
+
+def _beat_times(duration_seconds: float, count: int) -> list[float]:
+    if count <= 0:
+        return []
+    start = min(4.0, max(2.4, duration_seconds * 0.22))
+    end = max(start, duration_seconds - 3.0)
+    if count == 1:
+        return [round((start + end) / 2, 2)]
+    step = (end - start) / (count - 1)
+    return [round(start + step * index, 2) for index in range(count)]
+
+
+def _slide_beat_labels(slide: dict) -> list[str]:
+    candidates: list[str] = []
+    for key in ("title", "heading", "definition", "analogy", "description", "quote", "emphasis"):
+        value = slide.get(key)
+        if isinstance(value, str):
+            candidates.append(value)
+    for key in ("points", "left_items", "right_items"):
+        value = slide.get(key)
+        if isinstance(value, list):
+            candidates.extend(str(item) for item in value if item)
+    labels = []
+    for candidate in candidates:
+        text = " ".join(str(candidate).split()).strip("「」“”\"'")
+        if not text:
+            continue
+        if len(text) > 18:
+            text = text[:17] + "…"
+        if text not in labels:
+            labels.append(text)
+        if len(labels) >= _MAX_TIMED_BEATS:
+            break
+    return labels or ["建立对象", "拆解关系", "验证结论"]
+
+
+def _make_visual_beat(index: int, at: float, labels: list[str]) -> dict:
+    label = labels[index % len(labels)]
+    tone_colors = ["#6366f1", "#06b6d4", "#f59e0b", "#10b981"]
+    color = tone_colors[index % len(tone_colors)]
+    # Keep auto-added beats in the visual/diagram area. The right lane is
+    # reserved for scene annotations and text, so drawing there causes overlap.
+    patterns = [
+        ("underline", {"x": 380, "y": 552}, {"x": 920, "y": 552}),
+        ("box", {"x": 360, "y": 302}, {"x": 940, "y": 430}),
+        ("box", {"x": 384, "y": 516}, {"x": 900, "y": 680}),
+        ("curved-arrow", {"x": 682, "y": 742}, {"x": 976, "y": 620}),
+        ("circle", {"x": 604, "y": 410}, {"x": 852, "y": 658}),
+    ]
+    shape, start, end = patterns[index % len(patterns)]
+    return {
+        "at": at,
+        "type": "svg-draw",
+        "shape": shape,
+        "from": start,
+        "to": end,
+        "duration": 1.0,
+        "strokeColor": color,
+        "strokeWidth": 3,
+        "id": f"beat-{index + 1}-{label}",
+    }
 
 
 def _cleanup_audio_files(audio_results: list[tuple[Path, float]]) -> None:

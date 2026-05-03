@@ -267,6 +267,15 @@ export interface SceneAssetEvent extends VisualEventBase {
   labels?: string[];
 }
 
+export type SceneFamily =
+  | "cinematic-hero"
+  | "document-scan"
+  | "mechanism-map"
+  | "process-board"
+  | "data-dashboard"
+  | "split-compare"
+  | "recap-map";
+
 export interface ConceptBuildEvent extends VisualEventBase {
   type: "concept-build";
   position: CanvasPosition;
@@ -274,6 +283,20 @@ export interface ConceptBuildEvent extends VisualEventBase {
   title: string;
   labels: string[];
   caption?: string;
+}
+
+export interface SceneStageEvent extends VisualEventBase {
+  type: "scene-stage";
+  position: CanvasPosition;
+  stageKind: "hero" | "deep-dive" | "process" | "metric" | "comparison" | "recap";
+  sceneFamily?: SceneFamily;
+  title: string;
+  subtitle?: string;
+  labels?: string[];
+  focus?: string;
+  assetKind?: "dashboard" | "lab" | "code" | "network" | "document" | "timeline" | "signal";
+  assetSrc?: string;
+  assetPrompt?: string;
 }
 
 export interface TransitionEvent extends VisualEventBase {
@@ -307,6 +330,7 @@ export type VisualEvent =
   | SpotlightEvent
   | SceneAssetEvent
   | ConceptBuildEvent
+  | SceneStageEvent
   | TransitionEvent
   | ClearEvent
   | ImageEvent;

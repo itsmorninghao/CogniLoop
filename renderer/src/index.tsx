@@ -20,12 +20,16 @@ const sampleSlides = [
   },
 ];
 
+const SlideVideoComposition: React.FC<Record<string, unknown>> = (props) => (
+  <SlideVideo {...(props as unknown as SlideVideoProps)} />
+);
+
 const Root: React.FC = () => {
   return (
     <>
       <Composition
         id="SlideVideo"
-        component={SlideVideo}
+        component={SlideVideoComposition}
         durationInFrames={calculateTotalFrames(sampleSlides)}
         fps={VIDEO_FPS}
         width={VIDEO_WIDTH}
@@ -39,7 +43,7 @@ const Root: React.FC = () => {
         calculateMetadata={async ({ props }) => {
           return {
             durationInFrames: calculateTotalFrames(
-              (props as SlideVideoProps).slides
+              (props as unknown as SlideVideoProps).slides
             ),
             fps: VIDEO_FPS,
             width: VIDEO_WIDTH,

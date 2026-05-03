@@ -37,14 +37,29 @@ from backend.app.schemas.course import (
 
 logger = logging.getLogger(__name__)
 
-# Strong references to background tasks so they aren't GC'd
-_background_tasks: set = set()
+# Strong references to background tasks so they aren't GC'd.
+_background_tasks: set[asyncio.Task[None]] = set()
 
 # Redis draft TTL: 30 minutes
 _DRAFT_TTL = 1800
 
 # Max concurrent leaf-node generations
 _GEN_CONCURRENCY = 3
+
+
+def _track_background_task(task: asyncio.Task[None]) -> None:
+    _background_tasks.add(task)
+
+    def _done(done_task: asyncio.Task[None]) -> None:
+        _background_tasks.discard(done_task)
+        try:
+            done_task.result()
+        except asyncio.CancelledError:
+            logger.warning("Course generation background task was cancelled")
+        except Exception:
+            logger.exception("Course generation background task failed")
+
+    task.add_done_callback(_done)
 
 
 # Redis helpers
@@ -423,13 +438,13 @@ async def confirm_outline(
             session.add(CourseNodeContent(node_id=node.id, gen_status="pending"))
 
     await session.flush()
-    # draft_id is passed to the background task so deletion happens after
-    # this request's DB session commits (background tasks run after response is sent)
+    # Commit before launching the task; otherwise the task can read before the
+    # request-scoped dependency commits and see an empty course.
+    await session.commit()
 
     # Launch Phase 2 in background (also cleans up the Redis draft)
     task = asyncio.create_task(_run_generation_pipeline(course.id, user.id, draft_id))
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    _track_background_task(task)
 
     return {"course_id": course.id, "status": "generating"}
 
@@ -461,6 +476,7 @@ async def retry_node(node_id: int, user: User, session: AsyncSession) -> dict:
     content.error_msg = None
     session.add(content)
     await session.flush()
+    await session.commit()
 
     all_nodes = (await session.execute(
         select(CourseNode).where(CourseNode.course_id == course.id)
@@ -480,8 +496,7 @@ async def retry_node(node_id: int, user: User, session: AsyncSession) -> dict:
             theme=course.theme,
         )
     )
-    _background_tasks.add(task)
-    task.add_done_callback(_background_tasks.discard)
+    _track_background_task(task)
 
     return {"node_id": node_id, "status": "retrying"}
 

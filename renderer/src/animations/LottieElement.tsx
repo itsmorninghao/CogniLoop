@@ -5,6 +5,7 @@
 import React, { useMemo } from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { Lottie, getLottieMetadata } from "@remotion/lottie";
+import type { LottieAnimationData } from "@remotion/lottie";
 import { getAssetUrl, getAssetMeta } from "./AssetLoader";
 import type { ThemeConfig } from "../types";
 
@@ -77,7 +78,7 @@ export const LottieElement: React.FC<Props> = ({
       transform: `scale(${scale})`,
     }}>
       <Lottie
-        animationData={animationData}
+        animationData={animationData as LottieAnimationData}
         playbackRate={playbackRate}
         loop={loop}
         style={{ width: "100%", height: "100%" }}

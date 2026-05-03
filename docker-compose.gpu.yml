@@ -18,7 +18,10 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-cogniloop_db}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Keep DB_PORT for app-to-db traffic inside the compose network.
+      # DB_PUBLIC_PORT only controls the optional host binding, avoiding
+      # conflicts with an existing host PostgreSQL on test machines.
+      - "${DB_PUBLIC_PORT:-5432}:5432"
     volumes:
       - cogniloop_pgdata:/var/lib/postgresql/data
     networks:

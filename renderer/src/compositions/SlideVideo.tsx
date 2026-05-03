@@ -35,8 +35,7 @@ export function calculateTotalFrames(slides: SlideData[]): number {
     const durationFrames = Math.ceil(
       (slides[i].duration_ms / 1000) * VIDEO_FPS
     );
-    const fadeFrames = i < slides.length - 1 ? FADE_DURATION_FRAMES : 0;
-    total += durationFrames + fadeFrames;
+    total += durationFrames;
   }
   return Math.max(1, total);
 }
@@ -163,22 +162,23 @@ export const SlideVideo: React.FC<SlideVideoProps> = ({ slides, theme, lottieCac
           (slide.duration_ms / 1000) * VIDEO_FPS
         );
         const isLast = i === totalSlides - 1;
-        const fadeFrames = isLast ? 0 : FADE_DURATION_FRAMES;
-        const totalSequenceFrames = durationFrames + fadeFrames;
+        const fadeFrames = isLast
+          ? 0
+          : Math.min(FADE_DURATION_FRAMES, Math.max(0, durationFrames - 1));
 
         const currentOffset = frameOffset;
-        frameOffset += totalSequenceFrames;
+        frameOffset += durationFrames;
 
         return (
           <Sequence
             key={i}
             from={currentOffset}
-            durationInFrames={totalSequenceFrames}
+            durationInFrames={durationFrames}
           >
             {renderSlide(slide, themeConfig, i, totalSlides, lottieCache)}
             {fadeFrames > 0 && (
               <FadeTransition
-                startFrame={durationFrames}
+                startFrame={durationFrames - fadeFrames}
                 duration={fadeFrames}
                 color={themeConfig.bg}
               />
