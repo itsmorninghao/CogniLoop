@@ -1,9 +1,3 @@
-/**
- * KineticText — Rich text animations driven by Remotion frame.
- *
- * Supports: typewriter, word-reveal, highlight, glow-pulse,
- * underline-draw, fade-up, scale-in.
- */
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import type { TextAnimation, TextStyle, ThemeConfig } from "../types";
@@ -85,8 +79,6 @@ export const KineticText: React.FC<Props> = ({
   }
 };
 
-// ─── Animation implementations ──────────────────────────────────────
-
 const Typewriter: React.FC<{
   text: string; frame: number; dur: number;
   style: React.CSSProperties; theme: ThemeConfig;
@@ -94,7 +86,7 @@ const Typewriter: React.FC<{
   const charsToShow = Math.floor(
     interpolate(frame, [0, dur], [0, text.length], { extrapolateRight: "clamp" })
   );
-  const showCursor = frame < dur + 12; // blink cursor a bit after done
+  const showCursor = frame < dur + 12;
   const cursorOpacity = showCursor ? (Math.floor(frame / 6) % 2 === 0 ? 1 : 0) : 0;
 
   return (
@@ -215,7 +207,6 @@ const Highlight: React.FC<{
   text: string; frame: number; dur: number;
   style: React.CSSProperties; theme: ThemeConfig;
 }> = ({ text, frame, dur, style, theme }) => {
-  // Text appears immediately, highlight sweeps across
   const highlightWidth = interpolate(frame, [6, dur * 0.6], [0, 100], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",

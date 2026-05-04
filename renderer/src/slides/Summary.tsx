@@ -22,7 +22,6 @@ export const Summary: React.FC<Props> = ({
 
   return (
     <SlideLayout theme={theme} slideIndex={slideIndex} totalSlides={totalSlides}>
-      {/* Heading with badge */}
       <AnimatedText delay={0} theme={theme.name} animation="fadeUp">
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <h2 style={{ fontSize: 48, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>
@@ -47,7 +46,6 @@ export const Summary: React.FC<Props> = ({
 
       <Divider theme={theme} delay={4} />
 
-      {/* Summary cards grid */}
       <div
         style={{
           display: "grid",

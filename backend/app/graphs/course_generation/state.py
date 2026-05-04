@@ -1,9 +1,5 @@
 """
 State definitions for course generation LangGraphs.
-
-Two separate graphs:
-  - outline_generation_graph: Phase 1 — KB → course outline draft
-  - node_generation_graph:    Phase 2 — single leaf node → content + quiz
 """
 
 from __future__ import annotations
@@ -14,20 +10,16 @@ from typing import TypedDict
 class OutlineGenState(TypedDict, total=False):
     """State for the outline generation graph (Phase 1)."""
 
-    # Input (set by service layer)
     kb_ids: list[int]
-    level: str           # "beginner" | "advanced"
+    level: str
     voice_id: str | None
     user_id: int
 
-    # kb_summarizer output
     kb_summary: str
 
-    # outline_generator output
     course_title: str
-    nodes: list[dict]    # list of OutlineNodeDraft-compatible dicts
+    nodes: list[dict]
 
-    # observability
     current_node: str
     errors: list[str]
 
@@ -35,42 +27,35 @@ class OutlineGenState(TypedDict, total=False):
 class NodeGenState(TypedDict, total=False):
     """State for the per-node content generation graph (Phase 2)."""
 
-    # Input (set by service layer)
     node_id: int
     course_id: int
     node_title: str
-    content_type: str    # "video" | "text"
+    content_type: str
     level: str
     kb_ids: list[int]
     voice_id: str | None
-    theme: str           # "tech-dark" | "clean-bright"
+    theme: str
     user_id: int
 
-    course_outline: str          # full outline summary (titles + key points)
-    node_key_points: list[str]   # key points for this specific node
-    node_position: str           # e.g. "第3节，前面讲了X，后面讲Y"
-    node_scope_note: str         # boundary: what to cover vs. skip
+    course_outline: str
+    node_key_points: list[str]
+    node_position: str
+    node_scope_note: str
 
-    # rag_retriever output
     rag_content: str
 
-    # content_generator output
-    script_json: dict | None    # slides JSON, video nodes only
-    text_content: str | None    # markdown article, text nodes only
-    narration_text: str         # full narration for TTS
+    script_json: dict | None
+    text_content: str | None
+    narration_text: str
 
-    # storyboard pipeline output (video nodes only)
     storyboard_json: dict | None
     render_scene_json: dict | None
     asset_manifest_json: dict | None
 
-    # video_pipeline output
     video_url: str | None
 
-    # quiz_generator output
     quiz_session_id: str | None
 
-    # observability / result
     current_node: str
-    gen_status: str      # "done" | "failed"
+    gen_status: str
     error_msg: str | None

@@ -1,6 +1,3 @@
-/**
- * NumberCounter — Animated counting number from/to with optional prefix/suffix.
- */
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import type { ThemeConfig } from "../types";
@@ -47,7 +44,6 @@ export const NumberCounter: React.FC<Props> = ({
     extrapolateRight: "clamp",
   });
 
-  // Determine decimal places from the target value
   const decimals = Number.isInteger(to) ? 0 : 1;
   const displayValue = value.toFixed(decimals);
 

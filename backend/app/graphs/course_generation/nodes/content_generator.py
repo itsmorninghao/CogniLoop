@@ -207,10 +207,10 @@ _TEXT_PROMPT_ADVANCED = """\
 
 
 def _generate_visual_events(slide: dict) -> list[dict]:
-    """Auto-generate visual_events from V1 slide data for animated rendering."""
+    """Generate timeline events from slide content."""
     template = slide.get("template", "")
     events: list[dict] = []
-    t = 0.0  # current time in seconds
+    t = 0.0
 
     if template == "TITLE_SLIDE":
         title = _clean_display_text(slide.get("title", ""))
@@ -733,7 +733,7 @@ async def content_generator(state: NodeGenState) -> dict:
             "current_node": "content_generator",
         }
 
-    else:  # text
+    else:
         from backend.app.core.redis_pubsub import publish
 
         node_id = state.get("node_id")

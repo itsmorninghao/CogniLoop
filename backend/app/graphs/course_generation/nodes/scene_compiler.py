@@ -1,10 +1,8 @@
 """
-Node graph: Scene Compiler.
+Compile creative storyboard output into the render_scene contract.
 
-The storyboard is creative but still model-shaped. This compiler converts it
-into a renderer contract that is stable, layout-aware, and safe to persist in
-script_json. V2 carries video-level visual identity so the renderer can build
-different explainer worlds instead of reusing one PPT skeleton.
+The compiler normalizes model output into stable layouts, objects, beats, and
+asset requests that the Remotion renderer can consume directly.
 """
 
 from __future__ import annotations
@@ -84,7 +82,6 @@ _WORLD_FALLBACKS = {
 
 
 async def scene_compiler(state: NodeGenState) -> dict:
-    """Attach renderer-ready render_scene payloads to script_json slides."""
     script_json = state.get("script_json")
     storyboard_json = state.get("storyboard_json")
 

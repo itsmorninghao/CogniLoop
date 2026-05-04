@@ -1,10 +1,8 @@
 """
-Node graph: Storyboard Generator.
+Generate director-level storyboards for video slides.
 
-This node upgrades the coarse slide script into a director-level storyboard.
-The important shift is video-level visual identity: every slide should feel
-like a different shot inside the same explainer world, not like the same PPT
-template with different text.
+The storyboard keeps the script content intact while choosing visual identity,
+scene space, continuity objects, beats, and camera direction for each slide.
 """
 
 from __future__ import annotations

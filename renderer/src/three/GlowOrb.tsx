@@ -18,17 +18,14 @@ const Orb: React.FC<{ color: string; size: number; opacity: number }> = ({
   const { fps } = useVideoConfig();
   const time = frame / fps;
 
-  // Pulsing scale
   const scale = 1 + Math.sin(time * 1.2) * 0.08;
   const scaledSize = (size / 200) * scale;
 
-  // Position offset — gentle drift
   const x = Math.sin(time * 0.3) * 0.5 + 2;
   const y = Math.cos(time * 0.4) * 0.3 + 0.5;
 
   return (
     <group position={[x, y, -3]}>
-      {/* Core sphere */}
       <mesh scale={[scaledSize, scaledSize, scaledSize]}>
         <sphereGeometry args={[1, 32, 32]} />
         <meshBasicMaterial
@@ -37,7 +34,6 @@ const Orb: React.FC<{ color: string; size: number; opacity: number }> = ({
           opacity={opacity * 0.8}
         />
       </mesh>
-      {/* Outer glow (larger, more transparent) */}
       <mesh scale={[scaledSize * 1.8, scaledSize * 1.8, scaledSize * 1.8]}>
         <sphereGeometry args={[1, 16, 16]} />
         <meshBasicMaterial

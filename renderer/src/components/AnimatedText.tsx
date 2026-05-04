@@ -4,7 +4,7 @@ import type { ThemeName } from "../types";
 
 interface AnimatedTextProps {
   children: React.ReactNode;
-  delay?: number; // delay in frames
+  delay?: number;
   style?: React.CSSProperties;
   theme: ThemeName;
   animation?: "fadeUp" | "fadeIn" | "scaleIn" | "slideLeft" | "slideRight";
@@ -46,7 +46,6 @@ export const AnimatedText: React.FC<AnimatedTextProps> = ({
         transform = "none";
     }
   } else {
-    // tech-dark: smooth ease-out
     opacity = interpolate(adjustedFrame, [0, 18], [0, 1], { extrapolateRight: "clamp" });
     switch (animation) {
       case "fadeUp":

@@ -128,7 +128,6 @@ async def outline_generator(state: OutlineGenState) -> dict:
     course_title = data.get("course_title", "未命名课程")
     raw_nodes = data.get("nodes", [])
 
-    # Normalise nodes: ensure required fields have defaults
     nodes = [
         {
             "temp_id": n.get("temp_id", f"n{i}"),

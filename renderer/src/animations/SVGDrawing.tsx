@@ -1,7 +1,3 @@
-/**
- * SVGDrawing — Animated SVG path reveal.
- * Supports arrow, underline, circle, bracket, line, box, curved-arrow.
- */
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import type { ThemeConfig } from "../types";
@@ -60,7 +56,6 @@ export const SVGDrawing: React.FC<Props> = ({
         strokeDasharray={pathLength}
         strokeDashoffset={pathLength * (1 - progress)}
       />
-      {/* Arrowhead for arrow shapes */}
       {(shape === "arrow" || shape === "curved-arrow") && progress > 0.8 && (
         <ArrowHead
           toX={toX} toY={toY}

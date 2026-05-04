@@ -4,8 +4,8 @@ import type { ThemeName } from "../types";
 
 interface AnimatedListProps {
   items: string[];
-  baseDelay?: number; // start delay in frames
-  staggerDelay?: number; // frames between each item
+  baseDelay?: number;
+  staggerDelay?: number;
   theme: ThemeName;
   renderItem: (item: string, index: number) => React.ReactNode;
 }

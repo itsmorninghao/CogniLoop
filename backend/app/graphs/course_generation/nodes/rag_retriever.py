@@ -1,6 +1,5 @@
 """
-Node 1 (node graph): RAG Retriever — fetch relevant chunks for a single course node.
-Uses the project's existing hybrid retrieval pipeline.
+Retrieve knowledge-base chunks for a course node.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from backend.app.rag.retriever import retrieve_chunks
 
 logger = logging.getLogger(__name__)
 
-_TOP_K = 8          # chunks per node
+_TOP_K = 8
 _CHUNK_MAX_CHARS = 600
 
 
@@ -33,14 +32,13 @@ async def rag_retriever(state: NodeGenState) -> dict:
                 knowledge_base_ids=kb_ids if kb_ids else None,
                 top_k=_TOP_K,
                 use_hybrid=True,
-                use_rerank=False,   # speed over precision for content gen
+                use_rerank=False,
             )
             rag_content = "\n\n".join(
                 c["content"][:_CHUNK_MAX_CHARS] for c in chunks if c.get("content")
             )
         except Exception as e:
             logger.warning("RAG retrieval failed for node '%s': %s, falling back", node_title, e)
-            # Fallback: sequential chunks from KB
             from sqlmodel import select
             from backend.app.models.knowledge_base import KBChunk
             result = await session.execute(

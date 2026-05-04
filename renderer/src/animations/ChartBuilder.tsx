@@ -1,6 +1,3 @@
-/**
- * ChartBuilder — Animated bar/line/pie/progress-ring charts in pure React+SVG.
- */
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import type { ThemeConfig } from "../types";
@@ -61,8 +58,6 @@ export const ChartBuilder: React.FC<Props> = ({
   );
 };
 
-// ─── Bar Chart ──────────────────────────────────────────────────────
-
 const BarChart: React.FC<{
   data: ChartData; colors: string[]; progress: number; w: number; h: number; theme: ThemeConfig;
 }> = ({ data, colors, progress, w, h, theme }) => {
@@ -74,9 +69,7 @@ const BarChart: React.FC<{
 
   return (
     <g>
-      {/* Axis */}
       <line x1={padding} y1={chartH} x2={w - padding / 2} y2={chartH} stroke={theme.textMuted} strokeWidth={1} opacity={0.3} />
-      {/* Bars */}
       {data.values.map((val, i) => {
         const barH = (val / maxVal) * (chartH - 20) * progress;
         const x = padding + i * (barWidth + gap) + gap / 2;
@@ -89,7 +82,6 @@ const BarChart: React.FC<{
               rx={6} ry={6}
               fill={colors[i % colors.length]}
             />
-            {/* Label */}
             <text
               x={x + barWidth / 2} y={chartH + 20}
               textAnchor="middle"
@@ -99,7 +91,6 @@ const BarChart: React.FC<{
             >
               {data.labels[i] ?? ""}
             </text>
-            {/* Value on top */}
             {progress > 0.5 && (
               <text
                 x={x + barWidth / 2} y={y - 8}
@@ -119,8 +110,6 @@ const BarChart: React.FC<{
     </g>
   );
 };
-
-// ─── Line Chart ─────────────────────────────────────────────────────
 
 const LineChart: React.FC<{
   data: ChartData; colors: string[]; progress: number; w: number; h: number; theme: ThemeConfig;
@@ -151,7 +140,6 @@ const LineChart: React.FC<{
         strokeDasharray={pathLength}
         strokeDashoffset={pathLength * (1 - progress)}
       />
-      {/* Dots */}
       {points.map((p, i) => {
         const dotProgress = interpolate(progress, [i / points.length, (i + 0.5) / points.length], [0, 1], {
           extrapolateLeft: "clamp", extrapolateRight: "clamp",
@@ -160,7 +148,6 @@ const LineChart: React.FC<{
           <circle key={i} cx={p.x} cy={p.y} r={5 * dotProgress} fill={colors[0]} />
         );
       })}
-      {/* Labels */}
       {data.labels.map((label, i) => (
         <text key={i}
           x={padding + i * stepX} y={chartH + 20}
@@ -173,8 +160,6 @@ const LineChart: React.FC<{
     </g>
   );
 };
-
-// ─── Pie Chart ──────────────────────────────────────────────────────
 
 const PieChart: React.FC<{
   data: ChartData; colors: string[]; progress: number; w: number; h: number; theme: ThemeConfig;
@@ -200,8 +185,6 @@ const PieChart: React.FC<{
 
   return <g>{slices}</g>;
 };
-
-// ─── Progress Ring ──────────────────────────────────────────────────
 
 const ProgressRing: React.FC<{
   data: ChartData; colors: string[]; progress: number; w: number; h: number; theme: ThemeConfig;

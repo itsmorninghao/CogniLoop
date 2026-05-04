@@ -1,4 +1,3 @@
-/** Slide template types matching the backend content_generator output */
 export type TemplateType =
   | "TITLE_SLIDE"
   | "BULLET_POINTS"
@@ -10,20 +9,14 @@ export type TemplateType =
 
 export type ThemeName = "tech-dark" | "clean-bright";
 
-/** Base slide data — every slide has these */
 export interface SlideBase {
   template: TemplateType;
   narration?: string;
   duration_ms: number;
-  /** Storyboard pipeline: director-level planning generated before rendering. */
   storyboard?: StoryboardSlide;
-  /** Storyboard pipeline: renderer-ready scene contract. Takes priority over visual_events. */
   render_scene?: RenderScene;
-  /** V2: Timeline-driven visual events. When present, AnimatedSlide renders instead of static template. */
   visual_events?: VisualEvent[];
-  /** V2: Layout hint for element positioning */
   layout?: SlideLayout;
-  /** V2: Background override */
   background?: SlideBackground;
 }
 
@@ -83,7 +76,6 @@ export type SlideData =
   | SummaryData
   | DiagramTextData;
 
-/** Render request from the backend */
 export interface RenderRequest {
   task_id: string;
   node_id: number;
@@ -95,7 +87,6 @@ export interface RenderRequest {
   };
 }
 
-/** Render response back to backend */
 export interface RenderResponse {
   status: "done" | "failed";
   video_path?: string;
@@ -103,47 +94,35 @@ export interface RenderResponse {
   duration_ms?: number;
 }
 
-/** Theme configuration */
 export interface ThemeConfig {
   name: ThemeName;
-  // Background
   bg: string;
   bgGradient: string;
-  // Cards
   cardBg: string;
   cardBorder: string;
   cardShadow: string;
-  // Text
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
-  // Brand colors
   primary: string;
   primaryLight: string;
   primaryDark: string;
   accent: string;
   accentGlow: string;
-  // Semantic
   success: string;
   warning: string;
-  // Accent bar gradient
   accentBarGradient: string;
-  // Decorative
   decorCircle1: string;
   decorCircle2: string;
-  // 3D config
   enable3d: boolean;
   particleColor: string;
   glowColor: string;
 }
 
-/** FPS and resolution constants */
 export const VIDEO_FPS = 24;
 export const VIDEO_WIDTH = 1920;
 export const VIDEO_HEIGHT = 1080;
-export const FADE_DURATION_FRAMES = 12; // 0.5s at 24fps
-
-// ─── Storyboard Render Scene System ─────────────────────────────────
+export const FADE_DURATION_FRAMES = 12;
 
 export type StoryboardSceneType =
   | "concept_opening"
@@ -292,9 +271,6 @@ export interface RenderScene {
   constraints?: StoryboardConstraints;
 }
 
-// ─── Visual Event System (V2 animated slides) ───────────────────────
-
-/** Position on the 1920×1080 canvas */
 export interface CanvasPosition {
   x: number;
   y: number;
@@ -303,7 +279,6 @@ export interface CanvasPosition {
   anchor?: "top-left" | "center" | "bottom-right" | "bottom-left" | "top-right";
 }
 
-/** Text animation styles */
 export type TextAnimation =
   | "typewriter"
   | "word-reveal"
@@ -313,17 +288,11 @@ export type TextAnimation =
   | "fade-up"
   | "scale-in";
 
-/** Text visual style presets */
 export type TextStyle = "heading" | "subheading" | "body" | "caption" | "label" | "emphasis" | "stat";
 
-// ─── Visual Event Subtypes ──────────────────────────────────────────
-
 interface VisualEventBase {
-  /** Seconds from slide start when this event triggers */
   at: number;
-  /** Animation duration in seconds (default varies by type) */
   duration?: number;
-  /** Optional ID for ClearEvent to reference */
   id?: string;
 }
 
@@ -470,7 +439,6 @@ export interface ImageEvent extends VisualEventBase {
   animation?: "fade-in" | "scale-in" | "slide-left" | "slide-right" | "ken-burns";
 }
 
-/** Union of all visual event types */
 export type VisualEvent =
   | TextEvent
   | LottieEvent
@@ -488,13 +456,9 @@ export type VisualEvent =
   | ClearEvent
   | ImageEvent;
 
-/** Slide layout variants */
 export type SlideLayout = "full" | "split-left" | "split-right" | "centered" | "two-column";
 
-/** Background variants */
 export type SlideBackground = "default" | "gradient-warm" | "gradient-cool" | "dark-emphasis" | "light-emphasis";
-
-// ─── Asset Manifest Types ───────────────────────────────────────────
 
 export interface AssetMeta {
   path: string;

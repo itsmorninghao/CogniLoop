@@ -1,5 +1,5 @@
 """
-Node 1 (outline graph): KB Summarizer — fetch KB content as LLM context.
+Fetch knowledge-base context for outline generation.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from sqlmodel import select
 
 logger = logging.getLogger(__name__)
 
-# Max chars of KB content to feed into the outline LLM
 _MAX_SUMMARY_CHARS = 8000
 
 
@@ -26,7 +25,6 @@ async def kb_summarizer(state: OutlineGenState) -> dict:
     kb_ids: list[int] = state.get("kb_ids", [])
 
     async with async_session_factory() as session:
-        # Try fetching up to 30 chunks across all selected KBs
         chunks_result = await session.execute(
             select(KBChunk.content)
             .where(KBChunk.knowledge_base_id.in_(kb_ids))
@@ -36,7 +34,6 @@ async def kb_summarizer(state: OutlineGenState) -> dict:
         chunks = [row[0] for row in chunks_result if row[0]]
 
         if not chunks:
-            # Fallback: use KB metadata
             kbs_result = await session.execute(
                 select(KnowledgeBase.name, KnowledgeBase.description)
                 .where(KnowledgeBase.id.in_(kb_ids))
@@ -45,7 +42,6 @@ async def kb_summarizer(state: OutlineGenState) -> dict:
                 f"知识库：{row[0]}。{row[1] or ''}" for row in kbs_result
             )
         else:
-            # Truncate each chunk and join, capped at total limit
             parts: list[str] = []
             total = 0
             for chunk in chunks:

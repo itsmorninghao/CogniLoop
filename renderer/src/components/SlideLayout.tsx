@@ -8,7 +8,6 @@ interface SlideLayoutProps {
   slideIndex: number;
   totalSlides: number;
   children: React.ReactNode;
-  /** Optional 3D background layer rendered behind content */
   background3d?: React.ReactNode;
 }
 
@@ -21,7 +20,6 @@ export const SlideLayout: React.FC<SlideLayoutProps> = ({
 }) => {
   const frame = useCurrentFrame();
 
-  // Accent bar expand animation
   const barWidth = interpolate(frame, [0, 18], [0, VIDEO_WIDTH], {
     extrapolateRight: "clamp",
   });
@@ -35,7 +33,6 @@ export const SlideLayout: React.FC<SlideLayoutProps> = ({
         overflow: "hidden",
       }}
     >
-      {/* Decorative circles */}
       <div
         style={{
           position: "absolute",
@@ -61,12 +58,10 @@ export const SlideLayout: React.FC<SlideLayoutProps> = ({
         }}
       />
 
-      {/* 3D background layer */}
       {background3d && (
         <AbsoluteFill style={{ zIndex: 0 }}>{background3d}</AbsoluteFill>
       )}
 
-      {/* Accent bar at top */}
       <div
         style={{
           position: "absolute",
@@ -79,7 +74,6 @@ export const SlideLayout: React.FC<SlideLayoutProps> = ({
         }}
       />
 
-      {/* Content area */}
       <div
         style={{
           position: "relative",
@@ -95,7 +89,6 @@ export const SlideLayout: React.FC<SlideLayoutProps> = ({
         {children}
       </div>
 
-      {/* Slide number */}
       <div
         style={{
           position: "absolute",

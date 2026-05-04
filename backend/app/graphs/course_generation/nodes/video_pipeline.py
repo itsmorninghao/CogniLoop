@@ -1,7 +1,8 @@
 """
-Node 3 (node graph, video path): Video Pipeline — renderer dispatch + TTS + ffmpeg.
+Render video nodes from slide scripts.
 
-Only executed for content_type == "video" nodes.
+The pipeline synthesizes per-slide narration, renders a silent Remotion video,
+muxes audio, and stores the final MP4.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from backend.app.services import tts_service, video_service
 
 logger = logging.getLogger(__name__)
 
-_RENDERER_TIMEOUT = 1800  # CPU rendering ~4fps, 3000 frames ≈ 12min
+_RENDERER_TIMEOUT = 1800
 _TTS_TIMEOUT = 90.0
 _MIN_SLIDE_DURATION_MS = 1000
 _BEAT_INTERVAL_SECONDS = 5.0
@@ -28,14 +29,6 @@ AudioResult = tuple[Path, float, bool]
 
 
 async def video_pipeline(state: NodeGenState) -> dict:
-    """
-    1. Call TTS per-slide for narration audio (parallel).
-    2. Dispatch slide rendering to Remotion renderer via HTTP.
-    3. Mux silent video + audio with ffmpeg.
-    4. Save to uploads, return video_url.
-
-    If renderer is unavailable, the node is still marked done but with video_url=None.
-    """
     node_id: int = state["node_id"]
     course_id: int = state["course_id"]
     script_json: dict | None = state.get("script_json")
@@ -51,7 +44,6 @@ async def video_pipeline(state: NodeGenState) -> dict:
         logger.warning("video_pipeline: no slides for node %d, skipping", node_id)
         return {"video_url": None, "current_node": "video_pipeline"}
 
-    # Step 1: Per-slide TTS (parallel, each task gets its own DB session)
     audio_results = await _synthesize_per_slide(slides, voice_id, node_id)
 
     if not audio_results:
@@ -62,7 +54,6 @@ async def video_pipeline(state: NodeGenState) -> dict:
         slide["duration_ms"] = max(_MIN_SLIDE_DURATION_MS, int(duration * 1000))
         _pace_visual_events_for_audio(slide, duration)
 
-    # Step 2: Dispatch to Remotion renderer via HTTP
     try:
         silent_video_path = await _dispatch_to_renderer(
             node_id, course_id, script_json, theme
@@ -79,19 +70,15 @@ async def video_pipeline(state: NodeGenState) -> dict:
 
     silent_video = Path(silent_video_path)
 
-    # Step 3: Concat per-slide audio files into single track
     audio_paths = [ap for ap, _duration, _tts_ok in audio_results]
     combined_audio = silent_video.parent / f"narration_{node_id}.mp3"
     await video_service.concat_audio_files(audio_paths, combined_audio)
 
-    # Step 4: Mux silent video + audio
     output_path = silent_video.parent / f"node_{node_id}.mp4"
     await video_service.mux_audio(silent_video, combined_audio, output_path)
 
-    # Step 5: Save to uploads
     video_url = await video_service.save_video_to_storage(output_path, course_id, node_id)
 
-    # Cleanup
     video_service.cleanup_render_output(silent_video)
     combined_audio.unlink(missing_ok=True)
     output_path.unlink(missing_ok=True)
@@ -333,10 +320,6 @@ async def _dispatch_to_renderer(
     script_json: dict,
     theme: str,
 ) -> str | None:
-    """
-    Send render request to Remotion renderer service via HTTP.
-    Returns the video file path on success, or None if renderer is unavailable.
-    """
     try:
         import httpx
 
@@ -349,7 +332,6 @@ async def _dispatch_to_renderer(
             "script_json": script_json,
         }
 
-        # Health check first
         async with httpx.AsyncClient(timeout=5) as client:
             try:
                 health = await client.get(f"{_RENDERER_URL}/health")
@@ -360,7 +342,6 @@ async def _dispatch_to_renderer(
                 logger.warning("video_pipeline: renderer not reachable at %s", _RENDERER_URL)
                 return None
 
-        # Send render request
         async with httpx.AsyncClient(timeout=_RENDERER_TIMEOUT) as client:
             response = await client.post(
                 f"{_RENDERER_URL}/render",

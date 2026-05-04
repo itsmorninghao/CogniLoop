@@ -22,7 +22,6 @@ export const QuoteHighlight: React.FC<Props> = ({
   const frame = useCurrentFrame();
   const isDark = theme.name === "tech-dark";
 
-  // Subtle floating effect for the quote card
   const floatY = interpolate(Math.sin(frame * 0.05), [-1, 1], [-4, 4]);
 
   return (
@@ -41,7 +40,6 @@ export const QuoteHighlight: React.FC<Props> = ({
           alignItems: "center",
         }}
       >
-        {/* Quote card */}
         <AnimatedText delay={4} theme={theme.name} animation="scaleIn">
           <div
             style={{
@@ -57,7 +55,6 @@ export const QuoteHighlight: React.FC<Props> = ({
               position: "relative",
             }}
           >
-            {/* Large quote mark */}
             <div
               style={{
                 position: "absolute",
@@ -89,7 +86,6 @@ export const QuoteHighlight: React.FC<Props> = ({
           </div>
         </AnimatedText>
 
-        {/* Emphasis text */}
         {slide.emphasis && (
           <AnimatedText delay={14} theme={theme.name} animation="fadeIn">
             <p

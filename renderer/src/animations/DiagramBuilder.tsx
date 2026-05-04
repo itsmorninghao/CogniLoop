@@ -1,6 +1,3 @@
-/**
- * DiagramBuilder — Progressive reveal flowcharts, mindmaps, timelines, cycles.
- */
 import React from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import type { ThemeConfig } from "../types";
@@ -67,8 +64,6 @@ export const DiagramBuilder: React.FC<Props> = ({
   );
 };
 
-// ─── Shared ─────────────────────────────────────────────────────────
-
 const NodeBox: React.FC<{
   x: number; y: number; label: string; progress: number;
   theme: ThemeConfig; isPrimary?: boolean; maxWidth?: number;
@@ -102,8 +97,6 @@ const NodeBox: React.FC<{
     {label}
   </div>
 );
-
-// ─── Flowchart (top to bottom) ──────────────────────────────────────
 
 const Flowchart: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;
@@ -162,8 +155,6 @@ const Flowchart: React.FC<{
   );
 };
 
-// ─── Mindmap (center + radial) ──────────────────────────────────────
-
 const Mindmap: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;
   w: number; h: number; theme: ThemeConfig; fps: number;
@@ -217,8 +208,6 @@ const Mindmap: React.FC<{
     </>
   );
 };
-
-// ─── Timeline Steps (horizontal) ────────────────────────────────────
 
 const TimelineSteps: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;
@@ -316,8 +305,6 @@ const TimelineSteps: React.FC<{
     </>
   );
 };
-
-// ─── Cycle (circular) ───────────────────────────────────────────────
 
 const Cycle: React.FC<{
   nodes: DiagramNode[]; frame: number; dur: number;

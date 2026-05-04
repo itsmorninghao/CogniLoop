@@ -1,10 +1,9 @@
 """
-Node Generation Graph — Phase 2 of AI Course Studio (per-leaf-node).
+Per-node course content generation graph.
 
-Graph:
-  rag_retriever → content_generator → [route_by_type]
-    video → storyboard_generator → scene_compiler → asset_generator → video_pipeline → quiz_generator → END
-    text  → quiz_generator → END
+Video nodes pass through storyboard planning, scene compilation, asset
+resolution, rendering, and quiz generation. Text nodes skip the video-only
+steps and go directly from content generation to quiz generation.
 """
 
 from __future__ import annotations
@@ -22,7 +21,6 @@ from backend.app.graphs.course_generation.state import NodeGenState
 
 
 def _route_by_content_type(state: NodeGenState) -> str:
-    """Route video nodes into storyboard planning, skip to quiz_generator for text nodes."""
     if state.get("content_type") == "video":
         return "storyboard_generator"
     return "quiz_generator"

@@ -37,7 +37,6 @@ export const Comparison: React.FC<Props> = ({
       totalSlides={totalSlides}
       background3d={background3d}
     >
-      {/* Heading */}
       <AnimatedText delay={0} theme={theme.name} animation="fadeUp">
         <h2 style={{ fontSize: 48, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>
           {slide.heading}
@@ -46,9 +45,7 @@ export const Comparison: React.FC<Props> = ({
 
       <Divider theme={theme} delay={4} />
 
-      {/* Two columns */}
       <div style={{ display: "flex", gap: 32, marginTop: 16, flex: 1 }}>
-        {/* Left column */}
         <AnimatedText delay={10} theme={theme.name} animation="slideLeft" style={{ flex: 1 }}>
           <div style={{ ...columnStyle, borderTop: `3px solid ${theme.primary}` }}>
             <h3
@@ -80,7 +77,6 @@ export const Comparison: React.FC<Props> = ({
           </div>
         </AnimatedText>
 
-        {/* VS divider */}
         <AnimatedText delay={14} theme={theme.name} animation="scaleIn">
           <div
             style={{
@@ -112,7 +108,6 @@ export const Comparison: React.FC<Props> = ({
           </div>
         </AnimatedText>
 
-        {/* Right column */}
         <AnimatedText delay={10} theme={theme.name} animation="slideRight" style={{ flex: 1 }}>
           <div style={{ ...columnStyle, borderTop: `3px solid ${theme.accent}` }}>
             <h3

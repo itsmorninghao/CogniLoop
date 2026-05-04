@@ -1,9 +1,3 @@
-/**
- * AnimatedSlide — Renders a slide driven by visual_events timeline.
- *
- * Each VisualEvent becomes a positioned element that appears at its `at` time.
- * Elements persist until cleared by a ClearEvent or the slide ends.
- */
 import React, { useMemo } from "react";
 import { Sequence, useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import {
@@ -25,7 +19,6 @@ interface Props {
   theme: ThemeConfig;
   slideIndex: number;
   totalSlides: number;
-  /** Pre-loaded Lottie animation data keyed by assetId */
   lottieCache?: Record<string, object>;
 }
 
@@ -36,7 +29,6 @@ export const AnimatedSlide: React.FC<Props> = ({
   const events = slide.visual_events ?? [];
   const bg = getBackground(slide.background, theme);
 
-  // Sort events by time
   const sortedEvents = useMemo(
     () => [...events].sort((a, b) => a.at - b.at),
     [events]
@@ -53,7 +45,6 @@ export const AnimatedSlide: React.FC<Props> = ({
     }}>
       <SlideBackdrop slide={slide} theme={theme} />
 
-      {/* Slide number indicator */}
       <div style={{
         position: "absolute",
         bottom: 30,
@@ -65,7 +56,6 @@ export const AnimatedSlide: React.FC<Props> = ({
         {slideIndex + 1} / {totalSlides}
       </div>
 
-      {/* Accent bar at top */}
       <div style={{
         position: "absolute",
         top: 0, left: 0, right: 0,
@@ -73,7 +63,6 @@ export const AnimatedSlide: React.FC<Props> = ({
         background: theme.accentBarGradient,
       }} />
 
-      {/* Render each visual event as a positioned Sequence */}
       {sortedEvents.map((event, i) => {
         const startFrame = Math.round(event.at * fps);
         const durFrames = event.duration ? Math.round(event.duration * fps) : undefined;
@@ -94,8 +83,6 @@ export const AnimatedSlide: React.FC<Props> = ({
     </div>
   );
 };
-
-// ─── Visual stage ───────────────────────────────────────────────────
 
 const SlideBackdrop: React.FC<{
   slide: SlideData;
@@ -156,8 +143,6 @@ const SlideBackdrop: React.FC<{
     </>
   );
 };
-
-// ─── Event Renderer ─────────────────────────────────────────────────
 
 const EventRenderer: React.FC<{
   event: VisualEvent;
@@ -264,11 +249,9 @@ const EventRenderer: React.FC<{
       );
 
     case "clear":
-      // ClearEvent is a no-op in rendering — handled by Sequence `durationInFrames`
       return null;
 
     case "transition":
-      // Transitions are handled at the SlideVideo level
       return null;
 
     case "image":
@@ -375,8 +358,6 @@ const EventRenderer: React.FC<{
   }
 };
 
-// ─── Positioning wrapper ────────────────────────────────────────────
-
 const Positioned: React.FC<{
   pos: CanvasPosition;
   children: React.ReactNode;
@@ -414,8 +395,6 @@ const Positioned: React.FC<{
     </div>
   );
 };
-
-// ─── Image reveal ───────────────────────────────────────────────────
 
 const ImageReveal: React.FC<{
   src: string;
@@ -475,8 +454,6 @@ const ImageReveal: React.FC<{
   );
 };
 
-// ─── Icon Grid ──────────────────────────────────────────────────────
-
 import { Sequence as Seq } from "remotion";
 
 const IconGridRenderer: React.FC<{
@@ -487,7 +464,7 @@ const IconGridRenderer: React.FC<{
   lottieCache: Record<string, object>;
 }> = ({ icons, columns, startFrame, theme, lottieCache }) => {
   const { fps } = useVideoConfig();
-  const stagger = 6; // frames between each icon
+  const stagger = 6;
 
   return (
     <div style={{
@@ -521,8 +498,6 @@ const IconGridRenderer: React.FC<{
     </div>
   );
 };
-
-// ─── Explainer Visuals ─────────────────────────────────────────────
 
 const TONE_COLORS = {
   primary: "#6366f1",
@@ -2848,8 +2823,6 @@ const SummaryBuild: React.FC<{ labels: string[]; progress: number; theme: ThemeC
     </svg>
   );
 };
-
-// ─── Background helpers ─────────────────────────────────────────────
 
 function getBackground(bg: string | undefined, theme: ThemeConfig): string {
   switch (bg) {

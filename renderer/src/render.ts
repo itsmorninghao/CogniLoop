@@ -41,10 +41,8 @@ const REMOTION_NVENC_BINARIES_DIR = "/opt/remotion-nvenc-bin";
 
 let bundlePath: string | null = null;
 let assetManifest: AssetManifest | null = null;
-/** Directory where public/ assets live (for reading Lottie JSON at render time) */
 let publicAssetsDir: string | null = null;
 
-/** Calculate total frames for a list of slides */
 function calculateTotalFrames(slides: SlideData[]): number {
   let total = 0;
   for (let i = 0; i < slides.length; i++) {
@@ -54,7 +52,6 @@ function calculateTotalFrames(slides: SlideData[]): number {
   return Math.max(1, total);
 }
 
-/** Load the asset manifest from a directory */
 function loadManifest(dir: string): AssetManifest | null {
   const manifestPath = path.join(dir, "manifest.json");
   if (fs.existsSync(manifestPath)) {
@@ -67,14 +64,11 @@ function loadManifest(dir: string): AssetManifest | null {
   return null;
 }
 
-/** Initialize the Remotion bundle (called once on startup) */
 export async function initBundle(): Promise<void> {
-  // Check if pre-built bundle exists (Docker build)
   const prebuiltBundle = path.resolve("/app/bundle");
   if (fs.existsSync(prebuiltBundle)) {
     bundlePath = prebuiltBundle;
     console.log(`Using pre-built bundle at ${prebuiltBundle}`);
-    // In Docker, public/ assets are at /app/public/assets/
     publicAssetsDir = path.resolve("/app/public/assets");
     assetManifest = loadManifest(publicAssetsDir);
     if (assetManifest) {
@@ -83,7 +77,6 @@ export async function initBundle(): Promise<void> {
     return;
   }
 
-  // Development: bundle on the fly
   const entryPoint = path.resolve(__dirname, "../src/index.tsx");
   console.log("Bundling Remotion compositions...");
   bundlePath = await bundle({
@@ -94,7 +87,6 @@ export async function initBundle(): Promise<void> {
   });
   console.log(`Bundle ready at ${bundlePath}`);
 
-  // Development: assets in public/assets/
   publicAssetsDir = path.resolve(__dirname, "../public/assets");
   assetManifest = loadManifest(publicAssetsDir);
   if (assetManifest) {
@@ -102,7 +94,6 @@ export async function initBundle(): Promise<void> {
   }
 }
 
-/** Collect all unique Lottie asset IDs referenced in slides */
 function collectLottieAssetIds(slides: SlideData[]): Set<string> {
   const ids = new Set<string>();
   for (const slide of slides) {
@@ -121,7 +112,6 @@ function collectLottieAssetIds(slides: SlideData[]): Set<string> {
   return ids;
 }
 
-/** Build lottieCache by reading JSON files for referenced assets */
 function buildLottieCache(assetIds: Set<string>): Record<string, object> {
   const cache: Record<string, object> = {};
   if (!assetManifest || !publicAssetsDir) return cache;
@@ -274,7 +264,6 @@ function getEncodingOptions(): {
   };
 }
 
-/** Render a slide video to MP4 */
 export async function renderSlideVideo(
   req: RenderRequest,
   onProgress?: (pct: number) => void
@@ -283,7 +272,6 @@ export async function renderSlideVideo(
     throw new Error("Bundle not initialized. Call initBundle() first.");
   }
 
-  // Ensure output directory exists
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
   const slides = enrichSlidesWithVisualAssets(req.script_json.slides);
@@ -293,7 +281,6 @@ export async function renderSlideVideo(
   const glRenderer = getChromiumGlRenderer();
   const encoding = getEncodingOptions();
 
-  // Build Lottie cache for referenced assets
   const lottieAssetIds = collectLottieAssetIds(slides);
   const lottieCache = buildLottieCache(lottieAssetIds);
   const manifest = assetManifest ?? { version: 1, assets: {} };
@@ -301,14 +288,12 @@ export async function renderSlideVideo(
   const inputProps = { slides, theme, lottieCache, manifest };
   const sceneAssetCount = countSceneAssets(slides);
 
-  // Resolve composition with calculated metadata
   const composition = await selectComposition({
     serveUrl: bundlePath,
     id: "SlideVideo",
     inputProps,
   });
 
-  // Determine concurrency
   const cpuCount = os.cpus().length;
   const concurrency = getRenderConcurrency(cpuCount);
 
@@ -357,7 +342,6 @@ export async function renderSlideVideo(
   return outputPath;
 }
 
-/** Clean up a rendered output file */
 export function cleanupOutput(videoPath: string): void {
   try {
     if (fs.existsSync(videoPath)) {

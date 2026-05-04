@@ -2,9 +2,7 @@ import React from "react";
 import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 
 interface FadeTransitionProps {
-  /** The frame (relative to this sequence) where the fade starts */
   startFrame: number;
-  /** Number of frames for the fade */
   duration: number;
   color?: string;
 }

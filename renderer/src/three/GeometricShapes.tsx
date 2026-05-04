@@ -28,7 +28,6 @@ const Shape: React.FC<{
     time * data.rotationSpeed[2],
   ];
 
-  // Gentle floating
   const y = data.position[1] + Math.sin(time * 0.5 + data.position[0]) * 0.2;
 
   const geometry = useMemo(() => {

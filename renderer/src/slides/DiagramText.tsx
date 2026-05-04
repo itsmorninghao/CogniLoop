@@ -21,7 +21,6 @@ export const DiagramText: React.FC<Props> = ({
 
   return (
     <SlideLayout theme={theme} slideIndex={slideIndex} totalSlides={totalSlides}>
-      {/* Heading */}
       <AnimatedText delay={0} theme={theme.name} animation="fadeUp">
         <h2 style={{ fontSize: 48, fontWeight: 600, color: theme.textPrimary, margin: 0 }}>
           {slide.heading}
@@ -30,7 +29,6 @@ export const DiagramText: React.FC<Props> = ({
 
       <Divider theme={theme} delay={4} />
 
-      {/* Description card */}
       <AnimatedText delay={8} theme={theme.name} animation="fadeUp">
         <div
           style={{

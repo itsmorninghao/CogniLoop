@@ -23,7 +23,6 @@ export const TitleSlide: React.FC<Props> = ({
   const { fps } = useVideoConfig();
   const isDark = theme.name === "tech-dark";
 
-  // Title glow effect for tech-dark
   const glowIntensity = isDark
     ? interpolate(Math.sin(frame * 0.08), [-1, 1], [15, 30])
     : 0;
@@ -46,7 +45,6 @@ export const TitleSlide: React.FC<Props> = ({
           gap: 24,
         }}
       >
-        {/* Badge */}
         {slide.badge && (
           <AnimatedText delay={0} theme={theme.name} animation="scaleIn">
             <div
@@ -68,7 +66,6 @@ export const TitleSlide: React.FC<Props> = ({
           </AnimatedText>
         )}
 
-        {/* Title */}
         <AnimatedText delay={4} theme={theme.name} animation="fadeUp">
           <h1
             style={{
@@ -91,7 +88,6 @@ export const TitleSlide: React.FC<Props> = ({
           </h1>
         </AnimatedText>
 
-        {/* Divider line */}
         <AnimatedText delay={10} theme={theme.name} animation="scaleIn">
           <div
             style={{
@@ -103,7 +99,6 @@ export const TitleSlide: React.FC<Props> = ({
           />
         </AnimatedText>
 
-        {/* Subtitle */}
         {slide.subtitle && (
           <AnimatedText delay={14} theme={theme.name} animation="fadeUp">
             <p

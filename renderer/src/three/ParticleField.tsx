@@ -18,12 +18,10 @@ const Particles: React.FC<{ color: string; count: number; speed: number }> = ({
   const { fps } = useVideoConfig();
   const time = frame / fps;
 
-  // Generate deterministic particle positions
   const particles = useMemo(() => {
     const positions: [number, number, number][] = [];
     for (let i = 0; i < count; i++) {
-      // Use golden ratio distribution for even spacing
-      const phi = i * 2.39996; // golden angle
+      const phi = i * 2.39996;
       const r = Math.sqrt(i / count) * 8;
       positions.push([
         Math.cos(phi) * r,
@@ -38,7 +36,6 @@ const Particles: React.FC<{ color: string; count: number; speed: number }> = ({
     const arr = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
       const [baseX, baseY, baseZ] = particles[i];
-      // Gentle floating motion
       arr[i * 3] = baseX + Math.sin(time * speed + i * 0.5) * 0.3;
       arr[i * 3 + 1] = baseY + Math.cos(time * speed * 0.7 + i * 0.3) * 0.2;
       arr[i * 3 + 2] = baseZ;

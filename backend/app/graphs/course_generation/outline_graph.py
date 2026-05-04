@@ -1,8 +1,5 @@
 """
-Outline Generation Graph — Phase 1 of AI Course Studio.
-
-Graph: kb_summarizer → outline_generator
-Returns: course_title, nodes (list of node dicts)
+Course outline generation graph.
 """
 
 from __future__ import annotations

@@ -6,7 +6,6 @@ import { getTheme } from "../themes";
 import { setManifest } from "../animations/AssetLoader";
 import { FadeTransition } from "../components/FadeTransition";
 
-// V1: Static slide components
 import { TitleSlide } from "../slides/TitleSlide";
 import { BulletPoints } from "../slides/BulletPoints";
 import { ConceptExplain } from "../slides/ConceptExplain";
@@ -15,12 +14,10 @@ import { QuoteHighlight } from "../slides/QuoteHighlight";
 import { Summary } from "../slides/Summary";
 import { DiagramText } from "../slides/DiagramText";
 
-// V2: Animated slide composition
 import { AnimatedSlide } from "./AnimatedSlide";
 import { CinematicSceneSlide } from "./CinematicSceneSlide";
 import { RenderSceneSlide } from "./RenderSceneSlide";
 
-// 3D backgrounds (disabled — WebGL not available in Docker)
 import { get3dBackground } from "../three/backgrounds";
 
 export interface SlideVideoProps {
@@ -30,7 +27,6 @@ export interface SlideVideoProps {
   manifest?: AssetManifest;
 }
 
-/** Calculate total duration in frames for a list of slides */
 export function calculateTotalFrames(slides: SlideData[]): number {
   let total = 0;
   for (let i = 0; i < slides.length; i++) {
@@ -42,7 +38,6 @@ export function calculateTotalFrames(slides: SlideData[]): number {
   return Math.max(1, total);
 }
 
-/** Route a slide to its component */
 function renderSlide(
   slide: SlideData,
   themeConfig: ReturnType<typeof getTheme>,
@@ -50,7 +45,6 @@ function renderSlide(
   total: number,
   lottieCache: Record<string, object>,
 ): React.ReactNode {
-  // Storyboard path: renderer-ready scene contract from the new planning pipeline.
   if (slide.render_scene) {
     if (slide.render_scene.version === "render_scene.v2" || slide.render_scene.visual_identity) {
       return (
@@ -74,7 +68,6 @@ function renderSlide(
     );
   }
 
-  // V2 path: If slide has visual_events, use AnimatedSlide
   if (slide.visual_events && slide.visual_events.length > 0) {
     return (
       <AnimatedSlide
@@ -87,7 +80,6 @@ function renderSlide(
     );
   }
 
-  // V1 path: Static template rendering
   const bg3d = get3dBackground(slide.template, themeConfig);
 
   switch (slide.template) {
@@ -174,7 +166,6 @@ export const SlideVideo: React.FC<SlideVideoProps> = ({ slides, theme, lottieCac
   const themeConfig = getTheme(theme);
   const totalSlides = slides.length;
 
-  // Initialize asset manifest in browser context so getAssetMeta() works
   if (manifest) {
     setManifest(manifest);
   }

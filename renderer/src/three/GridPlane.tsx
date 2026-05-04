@@ -12,7 +12,6 @@ const Grid: React.FC<{ color: string; opacity: number }> = ({ color, opacity }) 
   const { fps } = useVideoConfig();
   const time = frame / fps;
 
-  // Slow scroll effect
   const offsetZ = (time * 0.3) % 1;
 
   return (

@@ -22,7 +22,6 @@ export const BulletPoints: React.FC<Props> = ({
 
   return (
     <SlideLayout theme={theme} slideIndex={slideIndex} totalSlides={totalSlides}>
-      {/* Heading */}
       <AnimatedText delay={0} theme={theme.name} animation="fadeUp">
         <h2
           style={{
@@ -38,7 +37,6 @@ export const BulletPoints: React.FC<Props> = ({
 
       <Divider theme={theme} delay={4} />
 
-      {/* Bullet list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 20, marginTop: 16 }}>
         <AnimatedList
           items={slide.points}

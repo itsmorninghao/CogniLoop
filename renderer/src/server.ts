@@ -7,11 +7,9 @@ const PORT = parseInt(process.env.PORT || "3100", 10);
 
 app.use(express.json({ limit: "10mb" }));
 
-// Track active renders for health reporting
 let activeRenders = 0;
 const startTime = Date.now();
 
-/** Health check endpoint */
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
@@ -20,7 +18,6 @@ app.get("/health", (_req, res) => {
   });
 });
 
-/** Render endpoint — synchronous (blocks until render completes) */
 app.post("/render", async (req, res) => {
   const body = req.body as RenderRequest;
 
@@ -41,7 +38,6 @@ app.post("/render", async (req, res) => {
   try {
     const startMs = Date.now();
     const videoPath = await renderSlideVideo(body, (pct) => {
-      // Log progress at 25% intervals
       if (pct % 25 === 0) {
         console.log(`[${body.task_id}] Progress: ${pct}%`);
       }
@@ -64,7 +60,6 @@ app.post("/render", async (req, res) => {
   }
 });
 
-/** Start server */
 async function main() {
   console.log("Initializing Remotion bundle...");
   await initBundle();

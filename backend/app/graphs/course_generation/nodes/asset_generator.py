@@ -1,10 +1,9 @@
 """
-Node graph: Bitmap Asset Generator.
+Bitmap asset generation for course video scenes.
 
-This node turns scene-level asset plans into real bitmap files before Remotion
-renders the video. It is intentionally provider-shaped: an external image
-service can be plugged in through env vars, while the default local generator
-still produces stable PNGs so the course pipeline remains testable offline.
+The node resolves scene asset plans into renderer-readable PNG URLs. External
+HTTP providers can be configured with env vars; the local generator keeps the
+pipeline usable without a bitmap service.
 """
 
 from __future__ import annotations

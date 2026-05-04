@@ -1,6 +1,3 @@
-/**
- * ClearAnimation — Wraps children with exit animations (fade-out, slide-out).
- */
 import React from "react";
 import { useCurrentFrame, interpolate } from "remotion";
 

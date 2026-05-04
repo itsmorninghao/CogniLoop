@@ -1,7 +1,3 @@
-/**
- * LottieElement — Positioned Lottie animation player for Remotion.
- * Loads from bundled assets via AssetLoader.
- */
 import React, { useMemo } from "react";
 import { useCurrentFrame, useVideoConfig, interpolate, spring } from "remotion";
 import { Lottie, getLottieMetadata } from "@remotion/lottie";
@@ -18,7 +14,6 @@ interface Props {
   width?: number;
   height?: number;
   theme: ThemeConfig;
-  /** Pre-fetched animation data (avoids async load in render) */
   animationData?: object;
 }
 
@@ -43,7 +38,6 @@ export const LottieElement: React.FC<Props> = ({
 
   if (localFrame < 0) return null;
   if (!animationData) {
-    // Fallback: show a placeholder
     return (
       <div style={{
         width: w, height: h,
@@ -61,7 +55,6 @@ export const LottieElement: React.FC<Props> = ({
     );
   }
 
-  // Entrance animation
   const entranceProgress = spring({
     frame: localFrame,
     fps,
