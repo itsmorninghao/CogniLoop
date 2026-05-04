@@ -17,6 +17,8 @@ import { DiagramText } from "../slides/DiagramText";
 
 // V2: Animated slide composition
 import { AnimatedSlide } from "./AnimatedSlide";
+import { CinematicSceneSlide } from "./CinematicSceneSlide";
+import { RenderSceneSlide } from "./RenderSceneSlide";
 
 // 3D backgrounds (disabled — WebGL not available in Docker)
 import { get3dBackground } from "../three/backgrounds";
@@ -48,6 +50,30 @@ function renderSlide(
   total: number,
   lottieCache: Record<string, object>,
 ): React.ReactNode {
+  // Storyboard path: renderer-ready scene contract from the new planning pipeline.
+  if (slide.render_scene) {
+    if (slide.render_scene.version === "render_scene.v2" || slide.render_scene.visual_identity) {
+      return (
+        <CinematicSceneSlide
+          slide={slide}
+          scene={slide.render_scene}
+          theme={themeConfig}
+          slideIndex={index}
+          totalSlides={total}
+        />
+      );
+    }
+    return (
+      <RenderSceneSlide
+        slide={slide}
+        scene={slide.render_scene}
+        theme={themeConfig}
+        slideIndex={index}
+        totalSlides={total}
+      />
+    );
+  }
+
   // V2 path: If slide has visual_events, use AnimatedSlide
   if (slide.visual_events && slide.visual_events.length > 0) {
     return (
@@ -162,7 +188,8 @@ export const SlideVideo: React.FC<SlideVideoProps> = ({ slides, theme, lottieCac
           (slide.duration_ms / 1000) * VIDEO_FPS
         );
         const isLast = i === totalSlides - 1;
-        const fadeFrames = isLast
+        const usesRenderScene = Boolean(slide.render_scene);
+        const fadeFrames = isLast || usesRenderScene
           ? 0
           : Math.min(FADE_DURATION_FRAMES, Math.max(0, durationFrames - 1));
 

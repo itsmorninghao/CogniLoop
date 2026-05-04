@@ -15,6 +15,10 @@ export interface SlideBase {
   template: TemplateType;
   narration?: string;
   duration_ms: number;
+  /** Storyboard pipeline: director-level planning generated before rendering. */
+  storyboard?: StoryboardSlide;
+  /** Storyboard pipeline: renderer-ready scene contract. Takes priority over visual_events. */
+  render_scene?: RenderScene;
   /** V2: Timeline-driven visual events. When present, AnimatedSlide renders instead of static template. */
   visual_events?: VisualEvent[];
   /** V2: Layout hint for element positioning */
@@ -138,6 +142,155 @@ export const VIDEO_FPS = 24;
 export const VIDEO_WIDTH = 1920;
 export const VIDEO_HEIGHT = 1080;
 export const FADE_DURATION_FRAMES = 12; // 0.5s at 24fps
+
+// ─── Storyboard Render Scene System ─────────────────────────────────
+
+export type StoryboardSceneType =
+  | "concept_opening"
+  | "mechanism_build"
+  | "contrastive_explainer"
+  | "evidence_scan"
+  | "process_walkthrough"
+  | "system_map"
+  | "metric_inspection"
+  | "mistake_reveal"
+  | "analogy_bridge"
+  | "recap_synthesis";
+
+export type RenderSceneLayout =
+  | "world_hook"
+  | "concept_lab"
+  | "split_world"
+  | "evidence_wall"
+  | "spatial_process"
+  | "system_landscape"
+  | "metric_story"
+  | "object_bridge"
+  | "recap_constellation"
+  | "hook_focus"
+  | "mechanism_map"
+  | "contrast_lanes"
+  | "evidence_scan"
+  | "process_path"
+  | "system_map"
+  | "metric_panel"
+  | "bridge_map"
+  | "recap_grid";
+
+export interface StoryboardBeat {
+  intent: string;
+  narration_anchor?: string;
+  visual_action: string;
+  emphasis?: string;
+}
+
+export type VisualWorld =
+  | "document_lab"
+  | "classroom_studio"
+  | "amplifier_factory"
+  | "data_observatory"
+  | "concept_kitchen"
+  | "systems_map";
+
+export type CameraMovement =
+  | "slow_push"
+  | "scan_pan"
+  | "tabletop_track"
+  | "split_reveal"
+  | "orbit"
+  | "pullback";
+
+export interface StoryboardVisualIdentity {
+  world: VisualWorld;
+  art_direction?: string;
+  visual_motif?: string;
+  core_objects?: string[];
+  palette?: string[];
+  camera_style?: CameraMovement;
+  asset_strategy?: string;
+}
+
+export interface StoryboardCamera {
+  movement?: CameraMovement;
+  start_focus?: string;
+  end_focus?: string;
+}
+
+export interface StoryboardConstraints {
+  density?: "low" | "medium" | "high";
+  motion_level?: "low" | "medium" | "high";
+  max_on_screen_text?: number;
+  avoid?: string[];
+}
+
+export interface StoryboardSlide {
+  slide_id?: string;
+  source_index?: number;
+  scene_type: StoryboardSceneType;
+  scene_space?: string;
+  composition?: string;
+  camera?: StoryboardCamera;
+  continuity_objects?: string[];
+  asset_prompt?: string;
+  teaching_intent: string;
+  learner_obstacle?: string;
+  visual_metaphor?: string;
+  beats: StoryboardBeat[];
+  constraints?: StoryboardConstraints;
+}
+
+export interface RenderSceneBeat extends StoryboardBeat {
+  index?: number;
+  label?: string;
+}
+
+export interface RenderSceneObject {
+  kind: "node" | "lane" | "metric" | "evidence" | "connector" | "asset";
+  label: string;
+  detail?: string;
+  role?: "focus" | "support";
+  tone?: "muted" | "accent";
+  value?: number;
+  items?: string[];
+}
+
+export interface RenderSceneAsset {
+  id: string;
+  role?: "primary" | "texture" | "reference" | "background";
+  kind?: string;
+  label?: string;
+  prompt?: string;
+  src?: string | null;
+  public_src?: string | null;
+  provider?: "http_bitmap" | "synthetic_bitmap" | "kb_reference_bitmap" | string;
+  cache_key?: string;
+  metadata?: Record<string, unknown>;
+  fallback?: "synthetic" | "blank";
+}
+
+export interface RenderScene {
+  version?: "render_scene.v1" | string;
+  scene_type: StoryboardSceneType;
+  layout: RenderSceneLayout;
+  variant?: string;
+  visual_kind?: string;
+  visual_identity?: StoryboardVisualIdentity;
+  scene_space?: string;
+  composition?: string;
+  camera?: StoryboardCamera;
+  continuity_objects?: string[];
+  assets?: RenderSceneAsset[];
+  title: string;
+  subtitle?: string;
+  intent?: string;
+  obstacle?: string;
+  metaphor?: string;
+  accent?: string;
+  keywords?: string[];
+  beats: RenderSceneBeat[];
+  objects?: RenderSceneObject[];
+  constraints?: StoryboardConstraints;
+}
 
 // ─── Visual Event System (V2 animated slides) ───────────────────────
 

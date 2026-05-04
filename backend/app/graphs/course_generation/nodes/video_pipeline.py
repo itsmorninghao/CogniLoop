@@ -18,10 +18,13 @@ from backend.app.services import tts_service, video_service
 logger = logging.getLogger(__name__)
 
 _RENDERER_TIMEOUT = 1800  # CPU rendering ~4fps, 3000 frames ≈ 12min
+_TTS_TIMEOUT = 90.0
 _MIN_SLIDE_DURATION_MS = 1000
 _BEAT_INTERVAL_SECONDS = 5.0
 _MAX_TIMED_BEATS = 5
 _RENDERER_URL = "http://renderer:3100"
+
+AudioResult = tuple[Path, float, bool]
 
 
 async def video_pipeline(state: NodeGenState) -> dict:
@@ -55,7 +58,7 @@ async def video_pipeline(state: NodeGenState) -> dict:
         logger.warning("video_pipeline: TTS failed for all slides of node %d", node_id)
         return {"video_url": None, "current_node": "video_pipeline"}
 
-    for slide, (_audio_path, duration) in zip(slides, audio_results, strict=False):
+    for slide, (_audio_path, duration, _tts_ok) in zip(slides, audio_results, strict=False):
         slide["duration_ms"] = max(_MIN_SLIDE_DURATION_MS, int(duration * 1000))
         _pace_visual_events_for_audio(slide, duration)
 
@@ -77,7 +80,7 @@ async def video_pipeline(state: NodeGenState) -> dict:
     silent_video = Path(silent_video_path)
 
     # Step 3: Concat per-slide audio files into single track
-    audio_paths = [ap for ap, _ in audio_results]
+    audio_paths = [ap for ap, _duration, _tts_ok in audio_results]
     combined_audio = silent_video.parent / f"narration_{node_id}.mp3"
     await video_service.concat_audio_files(audio_paths, combined_audio)
 
@@ -105,45 +108,100 @@ async def _synthesize_per_slide(
     slides: list[dict],
     voice_id: str | None,
     node_id: int,
-) -> list[tuple[Path, float]]:
+) -> list[AudioResult]:
     """
     Generate TTS audio for each slide's narration in parallel.
     Each task opens its own DB session to avoid concurrent session errors.
-    Returns list of (audio_path, duration_seconds).
+    Returns list of (audio_path, duration_seconds, tts_succeeded).
     """
     import tempfile
 
     tmp_dir = Path(tempfile.mkdtemp(prefix=f"tts_node_{node_id}_"))
 
-    async def synth_one(idx: int, slide: dict) -> tuple[Path, float]:
+    async def synth_one(idx: int, slide: dict) -> AudioResult:
         narration = slide.get("narration", "")
         if not narration:
             narration = slide.get("title") or slide.get("heading") or "..."
         audio_path = tmp_dir / f"slide_{idx:03d}.mp3"
-        async with async_session_factory() as session:
-            await tts_service.synthesize_speech(
-                text=narration,
-                voice_config_id=voice_id,
-                session=session,
-                output_path=audio_path,
+        try:
+            async with async_session_factory() as session:
+                await asyncio.wait_for(
+                    tts_service.synthesize_speech(
+                        text=narration,
+                        voice_config_id=voice_id,
+                        session=session,
+                        output_path=audio_path,
+                    ),
+                    timeout=_TTS_TIMEOUT,
+                )
+            duration = await tts_service.get_audio_duration(audio_path)
+            return audio_path, duration, True
+        except Exception as exc:
+            logger.warning(
+                "TTS failed or timed out for slide %d of node %d: %s",
+                idx,
+                node_id,
+                exc,
             )
-        duration = await tts_service.get_audio_duration(audio_path)
-        return audio_path, duration
+            fallback_duration = 3.0
+            await _create_silent_audio(audio_path, fallback_duration)
+            return audio_path, fallback_duration, False
 
     results = await asyncio.gather(
         *[synth_one(i, s) for i, s in enumerate(slides)],
         return_exceptions=True,
     )
 
-    valid: list[tuple[Path, float]] = []
+    valid: list[AudioResult] = []
     for i, r in enumerate(results):
         if isinstance(r, Exception):
             logger.warning("TTS failed for slide %d of node %d: %s", i, node_id, r)
-            valid.append((tmp_dir / f"slide_{i:03d}.mp3", 3.0))
+            _cleanup_audio_dir(tmp_dir)
+            return []
         else:
             valid.append(r)
 
+    if len(valid) != len(slides):
+        logger.warning(
+            "TTS produced %d/%d slide audio files for node %d",
+            len(valid),
+            len(slides),
+            node_id,
+        )
+        _cleanup_audio_dir(tmp_dir)
+        return []
+
+    if valid and not any(tts_ok for _audio_path, _duration, tts_ok in valid):
+        logger.error("TTS failed for every slide of node %d; refusing to render a silent video", node_id)
+        _cleanup_audio_dir(tmp_dir)
+        return []
+
     return valid
+
+
+async def _create_silent_audio(audio_path: Path, duration_seconds: float) -> None:
+    """Create a short silent MP3 so one flaky TTS call does not block a video."""
+    audio_path.parent.mkdir(parents=True, exist_ok=True)
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=44100",
+        "-t",
+        str(max(1.0, duration_seconds)),
+        "-q:a",
+        "9",
+        "-acodec",
+        "libmp3lame",
+        str(audio_path),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        raise RuntimeError(f"failed to create silent audio: {stderr.decode()[-300:]}")
 
 
 def _pace_visual_events_for_audio(slide: dict, duration_seconds: float) -> None:
@@ -253,15 +311,20 @@ def _make_visual_beat(index: int, at: float, labels: list[str]) -> dict:
     }
 
 
-def _cleanup_audio_files(audio_results: list[tuple[Path, float]]) -> None:
+def _cleanup_audio_files(audio_results: list[AudioResult]) -> None:
     """Clean up temporary per-slide audio files."""
-    import shutil
     dirs_seen: set[str] = set()
-    for audio_path, _ in audio_results:
+    for audio_path, _duration, _tts_ok in audio_results:
         parent = str(audio_path.parent)
         if parent not in dirs_seen:
             dirs_seen.add(parent)
-            shutil.rmtree(parent, ignore_errors=True)
+            _cleanup_audio_dir(audio_path.parent)
+
+
+def _cleanup_audio_dir(path: Path) -> None:
+    import shutil
+
+    shutil.rmtree(path, ignore_errors=True)
 
 
 async def _dispatch_to_renderer(

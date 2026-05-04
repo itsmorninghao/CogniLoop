@@ -16,7 +16,7 @@ export const FadeTransition: React.FC<FadeTransitionProps> = ({
 }) => {
   const frame = useCurrentFrame();
 
-  const opacity = interpolate(frame, [startFrame, startFrame + duration], [0, 1], {
+  const opacity = interpolate(frame, [startFrame, startFrame + duration], [0, 0.34], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });

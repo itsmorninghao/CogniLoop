@@ -59,6 +59,11 @@ class NodeGenState(TypedDict, total=False):
     text_content: str | None    # markdown article, text nodes only
     narration_text: str         # full narration for TTS
 
+    # storyboard pipeline output (video nodes only)
+    storyboard_json: dict | None
+    render_scene_json: dict | None
+    asset_manifest_json: dict | None
+
     # video_pipeline output
     video_url: str | None
 
