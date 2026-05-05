@@ -9,12 +9,15 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from collections import defaultdict
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
 logger = logging.getLogger(__name__)
+_PROCESS_ID = os.getpid()
 
 
 @dataclass
@@ -88,7 +91,13 @@ class SSEManager:
             from backend.app.core.redis_pubsub import publish
 
             await publish(
-                f"sse:{session_id}", {"event_type": event_type, **(data or {})}
+                f"sse:{session_id}",
+                {
+                    "event_type": event_type,
+                    "timestamp": event.timestamp,
+                    "_source_pid": _PROCESS_ID,
+                    **(data or {}),
+                },
             )
         except Exception:
             pass  # Redis unavailable — local queues still work
@@ -130,6 +139,7 @@ class SSEManager:
         which breaks the SSE ``event:`` field and causes the browser to fire
         generic ``message`` events instead of named event types.
         """
+        redis_task = asyncio.create_task(self._pump_redis_events(session_id, queue))
         try:
             while True:
                 try:
@@ -147,6 +157,9 @@ class SSEManager:
                     break
 
         finally:
+            redis_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await redis_task
             self.remove_subscriber(session_id, queue)
 
     async def subscribe(self, session_id: str) -> AsyncGenerator[dict, None]:
@@ -164,6 +177,53 @@ class SSEManager:
         queues = self._queues.get(session_id, [])
         for queue in queues:
             queue.put_nowait(None)
+
+    async def _pump_redis_events(
+        self,
+        session_id: str,
+        queue: asyncio.Queue,
+    ) -> None:
+        """Forward cross-process SSE events from Redis into the local queue."""
+        try:
+            from backend.app.core.redis_pubsub import subscribe_channel
+
+            async for payload in subscribe_channel(f"sse:{session_id}"):
+                if not isinstance(payload, dict):
+                    continue
+
+                if payload.get("_source_pid") == _PROCESS_ID:
+                    continue
+
+                event_type = payload.get("event_type")
+                if not isinstance(event_type, str) or not event_type:
+                    continue
+
+                timestamp = payload.get("timestamp")
+                try:
+                    event_timestamp = float(timestamp)
+                except (TypeError, ValueError):
+                    event_timestamp = time.time()
+
+                data = {
+                    key: value
+                    for key, value in payload.items()
+                    if key not in {"event_type", "timestamp", "_source_pid"}
+                }
+                queue.put_nowait(
+                    SSEEvent(
+                        event_type=event_type,
+                        data=data,
+                        timestamp=event_timestamp,
+                    )
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning(
+                "Redis SSE bridge stopped for session %s",
+                session_id[:8],
+                exc_info=True,
+            )
 
     @staticmethod
     def _to_sse_dict(event: SSEEvent) -> dict:

@@ -16,6 +16,7 @@ const OAuthCallbackPage = lazy(() => import('@/pages/OAuthCallbackPage'))
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const KnowledgeBasePage = lazy(() => import('@/pages/KnowledgeBasePage'))
 const KnowledgeBaseDetailPage = lazy(() => import('@/pages/KnowledgeBaseDetailPage'))
+const KnowledgeChatPage = lazy(() => import('@/pages/KnowledgeChatPage'))
 const QuizPage = lazy(() => import('@/pages/QuizPage'))
 const QuizCreateSmartPage = lazy(() => import('@/pages/QuizCreateSmartPage'))
 const QuizCreateProPage = lazy(() => import('@/pages/QuizCreateProPage'))
@@ -85,6 +86,8 @@ export default function App() {
                     <Route index element={<Suspense fallback={<PageSkeleton />}><DashboardPage /></Suspense>} />
                     <Route path="knowledge" element={<Suspense fallback={<PageSkeleton />}><KnowledgeBasePage /></Suspense>} />
                     <Route path="knowledge/:id" element={<Suspense fallback={<PageSkeleton />}><KnowledgeBaseDetailPage /></Suspense>} />
+                    <Route path="knowledge-chat" element={<Suspense fallback={<PageSkeleton />}><KnowledgeChatPage /></Suspense>} />
+                    <Route path="knowledge-chat/:sessionId" element={<Suspense fallback={<PageSkeleton />}><KnowledgeChatPage /></Suspense>} />
                     <Route path="exam-templates" element={<Suspense fallback={<PageSkeleton />}><ExamTemplatePage /></Suspense>} />
                     <Route path="exam-templates/:id" element={<Suspense fallback={<PageSkeleton />}><ExamTemplateEditorPage /></Suspense>} />
                     <Route path="quiz" element={<Suspense fallback={<PageSkeleton />}><QuizPage /></Suspense>} />

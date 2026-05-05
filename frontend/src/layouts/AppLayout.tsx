@@ -22,6 +22,7 @@ import {
     Sword,
     FileText,
     ClipboardList,
+    MessageSquareText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -32,6 +33,7 @@ import { GlobalSearchBar } from '@/components/shared/GlobalSearchBar'
 const NAV_ITEMS = [
     { path: '/', icon: LayoutDashboard, label: '仪表盘' },
     { path: '/knowledge', icon: BookOpen, label: '我的知识库' },
+    { path: '/knowledge-chat', icon: MessageSquareText, label: '知识库问答' },
     { path: '/exam-templates', icon: ClipboardList, label: '试卷模板' },
     { path: '/quiz', icon: PlusCircle, label: '出题中心' },
     { path: '/my-quizzes', icon: FileText, label: '我的试卷' },
@@ -45,6 +47,11 @@ const ADMIN_ITEMS = [
     { path: '/admin', icon: Settings, label: '系统管理' },
 ]
 
+function isNavActive(currentPath: string, itemPath: string) {
+    if (itemPath === '/') return currentPath === '/'
+    return currentPath === itemPath || currentPath.startsWith(`${itemPath}/`)
+}
+
 export default function AppLayout() {
     const [collapsed, setCollapsed] = useState(false)
     const [dark, setDark] = useState(() => {
@@ -54,6 +61,8 @@ export default function AppLayout() {
     })
     const [unreadCount, setUnreadCount] = useState(0)
     const location = useLocation()
+    const forceCollapsed = location.pathname.startsWith('/knowledge-chat')
+    const sidebarCollapsed = forceCollapsed || collapsed
     const { user, logout, token } = useAuthStore()
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -117,7 +126,7 @@ export default function AppLayout() {
             <aside
                 className={cn(
                     'relative flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out',
-                    collapsed ? 'w-[68px]' : 'w-[260px]',
+                    sidebarCollapsed ? 'w-[68px]' : 'w-[260px]',
                 )}
             >
                 <div className="flex h-16 items-center gap-3 border-b border-sidebar-border px-4">
@@ -125,7 +134,7 @@ export default function AppLayout() {
                         <div className="flex size-10 shrink-0 items-center justify-center">
                             <Logo size={32} />
                         </div>
-                        {!collapsed && (
+                        {!sidebarCollapsed && (
                             <div className="flex flex-col">
                                 <span className="text-lg font-medium tracking-tight text-foreground">CogniLoop</span>
                                 <span className="text-[11px] text-muted-foreground">v2.0</span>
@@ -135,17 +144,14 @@ export default function AppLayout() {
                 </div>
 
                 <div className="flex-1 overflow-y-auto py-4 px-3">
-                    {!collapsed && (
+                    {!sidebarCollapsed && (
                         <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                             主导航
                         </p>
                     )}
                     <nav className="space-y-1">
                         {NAV_ITEMS.map((item) => {
-                            const isActive =
-                                item.path === '/'
-                                    ? location.pathname === '/'
-                                    : location.pathname.startsWith(item.path)
+                            const isActive = isNavActive(location.pathname, item.path)
                             return (
                                 <Link
                                     key={item.path}
@@ -163,7 +169,7 @@ export default function AppLayout() {
                                             isActive ? 'text-sidebar-primary' : 'text-muted-foreground group-hover:text-foreground',
                                         )}
                                     />
-                                    {!collapsed && <span>{item.label}</span>}
+                                    {!sidebarCollapsed && <span>{item.label}</span>}
                                 </Link>
                             )
                         })}
@@ -173,14 +179,14 @@ export default function AppLayout() {
                     {user?.is_admin && (
                         <>
                             <div className="my-4 h-px bg-sidebar-border" />
-                            {!collapsed && (
+                            {!sidebarCollapsed && (
                                 <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                                     管理
                                 </p>
                             )}
                             <nav className="space-y-1">
                                 {ADMIN_ITEMS.map((item) => {
-                                    const isActive = location.pathname.startsWith(item.path)
+                                    const isActive = isNavActive(location.pathname, item.path)
                                     return (
                                         <Link
                                             key={item.path}
@@ -193,7 +199,7 @@ export default function AppLayout() {
                                             )}
                                         >
                                             <item.icon className="size-[18px] shrink-0" />
-                                            {!collapsed && <span>{item.label}</span>}
+                                            {!sidebarCollapsed && <span>{item.label}</span>}
                                         </Link>
                                     )
                                 })}
@@ -211,7 +217,7 @@ export default function AppLayout() {
                                 user?.full_name?.charAt(0) || 'U'
                             )}
                         </div>
-                        {!collapsed && (
+                        {!sidebarCollapsed && (
                             <div className="flex flex-1 flex-col overflow-hidden">
                                 <span className="truncate text-sm font-medium text-foreground">
                                     {user?.full_name || 'User'}
@@ -226,20 +232,22 @@ export default function AppLayout() {
                         onClick={logout}
                         className={cn(
                             'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive',
-                            collapsed && 'justify-center px-0',
+                            sidebarCollapsed && 'justify-center px-0',
                         )}
                     >
                         <LogOut className="size-[18px] shrink-0" />
-                        {!collapsed && <span>退出登录</span>}
+                        {!sidebarCollapsed && <span>退出登录</span>}
                     </button>
                 </div>
 
-                <button
-                    onClick={() => setCollapsed(!collapsed)}
-                    className="absolute -right-3 top-20 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-                >
-                    {collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}
-                </button>
+                {!forceCollapsed && (
+                    <button
+                        onClick={() => setCollapsed(!collapsed)}
+                        className="absolute -right-3 top-20 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                        {collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}
+                    </button>
+                )}
             </aside>
 
             <div className="flex flex-1 flex-col overflow-hidden">

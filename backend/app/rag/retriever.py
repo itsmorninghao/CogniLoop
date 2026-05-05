@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
 from backend.app.core.llm import get_chat_model, get_embeddings_model
-from backend.app.models.knowledge_base import KBChunk
+from backend.app.models.knowledge_base import KBChunk, KBDocument
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,66 @@ async def retrieve_chunks(
 
     Returns list of dicts (parent-level content) with chunk info and scores.
     """
+    chunks, _ = await _retrieve_chunks_internal(
+        query,
+        session,
+        knowledge_base_ids=knowledge_base_ids,
+        document_ids=document_ids,
+        top_k=top_k,
+        similarity_threshold=similarity_threshold,
+        use_hybrid=use_hybrid,
+        use_rerank=use_rerank,
+        rerank_top_k=rerank_top_k,
+        include_debug=False,
+    )
+    return chunks
+
+
+async def retrieve_chunks_with_debug(
+    query: str,
+    session: AsyncSession,
+    *,
+    knowledge_base_ids: list[int] | None = None,
+    document_ids: list[int] | None = None,
+    top_k: int = 8,
+    similarity_threshold: float = 0.25,
+    use_hybrid: bool = True,
+    use_rerank: bool = True,
+    rerank_top_k: int | None = None,
+) -> tuple[list[dict], dict]:
+    chunks, debug = await _retrieve_chunks_internal(
+        query,
+        session,
+        knowledge_base_ids=knowledge_base_ids,
+        document_ids=document_ids,
+        top_k=top_k,
+        similarity_threshold=similarity_threshold,
+        use_hybrid=use_hybrid,
+        use_rerank=use_rerank,
+        rerank_top_k=rerank_top_k,
+        include_debug=True,
+    )
+    return chunks, debug or {}
+
+
+async def _retrieve_chunks_internal(
+    query: str,
+    session: AsyncSession,
+    *,
+    knowledge_base_ids: list[int] | None,
+    document_ids: list[int] | None,
+    top_k: int,
+    similarity_threshold: float,
+    use_hybrid: bool,
+    use_rerank: bool,
+    rerank_top_k: int | None,
+    include_debug: bool,
+) -> tuple[list[dict], dict | None]:
+    """
+    Retrieve the most relevant chunks for a query.
+
+    Returns a tuple of (final_chunks, debug_payload_or_none).
+    """
     if rerank_top_k is None:
         rerank_top_k = top_k * 3
 
@@ -74,6 +134,7 @@ async def retrieve_chunks(
         similarity_threshold=similarity_threshold,
     )
 
+    keyword_results: list[ChunkResult] = []
     if not use_hybrid:
         results = vector_results
     else:
@@ -86,27 +147,67 @@ async def retrieve_chunks(
         )
         results = _reciprocal_rank_fusion([vector_results, keyword_results], k=60)
 
-    candidates = _mmr_filter(results, top_k=rerank_top_k, lambda_param=0.6)
+    mmr_candidates = _mmr_filter(results, top_k=rerank_top_k, lambda_param=0.6)
 
-    candidates = await _expand_to_parents(candidates, session)
+    expanded_candidates = await _expand_to_parents(mmr_candidates, session)
+    pre_rerank_candidates = list(expanded_candidates)
+    rerank_applied = use_rerank and len(expanded_candidates) > top_k
 
-    if use_rerank and len(candidates) > top_k:
+    if rerank_applied:
         try:
-            candidates = await _llm_rerank(query, candidates, session, top_k=top_k)
+            final_candidates = await _llm_rerank(
+                query, expanded_candidates, session, top_k=top_k
+            )
         except Exception as e:
             logger.warning("LLM rerank failed, falling back to score-based: %s", e)
-            candidates = candidates[:top_k]
+            final_candidates = expanded_candidates[:top_k]
     else:
-        candidates = candidates[:top_k]
+        final_candidates = expanded_candidates[:top_k]
 
     logger.info(
         "Retrieved %d chunks (query: '%s...', hybrid=%s, rerank=%s)",
-        len(candidates),
+        len(final_candidates),
         query[:40],
         use_hybrid,
         use_rerank,
     )
-    return [_result_to_dict(c) for c in candidates]
+    document_ids_in_results = {
+        c.document_id for c in final_candidates
+    }
+    if include_debug:
+        document_ids_in_results.update(c.document_id for c in pre_rerank_candidates[:5])
+    document_ids_in_results = sorted(document_ids_in_results)
+    document_name_map: dict[int, str] = {}
+    if document_ids_in_results:
+        stmt = select(KBDocument.id, KBDocument.original_filename).where(
+            KBDocument.id.in_(document_ids_in_results)
+        )
+        rows = (await session.execute(stmt)).all()
+        document_name_map = {
+            int(doc_id): filename for doc_id, filename in rows if filename
+        }
+
+    debug_payload = None
+    if include_debug:
+        debug_payload = {
+            "vector_result_count": len(vector_results),
+            "keyword_result_count": len(keyword_results),
+            "hybrid_result_count": len(results),
+            "mmr_candidate_count": len(mmr_candidates),
+            "expanded_candidate_count": len(pre_rerank_candidates),
+            "rerank_applied": rerank_applied,
+            "retrieval_preview": [
+                _result_preview(c, document_name_map) for c in pre_rerank_candidates[:5]
+            ],
+            "rerank_preview": [
+                _result_preview(c, document_name_map) for c in final_candidates[:5]
+            ],
+        }
+
+    return (
+        [_result_to_dict(c, document_name_map) for c in final_candidates],
+        debug_payload,
+    )
 
 
 def _build_scope_condition(kb_ids: list[int], doc_ids: list[int]):
@@ -445,11 +546,13 @@ Return the JSON array and nothing else."""
     return candidates[:top_k]
 
 
-def _result_to_dict(c: ChunkResult) -> dict:
+def _result_to_dict(c: ChunkResult, document_name_map: dict[int, str] | None = None) -> dict:
+    document_name_map = document_name_map or {}
     return {
         "id": c.id,
         "content": c.content,
         "document_id": c.document_id,
+        "original_filename": document_name_map.get(c.document_id),
         "knowledge_base_id": c.knowledge_base_id,
         "chunk_index": c.chunk_index,
         "similarity": c.similarity,
@@ -458,4 +561,23 @@ def _result_to_dict(c: ChunkResult) -> dict:
         "heading": c.heading,
         "document_title": c.document_title,
         "metadata": c.metadata,
+    }
+
+
+def _result_preview(c: ChunkResult, document_name_map: dict[int, str] | None = None) -> dict:
+    document_name_map = document_name_map or {}
+    snippet = c.content.strip().replace("\n", " ")
+    rerank_score = c.metadata.get("rerank_score")
+    return {
+        "chunk_id": c.id,
+        "document_id": c.document_id,
+        "document_name": document_name_map.get(c.document_id)
+        or c.document_title
+        or f"文档 {c.document_id}",
+        "heading": c.heading,
+        "section_path": c.section_path,
+        "snippet": snippet[:240],
+        "similarity": round(float(c.similarity), 4) if c.similarity is not None else None,
+        "rrf_score": round(float(c.rrf_score), 4) if c.rrf_score else 0.0,
+        "rerank_score": int(rerank_score) if isinstance(rerank_score, (int, float)) else None,
     }
