@@ -178,8 +178,8 @@ async def quiz_stream(
 
     sse_manager = SSEManager.get_instance()
 
-    # Register the queue synchronously NOW — before EventSourceResponse starts streaming
-    queue = sse_manager.create_subscriber(session_id)
+    # Register the queue NOW — before EventSourceResponse starts streaming
+    queue = await sse_manager.create_subscriber(session_id)
 
     async def event_generator():
         async for event_str in sse_manager.consume(session_id, queue):

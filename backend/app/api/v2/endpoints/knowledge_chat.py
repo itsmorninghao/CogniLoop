@@ -92,7 +92,7 @@ async def knowledge_chat_stream(
         )
 
     sse_manager = SSEManager.get_instance()
-    queue = sse_manager.create_subscriber(session_id)
+    queue = await sse_manager.create_subscriber(session_id)
 
     async def event_generator():
         async for event_str in sse_manager.consume(session_id, queue):
