@@ -13,10 +13,7 @@ from sqlmodel import select
 
 from backend.app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
 from backend.app.core.sse import SSEManager
-from backend.app.graphs.knowledge_chat.graph import (
-    knowledge_chat_checkpointer,
-    knowledge_chat_graph,
-)
+from backend.app.graphs.knowledge_chat.graph import knowledge_chat_graph
 from backend.app.graphs.knowledge_chat.trace import (
     mark_trace_error,
     normalize_execution_trace,
@@ -296,11 +293,6 @@ async def delete_chat_session(
     )
     await session.delete(chat_session)
 
-    try:
-        knowledge_chat_checkpointer.delete_thread(chat_session.id)
-    except Exception:
-        logger.debug("Failed to delete in-memory thread for %s", chat_session.id, exc_info=True)
-
 
 async def send_chat_message(
     session_id: str,
@@ -355,7 +347,25 @@ async def send_chat_message(
     chat_session.last_message_at = now
     chat_session.updated_at = now
     session.add(chat_session)
-    await session.flush()
+
+    # Commit the user/assistant rows BEFORE spawning the background task.
+    # Otherwise the worker (which opens a fresh session) may run before this
+    # request's session commits and find no rows. This replaces the old
+    # ``await asyncio.sleep(0.35)`` band-aid.
+    await session.commit()
+    # The dep ``get_session`` will try to commit again on cleanup; that is a
+    # no-op on an already-committed session and is safe.
+
+    session_payload = await _build_session_response(
+        chat_session,
+        session,
+        message_count=existing_message_count + 2,
+    )
+    response = KnowledgeChatSendMessageResponse(
+        session=session_payload,
+        user_message=_build_message_response(user_message),
+        assistant_message=_build_message_response(assistant_message),
+    )
 
     task = asyncio.create_task(
         _answer_message_background(
@@ -368,33 +378,26 @@ async def send_chat_message(
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
 
-    session_payload = await _build_session_response(
-        chat_session,
-        session,
-        message_count=existing_message_count + 2,
-    )
-    return KnowledgeChatSendMessageResponse(
-        session=session_payload,
-        user_message=_build_message_response(user_message),
-        assistant_message=_build_message_response(assistant_message),
-    )
-
-
-async def _has_checkpoint(session_id: str) -> bool:
-    config = {"configurable": {"thread_id": session_id}}
-    checkpoint = await knowledge_chat_checkpointer.aget(config)
-    return checkpoint is not None
+    return response
 
 
 def _db_messages_to_langchain(messages: list[KBChatMessage]) -> list[BaseMessage]:
+    """Convert persisted chat rows to LangChain messages.
+
+    Skips assistant rows that did not complete successfully (status != complete
+    or empty content) so that broken/error responses are NOT replayed back into
+    the model context on the next turn.
+    """
     result: list[BaseMessage] = []
     for message in messages:
-        content = message.content.strip()
+        content = (message.content or "").strip()
         if not content:
             continue
         if message.role == "user":
             result.append(HumanMessage(content=content))
         elif message.role == "assistant":
+            if message.status != "complete":
+                continue
             result.append(AIMessage(content=content))
     return result
 
@@ -408,7 +411,6 @@ async def _answer_message_background(
 ) -> None:
     from backend.app.core.database import async_session_factory
 
-    await asyncio.sleep(0.35)
     sse = SSEManager.get_instance()
     await sse.send_event(
         session_id,
@@ -446,10 +448,9 @@ async def _answer_message_background(
             graph_history = [
                 msg
                 for msg in all_messages
-                if msg.id != assistant_message_id and (msg.role != "assistant" or msg.status == "complete" or msg.content.strip())
+                if msg.id != assistant_message_id
             ]
             langchain_history = _db_messages_to_langchain(graph_history)
-            has_checkpoint = await _has_checkpoint(session_id)
 
             initial_state = {
                 "session_id": session_id,
@@ -459,18 +460,13 @@ async def _answer_message_background(
                 "user_message_id": user_message_id,
                 "assistant_message_id": assistant_message_id,
                 "latest_user_message": user_message.content,
-                "messages": [HumanMessage(content=user_message.content)]
-                if has_checkpoint
-                else langchain_history,
+                "messages": langchain_history,
                 "execution_trace": normalize_execution_trace(
                     assistant_message.trace, assistant_message_id
                 ),
                 "errors": [],
             }
-            result = await knowledge_chat_graph.ainvoke(
-                initial_state,
-                config={"configurable": {"thread_id": session_id}},
-            )
+            result = await knowledge_chat_graph.ainvoke(initial_state)
 
             assistant_message.content = str(result.get("answer", "")).strip()
             assistant_message.citations = result.get("citations", [])
