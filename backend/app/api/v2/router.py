@@ -8,6 +8,7 @@ from backend.app.api.v2.endpoints.admin import router as admin_router
 from backend.app.api.v2.endpoints.assistant import router as assistant_router
 from backend.app.api.v2.endpoints.auth import router as auth_router
 from backend.app.api.v2.endpoints.exam_templates import router as exam_templates_router
+from backend.app.api.v2.endpoints.knowledge_chat import router as knowledge_chat_router
 from backend.app.api.v2.endpoints.quiz_presets import router as quiz_presets_router
 from backend.app.api.v2.endpoints.challenges import router as challenges_router
 from backend.app.api.v2.endpoints.circles import router as circles_router
@@ -27,6 +28,7 @@ api_v2_router.include_router(assistant_router)
 api_v2_router.include_router(challenges_router)
 api_v2_router.include_router(kb_router)
 api_v2_router.include_router(kb_plaza_router)
+api_v2_router.include_router(knowledge_chat_router)
 api_v2_router.include_router(circles_router)
 api_v2_router.include_router(admin_router)
 api_v2_router.include_router(quiz_router)

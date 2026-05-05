@@ -229,6 +229,96 @@ export async function subscribeSSE(
     return cleanup
 }
 
+export async function subscribeKnowledgeChatSSE(
+    sessionId: string,
+    options: SubscribeSSEOptions,
+): Promise<() => void> {
+    const { onEvent, onError, onReconnect, maxRetries = 5 } = options
+
+    let aborted = false
+    let retryCount = 0
+    let pendingTimer: ReturnType<typeof setTimeout> | undefined
+    let currentES: EventSource | undefined
+
+    function cleanup() {
+        aborted = true
+        if (pendingTimer !== undefined) {
+            clearTimeout(pendingTimer)
+            pendingTimer = undefined
+        }
+        if (currentES) {
+            currentES.close()
+            currentES = undefined
+        }
+    }
+
+    async function connect(): Promise<void> {
+        const { ticket } = await api.post<{ ticket: string }>('/notifications/sse-ticket')
+        const url = `${BASE_URL}/knowledge-chat/sessions/${sessionId}/stream?ticket=${encodeURIComponent(ticket)}`
+
+        if (aborted) return
+
+        const es = new EventSource(url)
+        currentES = es
+
+        const handleEvent = (e: MessageEvent) => {
+            try {
+                const data: SSEEvent = JSON.parse(e.data)
+                onEvent(data)
+            } catch { /* noop */ }
+        }
+
+        es.addEventListener('node_start', handleEvent)
+        es.addEventListener('node_complete', handleEvent)
+        es.addEventListener('message_started', handleEvent)
+        es.addEventListener('rewrite_result', handleEvent)
+        es.addEventListener('retrieval_results', handleEvent)
+        es.addEventListener('rerank_results', handleEvent)
+        es.addEventListener('citations', handleEvent)
+        es.addEventListener('answer_delta', handleEvent)
+        es.addEventListener('message_complete', handleEvent)
+        es.addEventListener('message_error', handleEvent)
+
+        es.onerror = () => {
+            es.close()
+            currentES = undefined
+            if (aborted) return
+
+            retryCount++
+            if (retryCount > maxRetries) {
+                if (onError) onError()
+                return
+            }
+            scheduleReconnect()
+        }
+    }
+
+    function scheduleReconnect() {
+        const delay = Math.pow(2, retryCount - 1) * 1000
+        pendingTimer = setTimeout(async () => {
+            pendingTimer = undefined
+            if (aborted) return
+
+            try {
+                await connect()
+                retryCount = 0
+                if (onReconnect) onReconnect()
+            } catch {
+                if (aborted) return
+                retryCount++
+                if (retryCount > maxRetries) {
+                    if (onError) onError()
+                    return
+                }
+                scheduleReconnect()
+            }
+        }, delay)
+    }
+
+    await connect()
+    return cleanup
+}
+
 // Typed API helpers
 
 export interface KnowledgeBase {
@@ -254,6 +344,111 @@ export interface KBDocument {
     chunk_count: number
     error_message: string | null
     created_at: string
+}
+
+export interface KnowledgeChatScopeDocument {
+    id: number
+    original_filename: string
+    file_type: string
+}
+
+export interface KnowledgeChatCitation {
+    chunk_id: number
+    document_id: number
+    document_name: string
+    heading: string | null
+    section_path: string | null
+    snippet: string
+    similarity: number | null
+}
+
+export interface KnowledgeChatTraceChunk {
+    chunk_id: number
+    document_id: number
+    document_name: string
+    heading?: string | null
+    section_path?: string | null
+    snippet: string
+    similarity?: number | null
+    rrf_score?: number | null
+    rerank_score?: number | null
+}
+
+export type KnowledgeChatTraceStepKey =
+    | 'rewrite_query'
+    | 'retrieve_knowledge'
+    | 'generate_answer'
+
+export interface KnowledgeChatTraceStepState {
+    status: 'pending' | 'active' | 'complete' | 'error'
+    message: string | null
+}
+
+export interface KnowledgeChatExecutionTrace {
+    assistant_message_id: number
+    current_step: KnowledgeChatTraceStepKey | null
+    status_message: string | null
+    steps: Record<KnowledgeChatTraceStepKey, KnowledgeChatTraceStepState>
+    rewrite_query: string | null
+    query_source: string | null
+    history_turns_used: number
+    retrieval_query: string | null
+    vector_result_count: number
+    keyword_result_count: number
+    hybrid_result_count: number
+    expanded_candidate_count: number
+    retrieval_results: KnowledgeChatTraceChunk[]
+    rerank_results: KnowledgeChatTraceChunk[]
+}
+
+export interface KnowledgeChatMessage {
+    id: number
+    session_id: string
+    role: 'user' | 'assistant' | 'system'
+    content: string
+    status: 'complete' | 'streaming' | 'error'
+    citations: KnowledgeChatCitation[]
+    trace: KnowledgeChatExecutionTrace | null
+    retrieval_query: string | null
+    error_message: string | null
+    created_at: string
+    updated_at: string
+}
+
+export interface KnowledgeChatSessionListItem {
+    id: string
+    title: string
+    knowledge_base_id: number
+    knowledge_base_name: string
+    status: 'idle' | 'streaming' | 'error'
+    message_count: number
+    selected_doc_count: number
+    last_message_at: string
+    created_at: string
+    updated_at: string
+}
+
+export interface KnowledgeChatSession {
+    id: string
+    user_id: number
+    title: string
+    knowledge_base_id: number
+    knowledge_base_name: string
+    status: 'idle' | 'streaming' | 'error'
+    scope_doc_ids: number[]
+    selected_documents: KnowledgeChatScopeDocument[]
+    message_count: number
+    last_message_at: string
+    created_at: string
+    updated_at: string
+    messages?: KnowledgeChatMessage[] | null
+    has_more_messages?: boolean
+}
+
+export interface KnowledgeChatSendMessageResponse {
+    session: KnowledgeChatSession
+    user_message: KnowledgeChatMessage
+    assistant_message: KnowledgeChatMessage
 }
 
 export interface QuizSession {
@@ -475,6 +670,20 @@ export const kbApi = {
         api.post<KnowledgeBase>(`/knowledge-bases/${id}/publish`),
     unpublishFromPlaza: (id: number) =>
         api.delete<KnowledgeBase>(`/knowledge-bases/${id}/publish`),
+}
+
+export const knowledgeChatApi = {
+    listSessions: (limit = 100, offset = 0) =>
+        api.get<KnowledgeChatSessionListItem[]>(`/knowledge-chat/sessions?limit=${limit}&offset=${offset}`),
+    createSession: (data: { knowledge_base_id: number; doc_ids: number[] }) =>
+        api.post<KnowledgeChatSession>('/knowledge-chat/sessions', data),
+    getSession: (id: string, messagesLimit?: number) =>
+        api.get<KnowledgeChatSession>(
+            `/knowledge-chat/sessions/${id}${messagesLimit != null ? `?messages_limit=${messagesLimit}` : ''}`,
+        ),
+    deleteSession: (id: string) => api.delete(`/knowledge-chat/sessions/${id}`),
+    sendMessage: (id: string, data: { content: string; mode?: 'fast' | 'accurate' }) =>
+        api.post<KnowledgeChatSendMessageResponse>(`/knowledge-chat/sessions/${id}/messages`, data),
 }
 
 export const quizApi = {

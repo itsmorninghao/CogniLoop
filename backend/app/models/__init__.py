@@ -14,6 +14,10 @@ from backend.app.models.knowledge_base import (  # noqa: F401
     KBFolder,
     KnowledgeBase,
 )
+from backend.app.models.knowledge_chat import (  # noqa: F401
+    KBChatMessage,
+    KBChatSession,
+)
 from backend.app.models.notification import Notification  # noqa: F401
 from backend.app.models.profile import ProfileShare, UserProfile  # noqa: F401
 from backend.app.models.quiz import (  # noqa: F401

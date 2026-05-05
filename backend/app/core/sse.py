@@ -9,12 +9,16 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
-from collections import defaultdict
+import uuid
+from collections import defaultdict, deque
+from contextlib import suppress
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator
 
 logger = logging.getLogger(__name__)
+_PROCESS_ID = os.getpid()
 
 
 @dataclass
@@ -24,6 +28,7 @@ class SSEEvent:
     event_type: str  # node_start, node_complete, progress, error, complete
     data: dict
     timestamp: float = field(default_factory=time.time)
+    event_id: str = field(default_factory=lambda: uuid.uuid4().hex)
 
 
 class SSEManager:
@@ -71,36 +76,58 @@ class SSEManager:
         )
 
         queues = self._queues.get(session_id, [])
-        logger.info(
-            "SSE dispatch: %s/%s → %d subscriber(s)",
-            session_id[:8],
-            event_type,
-            len(queues),
-        )
         for queue in queues:
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 logger.warning("SSE queue full for session %s", session_id)
 
-        # Cross-process broadcast via Redis (best-effort)
+        # Cross-process broadcast via Redis (best-effort) + per-session ring
+        # buffer so that subscribers connecting after the event was dispatched
+        # can replay what they missed.
         try:
-            from backend.app.core.redis_pubsub import publish
+            from backend.app.core.redis_pubsub import buffer_event, publish
 
-            await publish(
-                f"sse:{session_id}", {"event_type": event_type, **(data or {})}
-            )
+            payload = {
+                "event_id": event.event_id,
+                "event_type": event_type,
+                "timestamp": event.timestamp,
+                "_source_pid": _PROCESS_ID,
+                **(data or {}),
+            }
+            await publish(f"sse:{session_id}", payload)
+            try:
+                await buffer_event(session_id, payload)
+            except Exception:
+                logger.warning(
+                    "SSE redis buffer FAILED for %s/%s",
+                    session_id[:8],
+                    event_type,
+                    exc_info=True,
+                )
         except Exception:
-            pass  # Redis unavailable — local queues still work
+            logger.warning(
+                "SSE redis publish FAILED for %s/%s",
+                session_id[:8],
+                event_type,
+                exc_info=True,
+            )
 
-    def create_subscriber(self, session_id: str) -> asyncio.Queue:
+    async def create_subscriber(self, session_id: str) -> asyncio.Queue:
         """Eagerly register a subscriber queue and return it.
 
         Call this BEFORE returning an EventSourceResponse so the queue is
         registered immediately when the HTTP endpoint is called, not lazily
         when the response body starts streaming.
+
+        The buffered-event replay happens later (inside ``consume``) to ensure
+        the cross-process Redis bridge is running first; otherwise events
+        published in the small window between buffer snapshot and bridge
+        subscribe would be lost. With the bridge started first, replay may
+        legitimately duplicate events that the bridge also forwards — the
+        ``event_id`` dedup in ``consume`` is what keeps that clean.
         """
-        queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue(maxsize=100)
+        queue: asyncio.Queue[SSEEvent | None] = asyncio.Queue(maxsize=200)
         self._queues[session_id].append(queue)
         logger.info(
             "SSE subscriber registered for session %s (total: %d)",
@@ -108,6 +135,53 @@ class SSEManager:
             len(self._queues[session_id]),
         )
         return queue
+
+    async def _replay_buffered(
+        self, session_id: str, queue: asyncio.Queue
+    ) -> int:
+        try:
+            from backend.app.core.redis_pubsub import fetch_buffered_events
+
+            buffered = await fetch_buffered_events(session_id)
+        except Exception:
+            logger.warning(
+                "SSE buffer fetch failed for %s",
+                session_id[:8],
+                exc_info=True,
+            )
+            return 0
+
+        replayed = 0
+        for payload in buffered:
+            event_type = payload.get("event_type")
+            if not isinstance(event_type, str) or not event_type:
+                continue
+            timestamp = payload.get("timestamp")
+            try:
+                event_timestamp = float(timestamp)
+            except (TypeError, ValueError):
+                event_timestamp = time.time()
+            event_id = payload.get("event_id")
+            if not isinstance(event_id, str) or not event_id:
+                event_id = uuid.uuid4().hex
+            data = {
+                k: v
+                for k, v in payload.items()
+                if k not in {"event_id", "event_type", "timestamp", "_source_pid"}
+            }
+            try:
+                queue.put_nowait(
+                    SSEEvent(
+                        event_type=event_type,
+                        data=data,
+                        timestamp=event_timestamp,
+                        event_id=event_id,
+                    )
+                )
+                replayed += 1
+            except asyncio.QueueFull:
+                break
+        return replayed
 
     def remove_subscriber(self, session_id: str, queue: asyncio.Queue) -> None:
         """Remove a subscriber queue."""
@@ -130,10 +204,29 @@ class SSEManager:
         which breaks the SSE ``event:`` field and causes the browser to fire
         generic ``message`` events instead of named event types.
         """
+        redis_task = asyncio.create_task(self._pump_redis_events(session_id, queue))
+        # Give the redis bridge a tick to actually subscribe before we replay
+        # buffered events. This narrows the window where a concurrently
+        # published event could land in neither the snapshot nor the bridge.
+        # Any leftover overlap is handled by the event_id dedup below.
+        await asyncio.sleep(0)
+        await self._replay_buffered(session_id, queue)
+        # Flush the response body immediately so the client / proxy / ASGI layer
+        # commits to the stream before the first real event arrives. Without
+        # this, the generator can sit on queue.get() for up to 30s before
+        # yielding anything, and any teardown of a prior EventSource (e.g. a
+        # page refresh) can race the new connection into being cancelled
+        # before its first yield ever lands.
+        yield {"comment": "ready"}
+        # Dedup ring: events buffered in Redis are also forwarded by the cross-
+        # process bridge in a small race window, so a subscriber may legitimately
+        # receive the same event from two paths. event_id makes that recoverable.
+        seen_ids: deque[str] = deque(maxlen=512)
+        seen_set: set[str] = set()
         try:
             while True:
                 try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    event = await asyncio.wait_for(queue.get(), timeout=15)
                 except asyncio.TimeoutError:
                     yield {"comment": "keepalive"}
                     continue
@@ -141,12 +234,22 @@ class SSEManager:
                 if event is None:
                     break
 
+                if event.event_id in seen_set:
+                    continue
+                if len(seen_ids) == seen_ids.maxlen:
+                    seen_set.discard(seen_ids[0])
+                seen_ids.append(event.event_id)
+                seen_set.add(event.event_id)
+
                 yield self._to_sse_dict(event)
 
                 if event.event_type == "complete":
                     break
 
         finally:
+            redis_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await redis_task
             self.remove_subscriber(session_id, queue)
 
     async def subscribe(self, session_id: str) -> AsyncGenerator[dict, None]:
@@ -155,7 +258,7 @@ class SSEManager:
         NOTE: prefer create_subscriber() + consume() for HTTP endpoints to avoid
         the lazy-iteration race condition with EventSourceResponse.
         """
-        queue = self.create_subscriber(session_id)
+        queue = await self.create_subscriber(session_id)
         async for event_dict in self.consume(session_id, queue):
             yield event_dict
 
@@ -164,6 +267,58 @@ class SSEManager:
         queues = self._queues.get(session_id, [])
         for queue in queues:
             queue.put_nowait(None)
+
+    async def _pump_redis_events(
+        self,
+        session_id: str,
+        queue: asyncio.Queue,
+    ) -> None:
+        """Forward cross-process SSE events from Redis into the local queue."""
+        try:
+            from backend.app.core.redis_pubsub import subscribe_channel
+
+            async for payload in subscribe_channel(f"sse:{session_id}"):
+                if not isinstance(payload, dict):
+                    continue
+
+                if payload.get("_source_pid") == _PROCESS_ID:
+                    continue
+
+                event_type = payload.get("event_type")
+                if not isinstance(event_type, str) or not event_type:
+                    continue
+
+                timestamp = payload.get("timestamp")
+                try:
+                    event_timestamp = float(timestamp)
+                except (TypeError, ValueError):
+                    event_timestamp = time.time()
+
+                event_id = payload.get("event_id")
+                if not isinstance(event_id, str) or not event_id:
+                    event_id = uuid.uuid4().hex
+
+                data = {
+                    key: value
+                    for key, value in payload.items()
+                    if key not in {"event_id", "event_type", "timestamp", "_source_pid"}
+                }
+                queue.put_nowait(
+                    SSEEvent(
+                        event_type=event_type,
+                        data=data,
+                        timestamp=event_timestamp,
+                        event_id=event_id,
+                    )
+                )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.warning(
+                "Redis SSE bridge stopped for session %s",
+                session_id[:8],
+                exc_info=True,
+            )
 
     @staticmethod
     def _to_sse_dict(event: SSEEvent) -> dict:
@@ -244,6 +399,18 @@ async def emit_complete(session_id: str, data: dict | None = None) -> None:
     sse = SSEManager.get_instance()
     await sse.send_event(session_id, "complete", data or {})
     await sse.close_session(session_id)
+    # The ring buffer is no longer useful once the session has completed; drop
+    # it so a fresh subscriber for a new turn doesn't replay yesterday's events.
+    try:
+        from backend.app.core.redis_pubsub import clear_buffered_events
+
+        await clear_buffered_events(session_id)
+    except Exception:
+        logger.warning(
+            "SSE buffer clear failed for %s",
+            session_id[:8],
+            exc_info=True,
+        )
 
 
 async def emit_error(session_id: str, error: str) -> None:
