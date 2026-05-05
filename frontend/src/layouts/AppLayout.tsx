@@ -23,6 +23,7 @@ import {
     FileText,
     ClipboardList,
     MessageSquareText,
+    GraduationCap,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
     { path: '/', icon: LayoutDashboard, label: '仪表盘' },
     { path: '/knowledge', icon: BookOpen, label: '我的知识库' },
     { path: '/knowledge-chat', icon: MessageSquareText, label: '知识库问答' },
+    { path: '/courses', icon: GraduationCap, label: '课程生成', experimental: true },
     { path: '/exam-templates', icon: ClipboardList, label: '试卷模板' },
     { path: '/quiz', icon: PlusCircle, label: '出题中心' },
     { path: '/my-quizzes', icon: FileText, label: '我的试卷' },
@@ -41,7 +43,7 @@ const NAV_ITEMS = [
     { path: '/challenges', icon: Sword, label: '我的挑战' },
     { path: '/plaza', icon: Globe, label: '公共广场' },
     { path: '/profile', icon: Target, label: '学习画像' },
-]
+] as const
 
 const ADMIN_ITEMS = [
     { path: '/admin', icon: Settings, label: '系统管理' },
@@ -163,7 +165,7 @@ export default function AppLayout() {
                     </Link>
                 </div>
 
-                <div className="flex-1 overflow-y-auto py-4 px-3">
+                <div className="flex-1 overflow-y-auto py-4 px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     {!sidebarCollapsed && (
                         <p className="mb-2 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                             主导航
@@ -189,7 +191,16 @@ export default function AppLayout() {
                                             isActive ? 'text-sidebar-primary' : 'text-muted-foreground group-hover:text-foreground',
                                         )}
                                     />
-                                    {!sidebarCollapsed && <span>{item.label}</span>}
+                                    {!sidebarCollapsed && (
+                                        <span className="flex flex-1 items-center justify-between gap-2">
+                                            <span>{item.label}</span>
+                                            {'experimental' in item && item.experimental && (
+                                                <span className="rounded-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                                                    实验
+                                                </span>
+                                            )}
+                                        </span>
+                                    )}
                                 </Link>
                             )
                         })}
