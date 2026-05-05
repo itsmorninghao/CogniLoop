@@ -11,7 +11,12 @@ from sqlalchemy import delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlmodel import select
 
-from backend.app.core.exceptions import BadRequestError, ForbiddenError, NotFoundError
+from backend.app.core.exceptions import (
+    AppException,
+    BadRequestError,
+    ForbiddenError,
+    NotFoundError,
+)
 from backend.app.core.sse import SSEManager
 from backend.app.graphs.knowledge_chat.graph import knowledge_chat_graph
 from backend.app.graphs.knowledge_chat.trace import (
@@ -36,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 _background_tasks: set[asyncio.Task] = set()
 
+# Generic message returned to clients (and stored alongside the assistant
+# message) when an unexpected exception occurs in the background graph run.
+# Keeps SQL/connection-string text out of user-visible payloads.
+GENERIC_FAILURE_MESSAGE = "回答生成失败,请稍后重试"
+
 
 def _now() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
@@ -50,6 +60,20 @@ def _scope_doc_ids(chat_session: KBChatSession) -> list[int]:
 def _truncate_title(text: str, limit: int = 50) -> str:
     text = " ".join(text.strip().split())
     return text[:limit] if len(text) > limit else text
+
+
+def _safe_error_message(exc: Exception) -> str:
+    """Map an exception into a user-safe message.
+
+    Known application errors keep their detail (already user-facing); anything
+    else collapses to a generic message so that SQL/asyncpg internals never
+    leak into the SSE stream or the assistant message stored in the DB.
+    """
+    if isinstance(exc, AppException):
+        detail = getattr(exc, "detail", None)
+        if isinstance(detail, str) and detail:
+            return detail[:500]
+    return GENERIC_FAILURE_MESSAGE
 
 
 async def _resolve_scope_documents(
@@ -132,18 +156,20 @@ async def _selected_documents(
 def _build_message_response(message: KBChatMessage) -> KnowledgeChatMessageResponse:
     citations = message.citations if isinstance(message.citations, list) else []
     trace = message.trace if isinstance(message.trace, dict) else None
-    return KnowledgeChatMessageResponse(
-        id=message.id,
-        session_id=message.session_id,
-        role=message.role,
-        content=message.content,
-        status=message.status,
-        citations=citations,
-        trace=trace,
-        retrieval_query=message.retrieval_query,
-        error_message=message.error_message,
-        created_at=message.created_at,
-        updated_at=message.updated_at,
+    return KnowledgeChatMessageResponse.model_validate(
+        {
+            "id": message.id,
+            "session_id": message.session_id,
+            "role": message.role,
+            "content": message.content,
+            "status": message.status,
+            "citations": citations,
+            "trace": trace,
+            "retrieval_query": message.retrieval_query,
+            "error_message": message.error_message,
+            "created_at": message.created_at,
+            "updated_at": message.updated_at,
+        }
     )
 
 
@@ -494,8 +520,10 @@ async def _answer_message_background(
             },
         )
     except Exception as exc:
+        # Log the full traceback for operators, but only expose a sanitized
+        # message to clients and to the DB-stored error_message column.
         logger.error("Knowledge chat failed for %s: %s", session_id, exc, exc_info=True)
-        error_message = str(exc)[:500] or "回答生成失败"
+        error_message = _safe_error_message(exc)
 
         try:
             async with async_session_factory() as session:
