@@ -335,7 +335,7 @@ async def send_chat_message(
     if not content:
         raise BadRequestError("消息内容不能为空")
     if chat_session.status == "streaming":
-        raise BadRequestError("当前会话仍在生成回答，请稍候")
+        raise BadRequestError("当前会话仍在生成回答,请稍候")
 
     existing_message_count = int(chat_session.message_count or 0)
 
@@ -518,6 +518,18 @@ async def _answer_message_background(
                 "status": "complete",
             },
         )
+        # Drop the per-session ring buffer now that the turn is finished, so
+        # the next turn starts with a clean slate and no stale replay.
+        try:
+            from backend.app.core.redis_pubsub import clear_buffered_events
+
+            await clear_buffered_events(session_id)
+        except Exception:
+            logger.warning(
+                "SSE buffer clear failed for %s",
+                session_id[:8],
+                exc_info=True,
+            )
     except Exception as exc:
         # Log the full traceback for operators, but only expose a sanitized
         # message to clients and to the DB-stored error_message column.
@@ -559,6 +571,12 @@ async def _answer_message_background(
                 "error": error_message,
             },
         )
+        try:
+            from backend.app.core.redis_pubsub import clear_buffered_events
+
+            await clear_buffered_events(session_id)
+        except Exception:
+            pass
 
 
 async def assert_stream_access(
