@@ -138,8 +138,13 @@ async def generate_answer(state: KnowledgeChatState) -> dict:
     ]
 
     parts: list[str] = []
+    fast_mode = state.get("mode") == "fast"
     async with async_session_factory() as session:
-        llm = await get_chat_model(session, temperature=0.2)
+        llm = await get_chat_model(
+            session,
+            temperature=0.2,
+            disable_thinking=fast_mode,
+        )
         async for chunk in llm.astream(prompt_messages):
             delta = _chunk_to_text(getattr(chunk, "content", ""))
             if not delta:

@@ -45,8 +45,16 @@ async def get_chat_model(
     *,
     temperature: float | None = None,
     model: str | None = None,
+    disable_thinking: bool = False,
 ) -> ChatOpenAI:
-    """Build a ChatOpenAI instance from system_configs."""
+    """Build a ChatOpenAI instance from system_configs.
+
+    ``disable_thinking`` is honored when both the model name contains "qwen"
+    and the base URL points at Aliyun DashScope/Bailian — Qwen3-series models
+    accept ``extra_body={"enable_thinking": false}`` via the OpenAI-compatible
+    endpoint to skip the chain-of-thought phase and stream the answer
+    immediately. For other providers it is a silent no-op.
+    """
     api_key = await get_config("OPENAI_API_KEY", session)
     if not api_key:
         raise RuntimeError(
@@ -54,15 +62,31 @@ async def get_chat_model(
             "Please set 'OPENAI_API_KEY' in Admin → System Config."
         )
 
+    resolved_model = model or await _get("OPENAI_MODEL", session)
+    base_url = await _get("OPENAI_BASE_URL", session)
+
+    kwargs: dict = {}
+    if disable_thinking and _is_qwen_aliyun(resolved_model, base_url):
+        kwargs["model_kwargs"] = {"extra_body": {"enable_thinking": False}}
+
     return ChatOpenAI(
         api_key=api_key,
-        model=model or await _get("OPENAI_MODEL", session),
-        base_url=await _get("OPENAI_BASE_URL", session),
+        model=resolved_model,
+        base_url=base_url,
         temperature=temperature
         if temperature is not None
         else float(await _get("OPENAI_TEMPERATURE", session)),
         max_retries=0,
+        **kwargs,
     )
+
+
+def _is_qwen_aliyun(model: str | None, base_url: str | None) -> bool:
+    model_l = (model or "").lower()
+    url_l = (base_url or "").lower()
+    qwen_match = "qwen" in model_l
+    aliyun_match = any(s in url_l for s in ("dashscope", "aliyun", "bailian"))
+    return qwen_match and aliyun_match
 
 
 async def get_embeddings_model(session: AsyncSession) -> OpenAIEmbeddings:

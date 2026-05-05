@@ -395,6 +395,7 @@ async def send_chat_message(
             user_id=user.id,
             user_message_id=user_message.id,
             assistant_message_id=assistant_message.id,
+            mode=req.mode,
         )
     )
     _background_tasks.add(task)
@@ -430,6 +431,7 @@ async def _answer_message_background(
     user_id: int,
     user_message_id: int,
     assistant_message_id: int,
+    mode: str = "accurate",
 ) -> None:
     from backend.app.core.database import async_session_factory
 
@@ -481,6 +483,7 @@ async def _answer_message_background(
                 "scope_doc_ids": _scope_doc_ids(chat_session),
                 "user_message_id": user_message_id,
                 "assistant_message_id": assistant_message_id,
+                "mode": mode,
                 "latest_user_message": user_message.content,
                 "messages": langchain_history,
                 "execution_trace": normalize_execution_trace(

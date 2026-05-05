@@ -15,6 +15,8 @@ class KnowledgeChatState(TypedDict, total=False):
     scope_doc_ids: list[int]
     user_message_id: int
     assistant_message_id: int
+    # "accurate" (default) or "fast" — fast skips LLM query rewrite and LLM rerank.
+    mode: str
 
     latest_user_message: str
     messages: Annotated[list[BaseMessage], add_messages]

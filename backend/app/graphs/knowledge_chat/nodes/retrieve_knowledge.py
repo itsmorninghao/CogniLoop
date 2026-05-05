@@ -62,7 +62,7 @@ async def retrieve_knowledge(state: KnowledgeChatState) -> dict:
             document_ids=scope_doc_ids,
             top_k=6,
             use_hybrid=True,
-            use_rerank=True,
+            use_rerank=state.get("mode") != "fast",
         )
 
     citations = _build_citations(chunks)

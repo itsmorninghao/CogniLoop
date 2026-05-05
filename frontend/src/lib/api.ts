@@ -682,7 +682,7 @@ export const knowledgeChatApi = {
             `/knowledge-chat/sessions/${id}${messagesLimit != null ? `?messages_limit=${messagesLimit}` : ''}`,
         ),
     deleteSession: (id: string) => api.delete(`/knowledge-chat/sessions/${id}`),
-    sendMessage: (id: string, data: { content: string }) =>
+    sendMessage: (id: string, data: { content: string; mode?: 'fast' | 'accurate' }) =>
         api.post<KnowledgeChatSendMessageResponse>(`/knowledge-chat/sessions/${id}/messages`, data),
 }
 

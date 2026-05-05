@@ -33,20 +33,33 @@ async def rewrite_query(state: KnowledgeChatState) -> dict:
     assistant_message_id = state["assistant_message_id"]
     latest_user_message = state.get("latest_user_message", "").strip()
     messages = state.get("messages", [])
-    execution_trace = set_step_state(
-        state.get("execution_trace"),
-        assistant_message_id,
-        "rewrite_query",
-        status="active",
-        message="正在理解你的问题...",
-    )
+    fast_mode = state.get("mode") == "fast"
 
-    await emit_node_start(
-        session_id,
-        "rewrite_query",
-        "正在理解你的问题...",
-        assistant_message_id=assistant_message_id,
-    )
+    # In fast mode this node does no LLM work — emit nothing so the UI does
+    # not flash a "理解问题" step that would never have any user-visible
+    # content, and mark the trace step as complete immediately.
+    if fast_mode:
+        execution_trace = set_step_state(
+            state.get("execution_trace"),
+            assistant_message_id,
+            "rewrite_query",
+            status="complete",
+            message="已跳过(快速模式)",
+        )
+    else:
+        execution_trace = set_step_state(
+            state.get("execution_trace"),
+            assistant_message_id,
+            "rewrite_query",
+            status="active",
+            message="正在理解你的问题...",
+        )
+        await emit_node_start(
+            session_id,
+            "rewrite_query",
+            "正在理解你的问题...",
+            assistant_message_id=assistant_message_id,
+        )
 
     if not latest_user_message:
         return {
@@ -65,9 +78,10 @@ async def rewrite_query(state: KnowledgeChatState) -> dict:
         }
 
     history_lines = _build_history_lines(messages[:-1], limit=6) if len(messages) > 1 else []
-    if not history_lines:
+    fast_mode = state.get("mode") == "fast"
+    if fast_mode or not history_lines:
         query = latest_user_message[:200]
-        query_source = "direct"
+        query_source = "fast" if fast_mode else "direct"
         query_prompt = ""
     else:
         prompt = (
@@ -104,34 +118,35 @@ async def rewrite_query(state: KnowledgeChatState) -> dict:
         assistant_message_id,
         "rewrite_query",
         status="complete",
-        message="已生成检索查询",
+        message="已跳过(快速模式)" if fast_mode else "已生成检索查询",
     )
 
-    await SSEManager.get_instance().send_event(
-        session_id,
-        "rewrite_result",
-        {
-            "assistant_message_id": assistant_message_id,
-            "retrieval_query": query,
-            "query_source": query_source,
-            "history_turns_used": len(history_lines),
-        },
-    )
+    if not fast_mode:
+        await SSEManager.get_instance().send_event(
+            session_id,
+            "rewrite_result",
+            {
+                "assistant_message_id": assistant_message_id,
+                "retrieval_query": query,
+                "query_source": query_source,
+                "history_turns_used": len(history_lines),
+            },
+        )
 
-    await emit_node_complete(
-        session_id,
-        "rewrite_query",
-        "已生成检索查询",
-        assistant_message_id=assistant_message_id,
-        input_summary={"latest_user_message": latest_user_message[:500]},
-        output_summary={
-            "retrieval_query": query,
-            "query_source": query_source,
-            "history_turns_used": len(history_lines),
-            **({"query_prompt": query_prompt[:2000]} if query_prompt else {}),
-        },
-        progress=0.1,
-    )
+        await emit_node_complete(
+            session_id,
+            "rewrite_query",
+            "已生成检索查询",
+            assistant_message_id=assistant_message_id,
+            input_summary={"latest_user_message": latest_user_message[:500]},
+            output_summary={
+                "retrieval_query": query,
+                "query_source": query_source,
+                "history_turns_used": len(history_lines),
+                **({"query_prompt": query_prompt[:2000]} if query_prompt else {}),
+            },
+            progress=0.1,
+        )
 
     return {
         "retrieval_query": query,

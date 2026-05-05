@@ -18,8 +18,14 @@ class KnowledgeChatSessionCreateRequest(BaseModel):
     doc_ids: list[int] = Field(default_factory=list, max_length=MAX_SCOPE_DOC_IDS)
 
 
+KnowledgeChatMode = Literal["fast", "accurate"]
+
+
 class KnowledgeChatMessageCreateRequest(BaseModel):
     content: str = Field(min_length=1, max_length=8000)
+    # "accurate" = full pipeline (LLM query rewrite + LLM rerank).
+    # "fast"     = skip both, use raw question for retrieval and skip rerank.
+    mode: KnowledgeChatMode = "accurate"
 
 
 class KnowledgeChatScopeDocument(BaseModel):
