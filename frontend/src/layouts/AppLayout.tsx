@@ -61,8 +61,21 @@ export default function AppLayout() {
     })
     const [unreadCount, setUnreadCount] = useState(0)
     const location = useLocation()
-    const forceCollapsed = location.pathname.startsWith('/knowledge-chat')
-    const sidebarCollapsed = forceCollapsed || collapsed
+    const sidebarCollapsed = collapsed
+    const prevPathRef = useRef<string | null>(null)
+
+    // Auto-collapse the sidebar ONLY when crossing INTO the /knowledge-chat
+    // domain from elsewhere. Once inside, respect the user's manual toggle —
+    // navigating between /knowledge-chat/<id> URLs must not re-collapse.
+    useEffect(() => {
+        const prev = prevPathRef.current
+        const nowInChat = location.pathname.startsWith('/knowledge-chat')
+        const wasInChat = prev !== null && prev.startsWith('/knowledge-chat')
+        if (nowInChat && !wasInChat) {
+            setCollapsed(true)
+        }
+        prevPathRef.current = location.pathname
+    }, [location.pathname])
     const { user, logout, token } = useAuthStore()
     const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -240,14 +253,12 @@ export default function AppLayout() {
                     </button>
                 </div>
 
-                {!forceCollapsed && (
-                    <button
-                        onClick={() => setCollapsed(!collapsed)}
-                        className="absolute -right-3 top-20 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                        {collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}
-                    </button>
-                )}
+                <button
+                    onClick={() => setCollapsed(!collapsed)}
+                    className="absolute -right-3 top-20 z-10 flex size-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+                >
+                    {collapsed ? <ChevronRight className="size-3" /> : <ChevronLeft className="size-3" />}
+                </button>
             </aside>
 
             <div className="flex flex-1 flex-col overflow-hidden">
