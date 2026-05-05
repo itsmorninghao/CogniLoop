@@ -442,6 +442,7 @@ export interface KnowledgeChatSession {
     created_at: string
     updated_at: string
     messages?: KnowledgeChatMessage[] | null
+    has_more_messages?: boolean
 }
 
 export interface KnowledgeChatSendMessageResponse {
@@ -676,7 +677,10 @@ export const knowledgeChatApi = {
         api.get<KnowledgeChatSessionListItem[]>(`/knowledge-chat/sessions?limit=${limit}&offset=${offset}`),
     createSession: (data: { knowledge_base_id: number; doc_ids: number[] }) =>
         api.post<KnowledgeChatSession>('/knowledge-chat/sessions', data),
-    getSession: (id: string) => api.get<KnowledgeChatSession>(`/knowledge-chat/sessions/${id}`),
+    getSession: (id: string, messagesLimit?: number) =>
+        api.get<KnowledgeChatSession>(
+            `/knowledge-chat/sessions/${id}${messagesLimit != null ? `?messages_limit=${messagesLimit}` : ''}`,
+        ),
     deleteSession: (id: string) => api.delete(`/knowledge-chat/sessions/${id}`),
     sendMessage: (id: string, data: { content: string }) =>
         api.post<KnowledgeChatSendMessageResponse>(`/knowledge-chat/sessions/${id}/messages`, data),

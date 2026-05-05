@@ -5,13 +5,20 @@ from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, Column, Text, text
+from sqlalchemy import JSON, Column, Index, Text, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlmodel import Field, SQLModel
 
 
 class KBChatSession(SQLModel, table=True):
     __tablename__ = "kb_chat_sessions"
+    __table_args__ = (
+        Index(
+            "ix_kb_chat_sessions_user_last_message_at",
+            "user_id",
+            sa.text("last_message_at DESC"),
+        ),
+    )
 
     id: str = Field(
         default_factory=lambda: str(uuid.uuid4()),
@@ -33,6 +40,10 @@ class KBChatSession(SQLModel, table=True):
     title: str = Field(max_length=200)
     scope: Any = Field(default={}, sa_column=Column(JSON, server_default="{}"))
     status: str = Field(default="idle", max_length=20)  # idle / streaming / error
+    message_count: int = Field(
+        default=0,
+        sa_column=Column(sa.Integer, nullable=False, server_default="0"),
+    )
     last_message_at: datetime = Field(
         default_factory=lambda: datetime.now(UTC).replace(tzinfo=None)
     )

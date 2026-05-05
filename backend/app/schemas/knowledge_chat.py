@@ -7,10 +7,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Server-side cap on the number of documents that can be bound to a single
+# chat session. Keeps the WHERE id IN (...) query and the LangGraph state
+# reasonably bounded even if the client tries to bind every doc in a huge KB.
+MAX_SCOPE_DOC_IDS = 500
+
 
 class KnowledgeChatSessionCreateRequest(BaseModel):
     knowledge_base_id: int
-    doc_ids: list[int] = Field(default_factory=list)
+    doc_ids: list[int] = Field(default_factory=list, max_length=MAX_SCOPE_DOC_IDS)
 
 
 class KnowledgeChatMessageCreateRequest(BaseModel):
@@ -128,6 +133,7 @@ class KnowledgeChatSessionResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     messages: list[KnowledgeChatMessageResponse] | None = None
+    has_more_messages: bool = False
 
 
 class KnowledgeChatSendMessageResponse(BaseModel):

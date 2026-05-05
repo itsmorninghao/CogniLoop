@@ -45,10 +45,18 @@ async def list_chat_sessions(
 @router.get("/sessions/{session_id}", response_model=KnowledgeChatSessionResponse)
 async def get_chat_session(
     session_id: str,
+    messages_limit: int = Query(
+        default=50,
+        ge=1,
+        le=500,
+        description="Return only the most recent N messages. Use ?messages_limit=500 for full history.",
+    ),
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    return await knowledge_chat_service.get_chat_session(session_id, user, session)
+    return await knowledge_chat_service.get_chat_session(
+        session_id, user, session, messages_limit=messages_limit
+    )
 
 
 @router.delete("/sessions/{session_id}", status_code=204)

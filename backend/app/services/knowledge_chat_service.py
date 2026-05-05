@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 
 _background_tasks: set[asyncio.Task] = set()
 
+# Default cap on messages returned by ``get_chat_session``. Older history is
+# still in the DB and the client can request it explicitly via the
+# ``messages_limit`` query param.
+DEFAULT_MESSAGES_LIMIT = 50
+
 # Generic message returned to clients (and stored alongside the assistant
 # message) when an unexpected exception occurs in the background graph run.
 # Keeps SQL/connection-string text out of user-visible payloads.
@@ -177,33 +182,33 @@ async def _build_session_response(
     chat_session: KBChatSession,
     session: AsyncSession,
     *,
-    message_count: int | None = None,
     include_messages: bool = False,
+    messages_limit: int | None = None,
 ) -> KnowledgeChatSessionResponse:
     kb_result = await session.execute(
         select(KnowledgeBase.name).where(KnowledgeBase.id == chat_session.knowledge_base_id)
     )
     kb_name = kb_result.scalar_one_or_none() or "未知知识库"
 
-    if message_count is None:
-        count_result = await session.execute(
-            select(func.count(KBChatMessage.id)).where(
-                KBChatMessage.session_id == chat_session.id
-            )
-        )
-        message_count = int(count_result.scalar_one() or 0)
-
     selected_docs = await _selected_documents(chat_session, session)
     messages_payload: list[KnowledgeChatMessageResponse] | None = None
+    has_more_messages = False
     if include_messages:
+        if messages_limit is None or messages_limit <= 0:
+            messages_limit = DEFAULT_MESSAGES_LIMIT
+        # Pull the most recent N rows in DESC, then reverse to display order.
         msg_result = await session.execute(
             select(KBChatMessage)
             .where(KBChatMessage.session_id == chat_session.id)
-            .order_by(KBChatMessage.created_at, KBChatMessage.id)
+            .order_by(KBChatMessage.created_at.desc(), KBChatMessage.id.desc())
+            .limit(messages_limit + 1)
         )
-        messages_payload = [
-            _build_message_response(msg) for msg in msg_result.scalars().all()
-        ]
+        rows = msg_result.scalars().all()
+        has_more_messages = len(rows) > messages_limit
+        if has_more_messages:
+            rows = rows[:messages_limit]
+        rows.reverse()
+        messages_payload = [_build_message_response(msg) for msg in rows]
 
     return KnowledgeChatSessionResponse(
         id=chat_session.id,
@@ -214,11 +219,12 @@ async def _build_session_response(
         status=chat_session.status,
         scope_doc_ids=_scope_doc_ids(chat_session),
         selected_documents=selected_docs,
-        message_count=message_count,
+        message_count=int(chat_session.message_count or 0),
         last_message_at=chat_session.last_message_at,
         created_at=chat_session.created_at,
         updated_at=chat_session.updated_at,
         messages=messages_payload,
+        has_more_messages=has_more_messages,
     )
 
 
@@ -236,6 +242,7 @@ async def create_chat_session(
         title=f"{kb.name} 问答",
         scope={"doc_ids": [doc.id for doc in docs]},
         status="idle",
+        message_count=0,
         last_message_at=now,
         created_at=now,
         updated_at=now,
@@ -243,7 +250,7 @@ async def create_chat_session(
     session.add(chat_session)
     await session.flush()
     await session.refresh(chat_session)
-    return await _build_session_response(chat_session, session, message_count=0)
+    return await _build_session_response(chat_session, session)
 
 
 async def list_chat_sessions(
@@ -253,23 +260,11 @@ async def list_chat_sessions(
     limit: int = 100,
     offset: int = 0,
 ) -> list[KnowledgeChatSessionListItem]:
-    count_subq = (
-        select(
-            KBChatMessage.session_id,
-            func.count(KBChatMessage.id).label("message_count"),
-        )
-        .group_by(KBChatMessage.session_id)
-        .subquery()
-    )
-
+    # Reads denormalized ``message_count`` from the session row, so this query
+    # stays index-only on (user_id, last_message_at desc).
     stmt = (
-        select(
-            KBChatSession,
-            KnowledgeBase.name.label("knowledge_base_name"),
-            func.coalesce(count_subq.c.message_count, 0).label("message_count"),
-        )
+        select(KBChatSession, KnowledgeBase.name.label("knowledge_base_name"))
         .join(KnowledgeBase, KnowledgeBase.id == KBChatSession.knowledge_base_id)
-        .outerjoin(count_subq, count_subq.c.session_id == KBChatSession.id)
         .where(KBChatSession.user_id == user.id)
         .order_by(KBChatSession.last_message_at.desc(), KBChatSession.created_at.desc())
         .offset(offset)
@@ -278,7 +273,7 @@ async def list_chat_sessions(
 
     result = await session.execute(stmt)
     items: list[KnowledgeChatSessionListItem] = []
-    for chat_session, knowledge_base_name, message_count in result.all():
+    for chat_session, knowledge_base_name in result.all():
         items.append(
             KnowledgeChatSessionListItem(
                 id=chat_session.id,
@@ -286,7 +281,7 @@ async def list_chat_sessions(
                 knowledge_base_id=chat_session.knowledge_base_id,
                 knowledge_base_name=knowledge_base_name or "未知知识库",
                 status=chat_session.status,
-                message_count=int(message_count or 0),
+                message_count=int(chat_session.message_count or 0),
                 selected_doc_count=len(_scope_doc_ids(chat_session)),
                 last_message_at=chat_session.last_message_at,
                 created_at=chat_session.created_at,
@@ -300,10 +295,17 @@ async def get_chat_session(
     session_id: str,
     user: User,
     session: AsyncSession,
+    *,
+    messages_limit: int | None = None,
 ) -> KnowledgeChatSessionResponse:
     chat_session = await _get_chat_session_or_404(session_id, session)
     _check_chat_session_owner(chat_session, user)
-    return await _build_session_response(chat_session, session, include_messages=True)
+    return await _build_session_response(
+        chat_session,
+        session,
+        include_messages=True,
+        messages_limit=messages_limit,
+    )
 
 
 async def delete_chat_session(
@@ -335,10 +337,7 @@ async def send_chat_message(
     if chat_session.status == "streaming":
         raise BadRequestError("当前会话仍在生成回答，请稍候")
 
-    msg_count_result = await session.execute(
-        select(func.count(KBChatMessage.id)).where(KBChatMessage.session_id == session_id)
-    )
-    existing_message_count = int(msg_count_result.scalar_one() or 0)
+    existing_message_count = int(chat_session.message_count or 0)
 
     now = _now()
     user_message = KBChatMessage(
@@ -370,6 +369,7 @@ async def send_chat_message(
     if existing_message_count == 0:
         chat_session.title = _truncate_title(content) or chat_session.title
     chat_session.status = "streaming"
+    chat_session.message_count = existing_message_count + 2
     chat_session.last_message_at = now
     chat_session.updated_at = now
     session.add(chat_session)
@@ -382,11 +382,7 @@ async def send_chat_message(
     # The dep ``get_session`` will try to commit again on cleanup; that is a
     # no-op on an already-committed session and is safe.
 
-    session_payload = await _build_session_response(
-        chat_session,
-        session,
-        message_count=existing_message_count + 2,
-    )
+    session_payload = await _build_session_response(chat_session, session)
     response = KnowledgeChatSendMessageResponse(
         session=session_payload,
         user_message=_build_message_response(user_message),
