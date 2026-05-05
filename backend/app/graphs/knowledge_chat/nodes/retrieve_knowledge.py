@@ -16,7 +16,10 @@ from backend.app.rag.retriever import retrieve_chunks_with_debug
 def _build_citations(chunks: list[dict], limit: int = 5) -> list[dict]:
     citations: list[dict] = []
     for chunk in chunks[:limit]:
-        snippet = chunk.get("content", "").strip().replace("\n", " ")
+        # Keep the full chunk content (capped to a reasonable size) so the
+        # frontend citation modal can show the complete excerpt the model
+        # actually saw, not just a 240-char preview.
+        snippet = (chunk.get("content") or "").strip()
         citations.append(
             {
                 "chunk_id": chunk["id"],
@@ -26,7 +29,7 @@ def _build_citations(chunks: list[dict], limit: int = 5) -> list[dict]:
                 or f"文档 {chunk['document_id']}",
                 "heading": chunk.get("heading"),
                 "section_path": chunk.get("section_path"),
-                "snippet": snippet[:240],
+                "snippet": snippet[:4000],
                 "similarity": round(float(chunk.get("similarity", 0.0)), 4),
             }
         )
