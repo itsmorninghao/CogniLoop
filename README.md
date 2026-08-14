@@ -96,7 +96,7 @@ docker-compose up -d --build
 
 ## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=itsmorninghao/CogniLoop&type=date&legend=top-left)](https://www.star-history.com/#itsmorninghao/CogniLoop&type=date&legend=top-left)
+[![Star History Chart](https://api.star-history.com/chart?repos=itsmorninghao/CogniLoop&type=date&legend=top-left&sealed_token=EQ04fkO9Ay_mm1EzXzUetEzsrS3cbKGmCz7MfYo0VmXH6UIX8hvdluGLKBnr-BKMrA1IhqaHob9JAaBKkJPpOsp7FXcDtpys0lHhl4BnhrBWpvr_c440qxLxuZpKi0zyQiUJmHkDul81SZwzbbpPTjcLAHBNiZVXWJsUCG-DWsOoACdvObZNriWQ-FKr)](https://www.star-history.com/?repos=itsmorninghao%2FCogniLoop&type=date&legend=top-left)
 
 ## 许可证
 
